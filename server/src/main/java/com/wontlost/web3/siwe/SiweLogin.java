@@ -24,6 +24,7 @@ import com.vaadin.flow.server.VaadinService;
 import com.vaadin.flow.shared.Registration;
 import com.wontlost.web3.Chains;
 import com.wontlost.web3.Web3Connect;
+import com.wontlost.web3.chain.ChainRegistry;
 
 /**
  * Vaadin sign-in control that requests an EIP-4361 signature and verifies it on the server.
@@ -31,14 +32,18 @@ import com.wontlost.web3.Web3Connect;
  * Supply an application-scoped {@link NonceStore}; it is registered with the current
  * {@link VaadinContext} when a service is available and restored after UI deserialization.
  * Configure the public domain and URI explicitly in production, especially behind a proxy.
- * EIP-1271 smart-contract wallet signatures are not supported yet.
+ * <p>
+ * Smart-contract wallets (ERC-1271, and ERC-6492 for wallets not deployed yet) are accepted automatically when a
+ * {@link ChainRegistry} is stored in the {@link VaadinContext} with an RPC client for the signing chain; otherwise
+ * only externally owned accounts can sign in.
  */
 public class SiweLogin extends Composite<HorizontalLayout> {
 
     private final Web3Connect wallet = new Web3Connect(true);
     private final Button signInButton = new Button("Sign in with Ethereum");
     private transient NonceStore nonces;
-    private transient SiweVerifier verifier;
+    /** 使用者通过 setVerifier 提供的校验器；为空时每次按当前上下文构建默认校验器。 */
+    private transient SiweVerifier customVerifier;
     private transient Supplier<VaadinContext> contextLookup = SiweLogin::currentContext;
     private String domain;
     private String uri;
@@ -51,7 +56,6 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     /** Creates a SIWE component using the supplied one-time nonce store. */
     public SiweLogin(NonceStore nonces) {
         this.nonces = Objects.requireNonNull(nonces, "nonces");
-        verifier = new SiweVerifier(nonces, Clock.systemUTC());
         VaadinContext context = currentContext();
         if (context != null) {
             registerNonceStore(context, nonces);
@@ -74,12 +78,11 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     /** Restricts accepted chain ids; an empty set allows any positive chain id. */
     public SiweLogin setAllowedChainIds(Set<Long> values) { allowedChainIds = Set.copyOf(values); return this; }
     /** Replaces the verifier, for example to provide a custom clock or policy. */
-    public SiweLogin setVerifier(SiweVerifier value) { verifier = Objects.requireNonNull(value); return this; }
+    public SiweLogin setVerifier(SiweVerifier value) { customVerifier = Objects.requireNonNull(value); return this; }
 
     /** Reattaches the application nonce store after UI deserialization. */
     public SiweLogin setNonceStore(NonceStore value) {
         nonces = Objects.requireNonNull(value);
-        verifier = new SiweVerifier(value, Clock.systemUTC());
         VaadinContext context = currentContext();
         if (context != null) {
             registerNonceStore(context, value);
@@ -191,18 +194,17 @@ public class SiweLogin extends Composite<HorizontalLayout> {
                         + "SiweLogin.registerNonceStore(VaadinContext, NonceStore) before restoring the UI");
             }
             nonces = restored;
-            if (verifier == null) {
-                verifier = new SiweVerifier(restored, Clock.systemUTC());
-            }
         }
         return nonces;
     }
 
     private SiweVerifier requireVerifier() {
-        if (verifier == null) {
-            verifier = new SiweVerifier(requireNonces(), Clock.systemUTC());
+        if (customVerifier != null) {
+            return customVerifier;
         }
-        return verifier;
+        VaadinContext context = contextLookup == null ? currentContext() : contextLookup.get();
+        ChainRegistry chains = context == null ? null : context.getAttribute(ChainRegistry.class);
+        return new SiweVerifier(requireNonces(), Clock.systemUTC(), chains);
     }
 
     private void finishSuccess(VerifiedSignIn verified) {

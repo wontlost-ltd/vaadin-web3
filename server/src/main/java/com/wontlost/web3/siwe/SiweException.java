@@ -33,6 +33,8 @@ public class SiweException extends RuntimeException {
         TOO_OLD,
         SIGNATURE_INVALID,
         ADDRESS_MISMATCH,
-        NONCE_INVALID
+        NONCE_INVALID,
+        /** A smart-contract wallet signature could not be checked because the RPC endpoint failed; retrying may succeed. */
+        SIGNATURE_UNVERIFIABLE
     }
 }

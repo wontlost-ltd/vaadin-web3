@@ -27,10 +27,10 @@ public final class EthRpcClient {
     public long chainId() { return hexLong(result("eth_chainId", List.of()).asString()); }
     /** Returns the latest block number. */
     public long blockNumber() { return hexLong(result("eth_blockNumber", List.of()).asString()); }
-    /** Executes an {@code eth_call} against the requested block tag. */
+    /** Executes an {@code eth_call} against the requested block tag; a {@code null} target runs creation code. */
     public String call(String to, String dataHex, String blockTag) {
         ObjectNode call = MAPPER.createObjectNode();
-        call.put("to", to);
+        if (to != null) call.put("to", to);
         call.put("data", dataHex);
         return result("eth_call", List.of(call, blockTag)).asString();
     }

@@ -29,6 +29,15 @@ First public release.
   - The `SiweLogin` component and `Web3Session`.
   - `SiweLogin` supports reverse proxies (`Forwarded` / `X-Forwarded-*`), sends
     users back to their `continue` page, and offers `signOut()`.
+- Smart-contract wallet sign-in:
+  - Supports ERC-1271 for deployed wallets and ERC-6492 for wallets not yet
+    deployed.
+  - Verification is a single deployless `eth_call` through
+    `SignatureValidator`.
+  - It's enabled automatically when a `ChainRegistry` is registered.
+  - A new `SIGNATURE_UNVERIFIABLE` reason reports RPC failures.
+  - `NonceStore.isActive()` lets the verifier reject unknown nonces before
+    making any RPC call.
 - On-chain reads: `EthRpcClient`, `Erc20`, `ChainRegistry`, and the `Tokens`
   USDC registry for 11 networks.
 - `@RequiresToken` token-gated routes: checks use the SIWE-verified address,

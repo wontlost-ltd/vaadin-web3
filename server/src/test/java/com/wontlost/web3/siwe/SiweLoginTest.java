@@ -88,7 +88,9 @@ class SiweLoginTest {
         SiweLogin.registerNonceStore(context, store);
         SiweLogin login = new SiweLogin(store);
         setField(login, "nonces", null);
-        setField(login, "verifier", null);
+        setField(login, "customVerifier", null);
+        com.wontlost.web3.chain.ChainRegistry chains = new com.wontlost.web3.chain.ChainRegistry();
+        context.setAttribute(com.wontlost.web3.chain.ChainRegistry.class, chains);
         login.setContextLookup(() -> context);
 
         assertEquals(store, invoke(login, "requireNonces"));
@@ -96,6 +98,10 @@ class SiweLoginTest {
         Field nonceField = SiweVerifier.class.getDeclaredField("nonces");
         nonceField.setAccessible(true);
         assertEquals(store, nonceField.get(verifier));
+        // 应用注册的 ChainRegistry 自动用于合约钱包签名校验
+        Field chainsField = SiweVerifier.class.getDeclaredField("chains");
+        chainsField.setAccessible(true);
+        assertEquals(chains, chainsField.get(verifier));
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {
