@@ -11,8 +11,35 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import tools.jackson.databind.ObjectMapper;
 
 class Web3ConnectTest {
+
+    @Test
+    void parsesWalletMetadataAndReturnsImmutableList() {
+        Web3Connect component = new Web3Connect();
+        component.getElement().setProperty("wallets", "[{\"uuid\":\"u1\",\"name\":\"MetaMask\","
+                + "\"icon\":\"data:image/png;base64,AA==\",\"rdns\":\"io.metamask\"}]");
+
+        assertEquals(java.util.List.of(new WalletInfo("u1", "MetaMask", "data:image/png;base64,AA==", "io.metamask")),
+                component.getWallets());
+        assertThrows(UnsupportedOperationException.class, () -> component.getWallets().clear());
+    }
+
+    @Test
+    void returnsEmptyWalletListWhenPropertyIsMissingOrInvalid() {
+        Web3Connect component = new Web3Connect();
+        assertTrue(component.getWallets().isEmpty());
+        component.getElement().setProperty("wallets", "not-json");
+        assertTrue(component.getWallets().isEmpty());
+    }
+
+    @Test
+    void walletInfoIsSerializable() throws Exception {
+        WalletInfo info = new WalletInfo("u1", "MetaMask", "data:image/png;base64,AA==", "io.metamask");
+        String json = new ObjectMapper().writeValueAsString(info);
+        assertTrue(json.contains("io.metamask"));
+    }
 
     @Test
     void parsesMarkedErrorAfterPrefix() {

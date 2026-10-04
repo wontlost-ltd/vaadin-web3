@@ -92,6 +92,42 @@ public class Web3Connect extends Component {
         return getElement().getProperty("providerAvailable", false);
     }
 
+    /** Returns the EIP-6963 wallets currently discovered by the browser. */
+    @Synchronize(property = "wallets", value = "web3-wallets-changed")
+    public List<WalletInfo> getWallets() {
+        String wallets = getElement().getProperty("wallets", "");
+        if (wallets.isBlank()) return List.of();
+        try {
+            var nodes = MAPPER.readTree(wallets);
+            if (!nodes.isArray()) return List.of();
+            List<WalletInfo> result = new ArrayList<>();
+            for (var node : nodes) {
+                result.add(new WalletInfo(node.path("uuid").asString(""),
+                        node.path("name").asString(""), node.path("icon").asString(""),
+                        node.path("rdns").asString("")));
+            }
+            return List.copyOf(result);
+        } catch (RuntimeException exception) {
+            return List.of();
+        }
+    }
+
+    /** Sets the wallet reverse-DNS identifier preferred when connecting. */
+    public void setPreferredWallet(String rdns) {
+        getElement().setProperty("preferredWallet", Objects.requireNonNull(rdns));
+    }
+
+    /** Returns the preferred wallet reverse-DNS identifier. */
+    public String getPreferredWallet() {
+        return getElement().getProperty("preferredWallet", "");
+    }
+
+    /** Returns the selected wallet reverse-DNS identifier. */
+    @Synchronize(property = "selectedWallet", value = "web3-connected")
+    public String getSelectedWallet() {
+        return getElement().getProperty("selectedWallet", "");
+    }
+
     /** Sets the label of the connect button. */
     public void setConnectText(String text) {
         getElement().setProperty("connectText", Objects.requireNonNull(text));
@@ -115,6 +151,11 @@ public class Web3Connect extends Component {
      */
     public CompletableFuture<String> connect() {
         return call("return this.connect()");
+    }
+
+    /** Prompts the user to connect the wallet identified by its reverse-DNS name. */
+    public CompletableFuture<String> connect(String rdns) {
+        return call("return this.connect($0)", Objects.requireNonNull(rdns));
     }
 
     /**
@@ -270,6 +311,11 @@ public class Web3Connect extends Component {
         return addListener(ProviderDetectedEvent.class, listener);
     }
 
+    /** Fires when the set of discovered EIP-6963 wallets changes. */
+    public Registration addWalletsChangedListener(ComponentEventListener<WalletsChangedEvent> listener) {
+        return addListener(WalletsChangedEvent.class, listener);
+    }
+
     private CompletableFuture<String> call(String expression, Serializable... params) {
         CompletableFuture<String> future = new CompletableFuture<>();
         trackPendingFuture(future);
@@ -373,6 +419,14 @@ public class Web3Connect extends Component {
 
         public boolean isAvailable() {
             return available;
+        }
+    }
+
+    /** Event fired when EIP-6963 wallet metadata changes. */
+    @DomEvent("web3-wallets-changed")
+    public static class WalletsChangedEvent extends ComponentEvent<Web3Connect> {
+        public WalletsChangedEvent(Web3Connect source, boolean fromClient) {
+            super(source, fromClient);
         }
     }
 

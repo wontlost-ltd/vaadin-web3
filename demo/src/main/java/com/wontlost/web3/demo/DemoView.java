@@ -6,6 +6,7 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
@@ -35,6 +36,7 @@ public class DemoView extends VerticalLayout {
     private final Paragraph status = new Paragraph("Not connected.");
     private final Paragraph providerPrompt = new Paragraph(
             "No browser wallet detected. Install MetaMask: https://metamask.io/download");
+    private final VerticalLayout walletList = new VerticalLayout();
 
     public DemoView() {
         setMaxWidth("720px");
@@ -49,7 +51,9 @@ public class DemoView extends VerticalLayout {
         wireWalletEvents();
         address.setCopyable(true);
 
-        add(providerPrompt, wallet, address, status);
+        walletList.setPadding(false);
+        walletList.setSpacing(true);
+        add(providerPrompt, wallet, walletList, address, status);
         add(signSection(), transactionSection(), chainSection());
 
         // Restore a previously authorized session without prompting.
@@ -58,6 +62,7 @@ public class DemoView extends VerticalLayout {
 
     private void wireWalletEvents() {
         wallet.addProviderDetectedListener(e -> providerPrompt.setVisible(!e.isAvailable()));
+        wallet.addWalletsChangedListener(e -> refreshWallets());
         wallet.addConnectedListener(e -> {
             address.setAddress(e.getAccount());
             status.setText("Connected to chain " + e.getChainId()
@@ -83,6 +88,22 @@ public class DemoView extends VerticalLayout {
                 error("Wallet error " + e.getCode() + ": " + e.getErrorMessage());
             }
         });
+    }
+
+    private void refreshWallets() {
+        walletList.removeAll();
+        for (var info : wallet.getWallets()) {
+            HorizontalLayout row = new HorizontalLayout();
+            if (!info.icon().isBlank()) {
+                Image icon = new Image(info.icon(), info.name());
+                icon.setWidth("32px");
+                icon.setHeight("32px");
+                row.add(icon);
+            }
+            row.add(new Paragraph(info.name()), new Button("Connect with " + info.name(),
+                    event -> wallet.connect(info.rdns())));
+            walletList.add(row);
+        }
     }
 
     private VerticalLayout signSection() {
