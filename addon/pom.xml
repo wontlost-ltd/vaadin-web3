@@ -14,8 +14,8 @@
     <packaging>jar</packaging>
 
     <name>Web3 Add-on for Vaadin</name>
-    <description>Vaadin components for web3 support: wallet connection (EIP-1193 / MetaMask),
-        message signing, transactions, chain switching and address display.</description>
+    <description>Vaadin components for web3 support: wallet connection (EIP-1193, EIP-6963 multi-wallet
+        discovery), message and EIP-712 signing, transactions, chain switching and address display.</description>
     <url>https://github.com/wontlost-ltd/vaadin-web3</url>
 
     <licenses>
