@@ -12,7 +12,7 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 
 | Component | Tag | Purpose |
 |---|---|---|
-| `Web3Connect` | `<web3-connect>` | Wallet connect/disconnect button + full wallet API |
+| `Web3Connect` | `<web3-connect>` | EIP-6963 wallet discovery, connect/disconnect button + full wallet API |
 | `Web3Address` | `<web3-address>` | Abbreviated address display with color badge and click-to-copy |
 
 Plus server-side helpers: `Chains` (common chain ids, hex/decimal conversion)
@@ -51,6 +51,25 @@ wallet.restore();
 
 The built-in button can be hidden (`new Web3Connect(true)`) to drive
 everything from your own UI via `wallet.connect()`.
+
+### Multiple wallets (EIP-6963)
+
+`Web3Connect` discovers wallets that announce through EIP-6963 and exposes
+their metadata with `getWallets()`. Connect to a specific wallet using its
+reverse-DNS identifier; `setPreferredWallet()` selects the default. Calling
+`connect()` with multiple discovered wallets and no selection opens a built-in
+keyboard accessible wallet picker.
+
+```java
+wallet.addWalletsChangedListener(event -> wallet.getWallets().forEach(info ->
+        System.out.println(info.name() + " (" + info.rdns() + ")")));
+wallet.setPreferredWallet("io.metamask");
+wallet.connect("io.metamask");
+```
+
+The last successfully used wallet is remembered in browser local storage for
+subsequent connections and silent restoration. Existing `window.ethereum`
+wallets remain supported as a fallback.
 
 ### Sign a message (e.g. Sign-In with Ethereum)
 
