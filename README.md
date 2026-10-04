@@ -108,12 +108,21 @@ code 4001). `Web3Address` fires `AddressCopiedEvent`.
 - Transactions are confirmed by the user in their wallet; the add-on never
   touches private keys.
 
+## Project structure
+
+- `addon/` — the add-on itself (`com.wontlost:vaadin-web3`)
+- `demo/` — a Spring Boot demo application exercising all features
+
 ## Development
 
 ```bash
-mvn verify            # build + unit tests
-mvn install -Pdirectory   # also builds the Vaadin Directory zip
+mvn verify                      # build everything + unit tests
+mvn install -Pdirectory -pl addon   # also builds the Vaadin Directory zip
+mvn spring-boot:run -pl demo    # run the demo at http://localhost:8080
 ```
+
+The demo needs a browser wallet extension (e.g. MetaMask); use a test
+network such as Sepolia when trying transactions.
 
 ## License
 
