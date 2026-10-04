@@ -1,6 +1,8 @@
 package com.wontlost.web3;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -8,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.DomEvent;
 import com.vaadin.flow.component.EventData;
 import com.vaadin.flow.component.Synchronize;
@@ -41,7 +44,9 @@ import tools.jackson.databind.node.ObjectNode;
 @NpmPackage(value = "lit", version = "^3.0.0")
 public class Web3Connect extends Component {
 
+    private static final String ERROR_MARKER = "WEB3_ERROR:";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private transient List<CompletableFuture<String>> pendingFutures;
 
     /**
      * Creates a wallet connector rendered as a connect/disconnect button.
@@ -79,6 +84,12 @@ public class Web3Connect extends Component {
     /** Whether a wallet account is currently connected. */
     public boolean isConnected() {
         return !getAccount().isEmpty();
+    }
+
+    /** 是否检测到可用的钱包 provider。 */
+    @Synchronize(property = "providerAvailable", value = "web3-provider-detected")
+    public boolean isProviderAvailable() {
+        return getElement().getProperty("providerAvailable", false);
     }
 
     /** Sets the label of the connect button. */
@@ -253,18 +264,115 @@ public class Web3Connect extends Component {
         return addListener(Web3ErrorEvent.class, listener);
     }
 
+    /** 浏览器检测到钱包 provider 可用性变化时触发。 */
+    public Registration addProviderDetectedListener(
+            ComponentEventListener<ProviderDetectedEvent> listener) {
+        return addListener(ProviderDetectedEvent.class, listener);
+    }
+
     private CompletableFuture<String> call(String expression, Serializable... params) {
         CompletableFuture<String> future = new CompletableFuture<>();
-        getElement().executeJs(expression, params)
+        trackPendingFuture(future);
+        future.whenComplete((result, error) -> removePendingFuture(future));
+        String invocation = expression.startsWith("return ") ? expression.substring(7) : expression;
+        String wrappedExpression = "return Promise.resolve(" + invocation + ").catch(e => { throw new Error('"
+                + ERROR_MARKER
+                + "' + JSON.stringify(this._errorInfo(e))); })";
+        getElement().executeJs(wrappedExpression, params)
                 .then(String.class, future::complete,
-                        error -> future.completeExceptionally(new Web3Exception(error)));
+                        error -> future.completeExceptionally(parseWeb3Exception(error)));
         return future;
+    }
+
+    void trackPendingFuture(CompletableFuture<String> future) {
+        synchronized (this) {
+            if (pendingFutures == null) {
+                pendingFutures = new ArrayList<>();
+            }
+            pendingFutures.add(future);
+        }
+    }
+
+    private synchronized void removePendingFuture(CompletableFuture<String> future) {
+        if (pendingFutures != null) {
+            pendingFutures.remove(future);
+        }
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        completePendingFuturesOnDetach();
+        super.onDetach(detachEvent);
+    }
+
+    void completePendingFuturesOnDetach() {
+        List<CompletableFuture<String>> pending;
+        synchronized (this) {
+            pending = pendingFutures;
+            pendingFutures = null;
+        }
+        if (pending != null) {
+            Web3Exception error = new Web3Exception(-1, "Component detached; wallet request cancelled");
+            pending.forEach(future -> future.completeExceptionally(error));
+        }
+    }
+
+    static Web3Exception parseWeb3Exception(String error) {
+        String message = error == null ? "" : error;
+        int markerIndex = message.indexOf(ERROR_MARKER);
+        if (markerIndex < 0) {
+            return new Web3Exception(-1, message);
+        }
+        try {
+            var errorInfo = MAPPER.readTree(message.substring(markerIndex + ERROR_MARKER.length()));
+            int code = errorInfo.path("code").asInt(-1);
+            String errorMessage = errorInfo.path("message").asString(message);
+            return new Web3Exception(code, errorMessage);
+        } catch (RuntimeException exception) {
+            return new Web3Exception(-1, message);
+        }
     }
 
     /** Thrown when a client-side wallet operation fails. */
     public static class Web3Exception extends RuntimeException {
+        private final int code;
+
         public Web3Exception(String message) {
+            this(-1, message);
+        }
+
+        public Web3Exception(int code, String message) {
             super(message);
+            this.code = code;
+        }
+
+        /**
+         * The EIP-1193 / EIP-1474 error code reported by the wallet, or
+         * {@code -1} when unknown (e.g. the component was detached).
+         */
+        public int getCode() {
+            return code;
+        }
+
+        /** Whether the user rejected the request in the wallet (code 4001). */
+        public boolean isUserRejected() {
+            return code == 4001;
+        }
+    }
+
+    /** 钱包 provider 变为可用或不可用时触发。 */
+    @DomEvent("web3-provider-detected")
+    public static class ProviderDetectedEvent extends ComponentEvent<Web3Connect> {
+        private final boolean available;
+
+        public ProviderDetectedEvent(Web3Connect source, boolean fromClient,
+                @EventData("event.detail.available") boolean available) {
+            super(source, fromClient);
+            this.available = available;
+        }
+
+        public boolean isAvailable() {
+            return available;
         }
     }
 

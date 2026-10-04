@@ -57,7 +57,7 @@ export class Web3Address extends LitElement {
     if (!this.address) {
       return html``;
     }
-    const text = this.full ? this.address
+    const text = this.full || this.address.length <= 10 || !this.address.startsWith('0x') ? this.address
       : `${this.address.slice(0, 6)}…${this.address.slice(-4)}`;
     return html`
       <span class="badge" part="badge" style="background:${this._color()}"></span>
@@ -93,4 +93,4 @@ export class Web3Address extends LitElement {
   }
 }
 
-customElements.define(Web3Address.is, Web3Address);
+if (!customElements.get(Web3Address.is)) customElements.define(Web3Address.is, Web3Address);

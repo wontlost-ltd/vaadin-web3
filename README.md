@@ -56,9 +56,10 @@ everything from your own UI via `wallet.connect()`.
 
 ```java
 wallet.signMessage("Log in to Example at " + Instant.now())
-        .thenAccept(signature -> getUI().get().access(() ->
-                Notification.show("Signature: " + signature)));
+        .thenAccept(signature -> Notification.show("Signature: " + signature));
 ```
+
+The `CompletableFuture` callbacks run while the Vaadin session is locked, so no extra `UI.access()` call is needed.
 
 EIP-712 typed data is supported through `wallet.signTypedData(jsonPayload)`.
 
@@ -97,7 +98,18 @@ add(address);
 `Web3Connect` fires `Web3ConnectedEvent`, `Web3DisconnectedEvent`,
 `ChainChangedEvent`, `TransactionSentEvent`, `MessageSignedEvent` and
 `Web3ErrorEvent` (with the EIP-1193 error code; `isUserRejected()` maps
-code 4001). `Web3Address` fires `AddressCopiedEvent`.
+code 4001). Use `addProviderDetectedListener()` to observe
+`ProviderDetectedEvent`, and `isProviderAvailable()` to check whether a wallet
+provider is available. Failed futures use `Web3Connect.Web3Exception`; inspect
+`getCode()` or `isUserRejected()` for the error details. `Web3Address` fires
+`AddressCopiedEvent`.
+
+### Disconnecting
+
+After disconnecting, the add-on will not silently reconnect through `restore()`
+or when the wallet changes accounts. It will attempt to call
+`wallet_revokePermissions` when the wallet supports it.
+Disconnect state applies per site and synchronizes with other instances on the same page and other tabs.
 
 ## Security notes
 
@@ -117,9 +129,14 @@ code 4001). `Web3Address` fires `AddressCopiedEvent`.
 
 ```bash
 mvn verify                      # build everything + unit tests
-mvn install -Pdirectory -pl addon   # also builds the Vaadin Directory zip
+mvn install                     # install the add-on locally first
+# Or install only the add-on and its required modules:
+mvn -pl addon -am install
+mvn install -Pdirectory -pl addon -am   # also builds the Vaadin Directory zip
 mvn spring-boot:run -pl demo    # run the demo at http://localhost:8080
 ```
+
+The demo includes `vaadin-dev` for Vaadin development mode.
 
 The demo needs a browser wallet extension (e.g. MetaMask); use a test
 network such as Sepolia when trying transactions.

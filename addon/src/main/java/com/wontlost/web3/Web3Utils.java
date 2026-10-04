@@ -30,7 +30,14 @@ public final class Web3Utils {
 
     /** Converts an ether amount to a hex-encoded wei string for transactions. */
     public static String etherToWeiHex(BigDecimal ether) {
-        BigInteger wei = ether.multiply(WEI_PER_ETHER).toBigIntegerExact();
+        if (ether == null) {
+            throw new IllegalArgumentException("ether amount is required");
+        }
+        BigDecimal scaled = ether.multiply(WEI_PER_ETHER);
+        if (scaled.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException("ether amount must have at most 18 decimal places");
+        }
+        BigInteger wei = scaled.toBigIntegerExact();
         if (wei.signum() < 0) {
             throw new IllegalArgumentException("Amount must be non-negative");
         }
@@ -39,6 +46,9 @@ public final class Web3Utils {
 
     /** Converts a hex-encoded wei string (e.g. a balance) to ether. */
     public static BigDecimal weiHexToEther(String weiHex) {
+        if (weiHex == null) {
+            throw new IllegalArgumentException("wei hex value is required");
+        }
         String hex = weiHex.startsWith("0x") || weiHex.startsWith("0X")
                 ? weiHex.substring(2) : weiHex;
         return new BigDecimal(new BigInteger(hex, 16)).divide(WEI_PER_ETHER);
