@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
+  # 不限定目标分支：仓库默认分支目前不是 main，任何 PR 都应跑 CI
   pull_request:
-    branches:
-      - main
 
 jobs:
   build:
