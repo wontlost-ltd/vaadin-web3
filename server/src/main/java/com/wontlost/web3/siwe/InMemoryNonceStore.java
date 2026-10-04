@@ -57,6 +57,13 @@ public final class InMemoryNonceStore implements NonceStore {
         return expiresAt != null && clock.instant().isBefore(expiresAt);
     }
 
+    /** Returns whether the nonce was issued by this store and has not expired or been consumed. */
+    @Override
+    public boolean isActive(String nonce) {
+        Instant expiresAt = nonce == null ? null : entries.get(nonce);
+        return expiresAt != null && clock.instant().isBefore(expiresAt);
+    }
+
     private void cleanupExpired() {
         Instant now = clock.instant();
         entries.entrySet().removeIf(entry -> !now.isBefore(entry.getValue()));

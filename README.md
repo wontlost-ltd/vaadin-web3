@@ -27,7 +27,7 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 | `Web3Connect` wallet button and API | `vaadin-web3` | Connect, restore, disconnect, sign, EIP-712, send transactions, switch or add chains |
 | Multi-wallet discovery | `vaadin-web3` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
 | `Web3Address` | `vaadin-web3` | Shortened address, colour badge, click to copy |
-| `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, signature recovery, `Web3Session` |
+| `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
 | `@RequiresToken` | `vaadin-web3-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
 | `StablecoinCheckout` | `vaadin-web3-server` | USDC transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders |
 | `EthRpcClient`, `Erc20`, `Tokens` | `vaadin-web3-server` | Minimal JSON-RPC client, ERC-20 calls, built-in USDC contract addresses |
@@ -253,7 +253,45 @@ register the application nonce store with
 
 After sign-in, users go back to the page they first requested, taken from
 the `continue` query parameter. Only relative paths on the same site are
-followed. Smart-contract wallet signatures (EIP-1271) are not supported yet.
+followed.
+
+#### Smart-contract wallets (ERC-1271 and ERC-6492)
+
+Smart-contract wallets such as Safe, Coinbase Smart Wallet and other ERC-4337
+accounts don't sign with a single private key. `SiweLogin` accepts them
+automatically once a [`ChainRegistry`](#on-chain-reads) with an RPC endpoint
+for the signing chain is stored in the `VaadinContext`.
+
+When a signature doesn't recover to the address in the message, it is checked
+on chain:
+
+- **[ERC-1271](https://eips.ethereum.org/EIPS/eip-1271)**: deployed wallets
+  are asked whether the signature is valid (`isValidSignature`).
+- **[ERC-6492](https://eips.ethereum.org/EIPS/eip-6492)**: wallets that
+  haven't been deployed yet are also accepted. A new Coinbase Smart Wallet is
+  in this state until its first transaction.
+
+All of this happens in a single read-only `eth_call`, and nothing is deployed
+or written to the chain. Signatures from ordinary wallets are still verified
+locally, without any RPC call.
+
+| Situation | Result |
+|---|---|
+| The wallet accepts the signature | Signed in as the wallet address |
+| The wallet rejects it, or the call reverts | `ADDRESS_MISMATCH` or `SIGNATURE_INVALID` |
+| The RPC endpoint can't be reached | `SIGNATURE_UNVERIFIABLE`, so the user can retry |
+| No RPC client for the message's chain | Only ordinary wallet signatures are accepted |
+
+Before the on-chain check, the verifier asks the nonce store whether the nonce
+is still live, so requests with made-up nonces never reach your RPC endpoint.
+`InMemoryNonceStore` does this check. A custom `NonceStore` gets the same
+protection only if it implements `isActive()`.
+
+The on-chain check is one blocking call, limited by the transport timeout
+(10 seconds by default). Outside `SiweLogin`, pass the registry to
+`new SiweVerifier(nonces, clock, chains)`. To check signatures over other
+hashes, use `SignatureValidator.isValidSignature(client, address, hash,
+signature)`.
 
 ### On-chain reads
 
@@ -379,7 +417,8 @@ values sent by the browser.
   message is accepted only if all of these hold:
   - Its domain, URI and chain match.
   - Its time window is valid.
-  - The recovered signer equals the address in the message.
+  - The recovered signer equals the address in the message, or the
+    smart-contract wallet at that address confirms the signature on chain.
 - **Payments are checked against the chain,** not against the transaction hash
   the wallet returns.
 - **The add-on never handles private keys.** The user confirms every signature
@@ -423,7 +462,6 @@ mvn install -Pdirectory -pl addon -am    # also builds the Vaadin Directory zip
 
 ## Roadmap
 
-- EIP-1271 smart-contract wallet signatures (Safe, Coinbase Smart Wallet)
 - WalletConnect for mobile wallets
 - More stablecoins (USDT, EURC)
 
