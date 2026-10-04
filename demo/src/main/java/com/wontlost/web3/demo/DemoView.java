@@ -33,6 +33,8 @@ public class DemoView extends VerticalLayout {
     private final Web3Connect wallet = new Web3Connect();
     private final Web3Address address = new Web3Address();
     private final Paragraph status = new Paragraph("Not connected.");
+    private final Paragraph providerPrompt = new Paragraph(
+            "No browser wallet detected. Install MetaMask: https://metamask.io/download");
 
     public DemoView() {
         setMaxWidth("720px");
@@ -42,10 +44,12 @@ public class DemoView extends VerticalLayout {
                 new Paragraph("Requires a browser wallet extension such as MetaMask. "
                         + "Use a test network (e.g. Sepolia) when trying transactions."));
 
+        // 默认隐藏，只有浏览器明确报告没有钱包时才显示，避免已装钱包的用户每次加载都闪现提示
+        providerPrompt.setVisible(false);
         wireWalletEvents();
         address.setCopyable(true);
 
-        add(wallet, address, status);
+        add(providerPrompt, wallet, address, status);
         add(signSection(), transactionSection(), chainSection());
 
         // Restore a previously authorized session without prompting.
@@ -53,6 +57,7 @@ public class DemoView extends VerticalLayout {
     }
 
     private void wireWalletEvents() {
+        wallet.addProviderDetectedListener(e -> providerPrompt.setVisible(!e.isAvailable()));
         wallet.addConnectedListener(e -> {
             address.setAddress(e.getAccount());
             status.setText("Connected to chain " + e.getChainId()
@@ -99,8 +104,16 @@ public class DemoView extends VerticalLayout {
                 error("Enter a valid 0x… recipient address");
                 return;
             }
-            wallet.sendTransaction(to.getValue(),
-                    Web3Utils.etherToWeiHex(amount.getValue()), null);
+            BigDecimal value = amount.getValue();
+            if (value == null || value.signum() <= 0) {
+                error("Enter an amount greater than zero");
+                return;
+            }
+            try {
+                wallet.sendTransaction(to.getValue(), Web3Utils.etherToWeiHex(value), null);
+            } catch (IllegalArgumentException exception) {
+                error(exception.getMessage());
+            }
         });
         return section("Send a transaction", to, amount, send);
     }
@@ -110,14 +123,16 @@ public class DemoView extends VerticalLayout {
         chain.setLabel("Network");
         chain.setItems("Ethereum", "Sepolia", "Polygon", "Base", "Arbitrum One");
         chain.setValue("Sepolia");
-        Button switchBtn = new Button("Switch chain", e ->
-                wallet.switchChain(switch (chain.getValue()) {
-                    case "Ethereum" -> Chains.ETHEREUM_MAINNET;
-                    case "Polygon" -> Chains.POLYGON;
-                    case "Base" -> Chains.BASE;
-                    case "Arbitrum One" -> Chains.ARBITRUM_ONE;
-                    default -> Chains.SEPOLIA;
-                }));
+        Button switchBtn = new Button("Switch chain", e -> {
+            switch (chain.getValue()) {
+                case "Ethereum" -> wallet.switchChain(Chains.ETHEREUM_MAINNET);
+                case "Polygon" -> wallet.switchChain(Chains.POLYGON);
+                case "Base" -> wallet.switchChain(Chains.BASE, "Base", "https://mainnet.base.org", "ETH");
+                case "Arbitrum One" -> wallet.switchChain(Chains.ARBITRUM_ONE,
+                        "Arbitrum One", "https://arb1.arbitrum.io/rpc", "ETH");
+                default -> wallet.switchChain(Chains.SEPOLIA);
+            }
+        });
         return section("Switch network", new HorizontalLayout(chain, switchBtn));
     }
 
