@@ -4,9 +4,9 @@ Use this text when publishing the add-on to https://vaadin.com/directory.
 
 **Name:** Web3 Add-on for Vaadin
 
-**Summary (one line):** Wallet login, token-gated views and USDC payments for Vaadin Flow, in plain Java.
+**Summary (one line):** Wallet login, token-gated views and stablecoin payments for Vaadin Flow, in plain Java.
 
-**Tags:** web3, ethereum, wallet, metamask, siwe, authentication, payments, usdc, blockchain
+**Tags:** web3, ethereum, wallet, metamask, siwe, authentication, payments, stablecoin, usdc, blockchain
 
 **Compatibility:** Vaadin 25.3+, Java 21+
 
@@ -26,11 +26,14 @@ Bring Ethereum wallets to your Vaadin application without writing JavaScript.
   `Web3Session`.
 - **Gate views on token ownership.** Put
   `@RequiresToken(chainId = 1, token = "USDC", minBalance = "10")` on a route.
+  Built-in USDC, USDT, EURC and PYUSD symbols are supported alongside contract
+  addresses.
   Visitors who aren't signed in go to your login view and come back
   afterwards. Visitors without enough balance see a 403 page.
-- **Take USDC payments.** `StablecoinCheckout` asks the wallet to transfer
-  USDC on any of the 11 built-in networks you
-  configure. It reports success only after it has checked the
+- **Take stablecoin payments.** `StablecoinCheckout` accepts USDC, USDT, EURC
+  and PYUSD on their supported built-in networks. Select multiple tokens that
+  use the same currency, and it asks the wallet to transfer the selected token.
+  It reports success only after it has checked the
   on-chain receipt, the Transfer logs and the number of confirmations. A
   ledger stops one transaction from paying for two orders.
 

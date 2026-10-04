@@ -11,12 +11,12 @@ import com.wontlost.web3.chain.ChainRegistry;
 import com.wontlost.web3.pay.InMemoryPaymentLedger;
 import com.wontlost.web3.pay.StablecoinCheckout;
 
-/** Demonstrates a Sepolia USDC checkout. */
+/** Demonstrates a Sepolia stablecoin checkout. */
 @Route(value = "checkout", layout = MainLayout.class)
 public class CheckoutView extends VerticalLayout {
     public CheckoutView(ChainRegistry chains, InMemoryPaymentLedger ledger,
             @Value("${web3.demo.recipient}") String recipient) {
-        add(new H1("USDC checkout"), new StablecoinCheckout(chains, ledger, recipient,
-                new BigDecimal("1.00")).setPreferredChain(11155111));
+        add(new H1("Stablecoin checkout"), new StablecoinCheckout(chains, ledger, recipient,
+                new BigDecimal("1.00")).setTokens("USDC", "PYUSD").setPreferredChain(11155111));
     }
 }

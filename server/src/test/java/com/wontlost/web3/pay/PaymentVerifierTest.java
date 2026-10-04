@@ -63,4 +63,32 @@ class PaymentVerifierTest {
         assertEquals(PaymentStatus.FAILED, verifier.verify("failed", hash,
                 new PaymentRequest(1, token, recipient, amount, null)).status());
     }
+
+    @Test void verifiesRealUsdtMainnetFixture() throws Exception {
+        JsonNode usdt = MAPPER.readTree(getClass().getResourceAsStream("/fixtures/usdt-mainnet.json").readAllBytes());
+        JsonNode simple = usdt.path("simpleTransfer");
+        JsonNode tx = simple.path("transaction");
+        JsonNode log = simple.path("receipt").path("logs").get(0);
+        String recipient = "0x" + log.path("topics").get(2).asString().substring(26);
+        String payer = "0x" + log.path("topics").get(1).asString().substring(26);
+        BigInteger amount = new BigInteger(log.path("data").asString().substring(2), 16);
+        assertEquals(tx.path("input").asString(), com.wontlost.web3.chain.Erc20.transferData(recipient, amount));
+        OnChainSupportTest.FixtureTransport usdtTransport = new OnChainSupportTest.FixtureTransport(usdt);
+        usdtTransport.blockNumber = "0x18e97c7";
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(1, new com.wontlost.web3.chain.EthRpcClient(usdtTransport));
+        PaymentVerifier usdtVerifier = new PaymentVerifier(registry, new InMemoryPaymentLedger());
+        String hash = tx.path("hash").asString();
+        var receipt = registry.get(1).orElseThrow().getTransactionReceipt(hash).orElseThrow();
+        var parsedTransfers = com.wontlost.web3.chain.Erc20.transfers(receipt, Tokens.usdt(1).orElseThrow().address());
+        assertEquals(1, parsedTransfers.size());
+        assertEquals(recipient, parsedTransfers.getFirst().to());
+        assertEquals(amount, parsedTransfers.getFirst().amount());
+        assertEquals(com.wontlost.web3.pay.PaymentStatus.CONFIRMED, usdtVerifier.verify("usdt", hash,
+                new PaymentRequest(1, Tokens.usdt(1).orElseThrow().address(), recipient, amount, payer)).status());
+        assertEquals(com.wontlost.web3.pay.PaymentStatus.UNDERPAID, usdtVerifier.verify("usdt-short", hash,
+                new PaymentRequest(1, Tokens.usdt(1).orElseThrow().address(), recipient, amount.add(BigInteger.ONE), payer)).status());
+        assertEquals(com.wontlost.web3.pay.PaymentStatus.NO_MATCHING_TRANSFER, usdtVerifier.verify("usdc", hash,
+                new PaymentRequest(1, Tokens.usdc(1).orElseThrow().address(), recipient, amount, payer)).status());
+    }
 }
