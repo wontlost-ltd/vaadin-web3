@@ -27,6 +27,7 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 | `Web3Connect` wallet button and API | `vaadin-web3` | Connect, restore, disconnect, sign, EIP-712, send transactions, switch or add chains |
 | Multi-wallet discovery | `vaadin-web3` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
 | `Web3Address` | `vaadin-web3` | Shortened address, colour badge, click to copy |
+| WalletConnect mobile wallets | `vaadin-web3-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
 | `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
 | `@RequiresToken` | `vaadin-web3-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
 | `StablecoinCheckout` | `vaadin-web3-server` | USDC transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders |
@@ -131,6 +132,53 @@ wallet.connect("io.metamask");
 The last wallet used successfully is remembered in browser local storage. It
 is used for later connections and for silent restoration. Wallets that only
 expose `window.ethereum` still work as a fallback.
+
+### Mobile wallets (WalletConnect)
+
+Add the optional dependency and a Reown project ID from
+[cloud.reown.com](https://cloud.reown.com):
+
+```xml
+<dependency>
+    <groupId>com.wontlost</groupId>
+    <artifactId>vaadin-web3-walletconnect</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+Add one component to a shared layout so all wallet connectors on the page can
+discover it, including those inside `SiweLogin` and `StablecoinCheckout`:
+
+```java
+add(new WalletConnect(projectId)
+        .setChains(11155111, 84532));
+```
+
+WalletConnect then appears in the existing wallet picker. If it's the only
+wallet available, `connect()` uses it directly.
+
+- **Desktop:** browsers show a QR code to scan with a phone wallet.
+- **Mobile:** browsers show a list of wallet apps that open through deep links.
+- **Supported chains:** only the chains passed to `setChains()` are available.
+  The first one is the default. `switchChain()` to any other chain fails.
+- **Closing the QR modal** is reported like any other cancellation:
+  `isUserRejected()` is `true` (code 4001).
+- **Loading:** the WalletConnect package and its modal load only when a user
+  picks WalletConnect. Pages where nobody uses it pay nothing.
+- **Sessions:** a user's session is restored by `wallet.restore()` after a
+  reload. On page load the library is loaded only when a stored session is
+  found, or when the browser can't report whether one exists.
+- **App metadata:** `setMetadata(name, description, url, iconUrl)` sets what
+  the wallet shows about your app. It defaults to the page title and origin.
+  Add your domain to the Reown project so that wallets can verify it.
+- **RPC endpoints:** `setRpcUrl(chainId, url)` overrides the RPC endpoint that
+  WalletConnect uses for read calls.
+
+The demo enables WalletConnect when `WEB3_WALLETCONNECT_PROJECT_ID` is set:
+
+```bash
+WEB3_WALLETCONNECT_PROJECT_ID=<your project id> mvn spring-boot:run -pl demo
+```
 
 ### Sign messages
 
@@ -448,6 +496,8 @@ an address you control.
 
 - `addon/`: wallet components (`com.wontlost:vaadin-web3`), with no
   third-party dependencies.
+- `walletconnect/`: optional WalletConnect v2 mobile wallet integration
+  (`com.wontlost:vaadin-web3-walletconnect`).
 - `server/`: SIWE, on-chain reads, token gates and checkout
   (`com.wontlost:vaadin-web3-server`).
 - `demo/`: a Spring Boot demo application that exercises every feature.
@@ -456,13 +506,13 @@ an address you control.
 
 ```bash
 mvn verify                               # build everything and run the unit tests
-cd addon && npm ci && npm test           # frontend unit tests (Vitest)
+(cd addon && npm ci && npm test)         # frontend unit tests (Vitest)
+(cd walletconnect && npm ci && npm test) # WalletConnect frontend unit tests
 mvn install -Pdirectory -pl addon -am    # also builds the Vaadin Directory zip
 ```
 
 ## Roadmap
 
-- WalletConnect for mobile wallets
 - More stablecoins (USDT, EURC)
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
