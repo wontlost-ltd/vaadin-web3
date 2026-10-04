@@ -46,24 +46,25 @@ public final class TokenGate implements BeforeEnterListener {
             event.forwardTo(requirement.redirectTo(), QueryParameters.of("continue", path));
             return;
         }
-        TokenInfo token;
-        Decision decision;
-        try {
-            token = resolve(requirement);
-            int decimals = requirement.decimals() < 0 ? Erc20.decimals(client(requirement.chainId()), token.address())
-                    : requirement.decimals();
-            BigInteger minimum = Tokens.toBaseUnits(new BigDecimal(requirement.minBalance()), decimals);
-            TokenInfo resolvedToken = token;
-            decision = checkBalance(() -> balance(requirement.chainId(), resolvedToken.address(), signIn.get().address()), minimum);
-        } catch (RuntimeException exception) {
-            token = null;
-            decision = Decision.UNAVAILABLE;
-        }
+        Decision decision = evaluate(requirement, signIn.get().address());
         if (decision == Decision.UNAVAILABLE) {
             event.rerouteToError(TokenGateUnavailableException.class, "Token balance cannot be verified temporarily");
         } else if (decision == Decision.INSUFFICIENT) {
             event.rerouteToError(TokenGateDeniedException.class,
-                    "at least " + requirement.minBalance() + " " + token.symbol());
+                    "at least " + requirement.minBalance() + " " + resolve(requirement).symbol());
+        }
+    }
+
+    /** 已登录用户的余额判定；解析代币、查询 decimals 或余额的任何失败都归为 UNAVAILABLE（故障关闭）。 */
+    Decision evaluate(RequiresToken requirement, String address) {
+        try {
+            TokenInfo token = resolve(requirement);
+            int decimals = requirement.decimals() < 0 ? Erc20.decimals(client(requirement.chainId()), token.address())
+                    : requirement.decimals();
+            BigInteger minimum = Tokens.toBaseUnits(new BigDecimal(requirement.minBalance()), decimals);
+            return checkBalance(() -> balance(requirement.chainId(), token.address(), address), minimum);
+        } catch (RuntimeException exception) {
+            return Decision.UNAVAILABLE;
         }
     }
 

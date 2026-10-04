@@ -215,8 +215,20 @@ The server module provides an `EthRpcClient` over either a JSON-RPC URL or a
 custom `JsonRpcTransport`. `Erc20` builds common ERC-20 calls and reads
 `balanceOf` / `decimals`; `Tokens.usdc(chainId)` contains the supported USDC
 contracts and `Tokens.toBaseUnits()` converts display amounts without rounding.
-Register clients in the application-scoped `ChainRegistry` before using token
-gates or payment verification.
+Register clients in the application-scoped `ChainRegistry` and store it in the
+`VaadinContext` before using token gates or payment verification:
+
+```java
+@Bean
+VaadinServiceInitListener web3Chains() {
+    ChainRegistry chains = new ChainRegistry();
+    chains.register(11155111, "https://ethereum-sepolia-rpc.publicnode.com"); // Sepolia
+    return event -> event.getSource().getContext().setAttribute(ChainRegistry.class, chains);
+}
+```
+
+If no registry is registered, `@RequiresToken` views fail closed: they are
+rejected as temporarily unavailable (HTTP 503) and a warning is logged.
 
 ## Token-gated views
 

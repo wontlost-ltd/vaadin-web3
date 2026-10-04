@@ -62,4 +62,15 @@ class TokenGateTest {
         assertEquals(TokenGate.Decision.ALLOW,
                 TokenGate.decide(false, false, BigInteger.ZERO, BigInteger.ONE));
     }
+
+    @RequiresToken(chainId = 11155111, token = "USDC", minBalance = "1", decimals = 6)
+    private static final class UsdcGatedView { }
+
+    @Test void missingChainRegistryFailsClosed() {
+        // 应用未注册 ChainRegistry 时监听器装入空注册表：带注解的视图必须被拒绝，而不是放行
+        RequiresToken requirement = UsdcGatedView.class.getAnnotation(RequiresToken.class);
+        org.junit.jupiter.api.Assertions.assertEquals(TokenGate.Decision.UNAVAILABLE,
+                new TokenGate(new com.wontlost.web3.chain.ChainRegistry())
+                        .evaluate(requirement, "0x0000000000000000000000000000000000000001"));
+    }
 }
