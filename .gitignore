@@ -1,0 +1,18 @@
+target/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+node_modules/
+# Vaadin generated frontend state
+demo/src/main/frontend/generated/
+demo/vite.generated.ts
+demo/package.json
+demo/package-lock.json
+demo/tsconfig.json
+demo/types.d.ts
+demo/vite.config.ts
+demo/src/main/bundles/
+.classpath
+.project
+.settings/
