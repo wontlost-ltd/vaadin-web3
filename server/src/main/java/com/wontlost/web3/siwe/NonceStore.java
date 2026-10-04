@@ -1,0 +1,10 @@
+package com.wontlost.web3.siwe;
+
+/** Issues server-side nonces and consumes each nonce at most once. */
+public interface NonceStore {
+    /** Creates and stores a new nonce for a pending sign-in. */
+    String issue();
+
+    /** Removes a nonce and returns whether it was present and still valid. */
+    boolean consume(String nonce);
+}
