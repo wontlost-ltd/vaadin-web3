@@ -16,3 +16,5 @@ demo/src/main/bundles/
 .classpath
 .project
 .settings/
+# flatten-maven-plugin 生成的发布用 POM
+.flattened-pom.xml

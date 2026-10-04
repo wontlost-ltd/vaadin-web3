@@ -18,6 +18,20 @@
         <vaadin.version>25.3.0</vaadin.version>
     </properties>
 
+    <build>
+        <plugins>
+            <!-- addon 已通过 flatten 展开父 POM，父项目本身无需发布。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.4</version>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
     <modules>
         <module>addon</module>
         <module>demo</module>
