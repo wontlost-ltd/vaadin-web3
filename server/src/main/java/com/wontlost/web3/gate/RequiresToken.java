@@ -5,7 +5,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Declares the minimum token balance required to enter a routed view. */
+/** Declares the minimum balance of a built-in token symbol or ERC-20 contract address required to enter a routed view. */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface RequiresToken {

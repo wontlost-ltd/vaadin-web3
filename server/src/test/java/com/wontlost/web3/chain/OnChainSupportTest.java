@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
+
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,50 @@ public class OnChainSupportTest {
         assertEquals(new BigInteger("1234567"), Tokens.toBaseUnits(new BigDecimal("1.234567"), 6));
         assertEquals(new BigDecimal("1.234567"), Tokens.fromBaseUnits(new BigInteger("1234567"), 6));
         assertThrows(IllegalArgumentException.class, () -> Tokens.toBaseUnits(new BigDecimal("0.0000001"), 6));
+    }
+
+    @Test
+    void stablecoinRegistryHasExactAddressesAndLookupRules() {
+        Map<String, Map<Long, String>> expected = Map.of(
+                "USDC", Map.ofEntries(Map.entry(1L, "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"), Map.entry(11155111L, "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"), Map.entry(8453L, "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), Map.entry(84532L, "0x036CbD53842c5426634e7929541eC2318f3dCF7e"), Map.entry(42161L, "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"), Map.entry(421614L, "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"), Map.entry(10L, "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"), Map.entry(11155420L, "0x5fd84259d66Cd46123540766Be93DFE6D43130D7"), Map.entry(137L, "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"), Map.entry(80002L, "0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582"), Map.entry(43114L, "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E")),
+                "USDT", Map.of(1L, "0xdAC17F958D2ee523a2206206994597C13D831ec7", 43114L, "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", 42161L, "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", 10L, "0x01bFF41798a0BcF287b996046Ca68b395DbC1071", 137L, "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"),
+                "EURC", Map.of(1L, "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c", 8453L, "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42", 43114L, "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD", 11155111L, "0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4", 84532L, "0x808456652fdb597867f38412077A9182bf77359F", 43113L, "0x5E44db7996c682E92a960b65AC713a54AD815c6B"),
+                "PYUSD", Map.of(1L, "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8", 42161L, "0x46850aD61C2B7d64d08c9C754F45254596696984", 137L, "0x99aF3EeA856556646C98c8B9b2548Fe815240750", 11155111L, "0xCaC524BcA292aaade2DF8A05cC58F0a65B1B3bB9", 421614L, "0x637A1259C6afd7E3AdF63993cA7E58BB438aB1B1", 80002L, "0x4549bb98c667aAb626627C118102c28065E8f54C"));
+        expected.forEach((symbol, addresses) -> addresses.forEach((chain, address) -> {
+            TokenInfo token = Tokens.find(symbol.toLowerCase(), chain).orElseThrow();
+            assertEquals(symbol, token.symbol());
+            assertEquals(address, token.address());
+            assertEquals(address, Keys.toChecksumAddress(address));
+            assertEquals(6, token.decimals());
+        }));
+        assertEquals(java.util.Set.of("USDC", "USDT", "EURC", "PYUSD"), Tokens.symbols());
+        assertEquals(Tokens.find("USDT", 1), Tokens.usdt(1));
+        assertEquals(Tokens.find("EURC", 43113), Tokens.eurc(43113));
+        assertEquals(Tokens.find("PYUSD", 11155111), Tokens.pyusd(11155111));
+        assertEquals("USD", Tokens.currency("USDC"));
+        assertEquals("EUR", Tokens.currency("eurc"));
+        assertEquals("USD", Tokens.currency("uSdT"));
+        assertEquals("USD", Tokens.currency("pyusd"));
+        assertEquals(expected.get("USDT").keySet(), Tokens.chains("USDT"));
+        assertTrue(Tokens.find("unknown", 1).isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> Tokens.currency("unknown"));
+    }
+
+    @Test
+    void usdtFixtureMatchesEncodingAndTransferLog() throws Exception {
+        JsonNode usdt = MAPPER.readTree(getClass().getResourceAsStream("/fixtures/usdt-mainnet.json").readAllBytes());
+        JsonNode simple = usdt.path("simpleTransfer");
+        JsonNode tx = simple.path("transaction");
+        JsonNode log = simple.path("receipt").path("logs").get(0);
+        String recipient = "0x" + log.path("topics").get(2).asString().substring(26);
+        BigInteger amount = new BigInteger(log.path("data").asString().substring(2), 16);
+        assertEquals(tx.path("input").asString(), Erc20.transferData(recipient, amount));
+        TransactionReceipt receipt = parseReceipt(simple.path("receipt"));
+        List<Transfer> transfers = Erc20.transfers(receipt, Tokens.usdt(1).orElseThrow().address());
+        assertEquals(1, transfers.size());
+        assertEquals(recipient, transfers.getFirst().to());
+        assertEquals(amount, transfers.getFirst().amount());
+
     }
 
     @Test

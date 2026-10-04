@@ -48,9 +48,11 @@ First public release.
 - `@RequiresToken` token-gated routes: checks use the SIWE-verified address,
   results are cached for 30 s, and 403/503 error views are included. Gated
   views fail closed when no `ChainRegistry` is configured.
-- `StablecoinCheckout` and `PaymentVerifier`: USDC payments verified against
-  the receipt and Transfer logs, with confirmation counting and a
+- `StablecoinCheckout` and `PaymentVerifier`: USDC payments by default, verified
+  against the receipt and Transfer logs, with confirmation counting and a
   `PaymentLedger` that stops one transaction from paying for two orders.
+- Built-in USDT, EURC and PYUSD contract registries; token gates accept
+  built-in symbols, and checkout supports same-currency token selection.
 
 ### Demo
 - Spring Boot demo with routes for wallet features, SIWE login, a token-gated

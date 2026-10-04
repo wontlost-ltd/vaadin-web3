@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -54,15 +55,20 @@ public class StablecoinCheckout extends VerticalLayout {
     private final BigDecimal amount;
     private final Web3Connect wallet = new Web3Connect(true);
     private final Select<Long> network = new Select<>();
+    private final Select<String> tokenSelect = new Select<>();
     private final Button pay = new Button();
     private final Span status = new Span("Waiting for payment.");
-    private Set<Long> allowedChains;
+    private final Span amountLabel;
+    private Set<Long> allowedChainIds;
+    private List<String> tokens = List.of("USDC");
+    private String selectedToken = "USDC";
     private String orderId = UUID.randomUUID().toString();
     private Long preferredChain;
     private int minConfirmations = 1;
     private String buttonText;
     private String transactionHash;
     private PaymentRequest submittedRequest;
+    private TokenInfo submittedToken;
     private String submittedOrderId;
     private Registration pollRegistration;
     private UI pollingUi;
@@ -84,15 +90,26 @@ public class StablecoinCheckout extends VerticalLayout {
         this.recipient = Objects.requireNonNull(recipient);
         this.amount = Objects.requireNonNull(amount);
         this.verificationExecutor = Objects.requireNonNull(verificationExecutor);
-        this.allowedChains = chains.clients().keySet().stream().filter(id -> Tokens.usdc(id).isPresent())
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        this.allowedChainIds = Set.copyOf(chains.clients().keySet());
         network.setLabel("Network");
         network.setItemLabelGenerator(StablecoinCheckout::networkName);
-        network.setItems(allowedChains.stream().sorted().toList());
-        if (!allowedChains.isEmpty()) network.setValue(allowedChains.stream().min(Long::compareTo).orElseThrow());
+        tokenSelect.setLabel("Token");
+        tokenSelect.setItems(tokens);
+        tokenSelect.setValue(selectedToken);
+        tokenSelect.setVisible(false);
+        amountLabel = new Span(amount.toPlainString() + " " + selectedToken);
+        tokenSelect.addValueChangeListener(event -> {
+            if (event.getValue() != null) {
+                selectedToken = event.getValue();
+                amountLabel.setText(amount.toPlainString() + " " + selectedToken);
+                pay.setText(label());
+                refreshNetworks();
+            }
+        });
+        refreshNetworks();
         pay.setText(label());
         pay.addClickListener(event -> beginPayment());
-        add(wallet, new Span(amount.toPlainString() + " USDC"), network, pay, status);
+        add(wallet, amountLabel, tokenSelect, network, pay, status);
         setSpacing(true);
     }
 
@@ -105,25 +122,67 @@ public class StablecoinCheckout extends VerticalLayout {
         orderId = Objects.requireNonNull(newOrderId);
         submittedOrderId = null;
         submittedRequest = null;
+        submittedToken = null;
         transactionHash = null;
         networkFailures = 0;
         paid = false;
         status.setText("Waiting for payment.");
         pay.setText(label());
-        pay.setEnabled(true);
+        setPayEnabled(true);
         return this;
     }
+    /**
+     * Restricts the networks offered for payment.
+     *
+     * @throws IllegalStateException while a payment is in progress or after it is paid; call {@link #reset(String)} first
+     */
     public StablecoinCheckout setAllowedChainIds(Set<Long> values) {
-        Set<Long> accepted = values.stream().filter(id -> chains.get(id).isPresent() && Tokens.usdc(id).isPresent())
+        requireConfigurable();
+        allowedChainIds = values.stream().filter(id -> chains.get(id).isPresent())
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        allowedChains = accepted;
-        network.setItems(accepted.stream().sorted().toList());
-        if (!accepted.isEmpty() && !accepted.contains(network.getValue())) network.setValue(accepted.iterator().next());
+        refreshNetworks();
         return this;
     }
+    /**
+     * Sets the accepted built-in tokens, which must share one denomination currency.
+     *
+     * @throws IllegalStateException while a payment is in progress or after it is paid; call {@link #reset(String)} first
+     */
+    public StablecoinCheckout setTokens(String... symbols) {
+        requireConfigurable();
+        if (symbols == null || symbols.length == 0) throw new IllegalArgumentException("At least one token is required");
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        String currency = null;
+        for (String symbol : symbols) {
+            String canonical = Tokens.symbols().stream().filter(item -> item.equalsIgnoreCase(symbol)).findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown token symbol: " + symbol));
+            String nextCurrency = Tokens.currency(canonical);
+            if (currency != null && !currency.equals(nextCurrency))
+                throw new IllegalArgumentException("All checkout tokens must use the same currency");
+            currency = nextCurrency;
+            normalized.add(canonical);
+        }
+        tokens = List.copyOf(normalized);
+        if (!tokens.contains(selectedToken)) selectedToken = tokens.getFirst();
+        tokenSelect.setItems(tokens);
+        tokenSelect.setValue(selectedToken);
+        tokenSelect.setVisible(tokens.size() > 1);
+        amountLabel.setText(amount.toPlainString() + " " + selectedToken);
+        pay.setText(label());
+        refreshNetworks();
+        return this;
+    }
+    /** Returns the accepted built-in token symbols in selection order. */
+    public List<String> getTokens() { return tokens; }
+    /**
+     * Sets the network the wallet is switched to when it is on an unsupported network.
+     *
+     * @throws IllegalStateException while a payment is in progress or after it is paid; call {@link #reset(String)} first
+     */
     public StablecoinCheckout setPreferredChain(long chainId) {
+        requireConfigurable();
         preferredChain = chainId;
-        if (allowedChains.contains(chainId)) network.setValue(chainId);
+        if (allowedChains().contains(chainId)) network.setValue(chainId);
         return this;
     }
     public StablecoinCheckout setMinConfirmations(int value) {
@@ -148,35 +207,76 @@ public class StablecoinCheckout extends VerticalLayout {
             case 137 -> "Polygon";
             case 80002 -> "Polygon Amoy";
             case 43114 -> "Avalanche";
+            case 43113 -> "Avalanche Fuji";
             default -> "Chain " + chainId;
         };
     }
 
-    private String label() { return buttonText == null ? "Pay " + amount.toPlainString() + " USDC" : buttonText; }
+    /** 支付进行中或已付款时界面已锁定，此时修改配置会让显示与已捕获的支付意图不一致。 */
+    private void requireConfigurable() {
+        if (!pay.isEnabled()) {
+            throw new IllegalStateException("A payment is in progress or already paid; call reset(orderId) first");
+        }
+    }
+
+    /** 支付进行中或已付款时同时锁定代币与网络选择，避免界面显示的代币与正在校验的支付不一致。 */
+    private void setPayEnabled(boolean enabled) {
+        pay.setEnabled(enabled);
+        tokenSelect.setEnabled(enabled);
+        network.setEnabled(enabled);
+    }
+
+    private String label() { return buttonText == null ? "Pay " + amount.toPlainString() + " " + selectedToken : buttonText; }
+
+    private Set<Long> allowedChains() {
+        return allowedChains(selectedToken);
+    }
+
+    private Set<Long> allowedChains(String symbol) {
+        return chains.clients().keySet().stream()
+                .filter(id -> allowedChainIds.contains(id) && Tokens.find(symbol, id).isPresent())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    private void refreshNetworks() {
+        Set<Long> accepted = allowedChains();
+        Long current = network.getValue();
+        network.setItems(accepted.stream().sorted().toList());
+        if (current != null && accepted.contains(current)) {
+            network.setValue(current);
+            return;
+        }
+        if (preferredChain != null && accepted.contains(preferredChain)) network.setValue(preferredChain);
+        else if (!accepted.isEmpty()) network.setValue(accepted.stream().min(Long::compareTo).orElseThrow());
+        else network.clear();
+    }
 
     private void beginPayment() {
         if (!pay.isEnabled()) return;
-        Long selected = network.getValue();
-        if (selected == null) { status.setText("No supported network is configured."); return; }
-        TokenInfo token = Tokens.usdc(selected).orElseThrow();
-        BigInteger units = Tokens.toBaseUnits(amount, token.decimals());
-        pay.setEnabled(false);
+        submittedToken = null;
+        submittedRequest = null;
+        PaymentIntent intent = capturePaymentIntent();
+        if (intent == null) { status.setText("No supported network is configured."); return; }
+        setPayEnabled(false);
         long started = generation;
         var connected = wallet.isConnected() ? java.util.concurrent.CompletableFuture.completedFuture(wallet.getAccount())
                 : wallet.connect();
         connected.thenCompose(account -> {
             long activeChain = Chains.toDecimal(wallet.getChainId()).longValueExact();
-            long targetChain = allowedChains.contains(activeChain) ? selected
-                    : preferredChain != null && allowedChains.contains(preferredChain) ? preferredChain : selected;
-            TokenInfo targetToken = Tokens.usdc(targetChain).orElseThrow();
+            Set<Long> eligibleChains = allowedChains(intent.tokenSymbol());
+            long targetChain = eligibleChains.contains(activeChain) ? intent.selectedChain()
+                    : intent.preferredChain() != null && eligibleChains.contains(intent.preferredChain())
+                            ? intent.preferredChain() : intent.selectedChain();
+            TokenInfo targetToken = Tokens.find(intent.tokenSymbol(), targetChain).orElseThrow();
+            submittedToken = targetToken;
             String payer = Web3Session.current().map(user -> user.address()).orElse(account);
-            submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, units, payer,
+            submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, intent.amountUnits(), payer,
                     minConfirmations);
             submittedOrderId = orderId;
-            if (activeChain == targetChain) return send(targetToken, units);
+            if (activeChain == targetChain) return send(targetToken, intent.amountUnits());
             return wallet.switchChain(Chains.toHex(targetChain)).thenCompose(ignored -> {
                 network.setValue(targetChain);
-                return send(targetToken, units);
+                return send(targetToken, intent.amountUnits());
             });
         }).whenComplete((hash, error) -> {
             // 钱包确认期间订单已被 reset，旧订单的交易不能挂到新订单上
@@ -184,10 +284,21 @@ public class StablecoinCheckout extends VerticalLayout {
             if (error != null) { paymentError(error); return; }
             transactionHash = hash;
             status.setText("Payment submitted: " + hash);
-            fireEvent(new PaymentSubmittedEvent(this, hash));
+            fireEvent(new PaymentSubmittedEvent(this, hash, submittedToken));
             startPolling();
         });
     }
+
+    PaymentIntent capturePaymentIntent() {
+        Long selectedChain = network.getValue();
+        if (selectedChain == null) return null;
+        String symbol = selectedToken;
+        TokenInfo token = Tokens.find(symbol, selectedChain).orElseThrow();
+        return new PaymentIntent(symbol, selectedChain, preferredChain,
+                Tokens.toBaseUnits(amount, token.decimals()));
+    }
+
+    record PaymentIntent(String tokenSymbol, long selectedChain, Long preferredChain, BigInteger amountUnits) { }
 
     private java.util.concurrent.CompletableFuture<String> send(TokenInfo token, BigInteger units) {
         return wallet.sendTransaction(Map.of("to", token.address(), "data", Erc20.transferData(recipient, units), "value", "0x0"));
@@ -199,8 +310,8 @@ public class StablecoinCheckout extends VerticalLayout {
         boolean rejected = cause instanceof Web3Connect.Web3Exception walletError && walletError.isUserRejected();
         PaymentResult result = new PaymentResult(PaymentStatus.FAILED, null, null, BigInteger.ZERO, 0);
         status.setText(rejected ? "Payment was rejected in the wallet." : "Payment failed: " + cause.getMessage());
-        fireEvent(new PaymentFailedEvent(this, result, rejected));
-        pay.setEnabled(true);
+        fireEvent(new PaymentFailedEvent(this, result, rejected, submittedToken));
+        setPayEnabled(true);
     }
 
     void startPolling() {
@@ -233,6 +344,9 @@ public class StablecoinCheckout extends VerticalLayout {
         transactionHash = hash;
         submittedOrderId = orderId;
         submittedRequest = request;
+        submittedToken = Tokens.symbols().stream().flatMap(symbol -> Tokens.chains(symbol).stream()
+                .map(chainId -> Tokens.find(symbol, chainId).orElseThrow()))
+                .filter(token -> token.address().equalsIgnoreCase(request.token())).findFirst().orElse(null);
     }
 
     void verifyPayment() {
@@ -267,8 +381,8 @@ public class StablecoinCheckout extends VerticalLayout {
                                 PaymentResult failed = new PaymentResult(PaymentStatus.FAILED, hash, null,
                                         BigInteger.ZERO, 0);
                                 stopPolling();
-                                fireEvent(new PaymentFailedEvent(this, failed, false));
-                                pay.setEnabled(true);
+                                fireEvent(new PaymentFailedEvent(this, failed, false, submittedToken));
+                                setPayEnabled(true);
                             }
                             return;
                         }
@@ -283,14 +397,14 @@ public class StablecoinCheckout extends VerticalLayout {
         if (result.status() == PaymentStatus.CONFIRMED) {
             paid = true;
             pay.setText("Paid");
-            pay.setEnabled(false);
+            setPayEnabled(false);
             stopPolling();
-            fireEvent(new PaymentConfirmedEvent(this, result));
+            fireEvent(new PaymentConfirmedEvent(this, result, submittedToken));
         } else if (Set.of(PaymentStatus.FAILED, PaymentStatus.UNDERPAID, PaymentStatus.NO_MATCHING_TRANSFER,
                 PaymentStatus.ALREADY_CLAIMED).contains(result.status())) {
             stopPolling();
-            fireEvent(new PaymentFailedEvent(this, result, false));
-            pay.setEnabled(true);
+            fireEvent(new PaymentFailedEvent(this, result, false, submittedToken));
+            setPayEnabled(true);
         }
     }
 
@@ -301,7 +415,7 @@ public class StablecoinCheckout extends VerticalLayout {
         pollRegistration = null;
         if (pollingUi != null) releasePolling(pollingUi);
         pollingUi = null;
-        if (!paid) pay.setEnabled(true);
+        if (!paid) setPayEnabled(true);
     }
 
     @Override protected void onDetach(DetachEvent event) { stopPolling(); super.onDetach(event); }
@@ -316,21 +430,33 @@ public class StablecoinCheckout extends VerticalLayout {
     /** Event fired after the wallet submits a transaction. */
     public static class PaymentSubmittedEvent extends ComponentEvent<StablecoinCheckout> {
         private final String hash;
-        public PaymentSubmittedEvent(StablecoinCheckout source, String hash) { super(source, false); this.hash = hash; }
+        private final TokenInfo token;
+        public PaymentSubmittedEvent(StablecoinCheckout source, String hash) { this(source, hash, null); }
+        public PaymentSubmittedEvent(StablecoinCheckout source, String hash, TokenInfo token) { super(source, false); this.hash = hash; this.token = token; }
         public String getHash() { return hash; }
+        /** Returns the token used by this payment, or null when the token had not yet been determined. */
+        public TokenInfo getToken() { return token; }
     }
     /** Event fired after the payment satisfies all on-chain requirements. */
     public static class PaymentConfirmedEvent extends ComponentEvent<StablecoinCheckout> {
         private final PaymentResult result;
-        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result) { super(source, false); this.result = result; }
+        private final TokenInfo token;
+        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result) { this(source, result, null); }
+        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result, TokenInfo token) { super(source, false); this.result = result; this.token = token; }
         public PaymentResult getResult() { return result; }
+        /** Returns the token used by this payment, or null when the token had not yet been determined. */
+        public TokenInfo getToken() { return token; }
     }
     /** Event fired when a submitted payment cannot be accepted. */
     public static class PaymentFailedEvent extends ComponentEvent<StablecoinCheckout> {
         private final PaymentResult result;
         private final boolean userRejected;
-        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected) { super(source, false); this.result = result; this.userRejected = userRejected; }
+        private final TokenInfo token;
+        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected) { this(source, result, userRejected, null); }
+        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected, TokenInfo token) { super(source, false); this.result = result; this.userRejected = userRejected; this.token = token; }
         public PaymentResult getResult() { return result; }
         public boolean isUserRejected() { return userRejected; }
+        /** Returns the token used by this payment, or null when the token had not yet been determined. */
+        public TokenInfo getToken() { return token; }
     }
 }
