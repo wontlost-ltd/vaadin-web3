@@ -86,10 +86,10 @@ public final class TokenGate implements BeforeEnterListener {
     public enum Decision { ALLOW, SIGN_IN_REQUIRED, INSUFFICIENT, UNAVAILABLE }
 
     private TokenInfo resolve(RequiresToken requirement) {
-        if ("USDC".equalsIgnoreCase(requirement.token())) {
-            return Tokens.usdc(requirement.chainId()).orElseThrow(
-                    () -> new IllegalArgumentException("USDC is not registered on chain " + requirement.chainId()));
-        }
+        var builtIn = Tokens.find(requirement.token(), requirement.chainId());
+        if (builtIn.isPresent()) return builtIn.get();
+        if (Tokens.symbols().stream().anyMatch(symbol -> symbol.equalsIgnoreCase(requirement.token())))
+            throw new IllegalArgumentException(requirement.token() + " is not registered on chain " + requirement.chainId());
         return new TokenInfo("TOKEN", requirement.chainId(), requirement.token(), requirement.decimals());
     }
 

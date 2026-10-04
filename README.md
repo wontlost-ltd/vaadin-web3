@@ -1,6 +1,6 @@
 # Web3 Add-on for Vaadin
 
-Wallet login, token-gated views and USDC payments for Vaadin Flow, in plain
+Wallet login, token-gated views and stablecoin payments for Vaadin Flow, in plain
 server-side Java. You don't need a JavaScript web3 library or a frontend build
 step.
 
@@ -14,9 +14,9 @@ step.
   on the server.
 - **Token-gated routes**: add `@RequiresToken` to a view to require a token
   balance before it opens.
-- **Stablecoin checkout**: accept USDC on any of the 11 built-in networks you
-  register an RPC endpoint for. Each payment is checked against the on-chain
-  receipt before it is confirmed.
+- **Stablecoin checkout**: accept USDC, USDT, EURC or PYUSD on supported
+  networks where you register an RPC endpoint. Each payment is checked against
+  the on-chain receipt before it is confirmed.
 
 Requires **Vaadin 25.3+** and **Java 21+**.
 
@@ -30,8 +30,8 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 | WalletConnect mobile wallets | `vaadin-web3-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
 | `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
 | `@RequiresToken` | `vaadin-web3-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
-| `StablecoinCheckout` | `vaadin-web3-server` | USDC transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders |
-| `EthRpcClient`, `Erc20`, `Tokens` | `vaadin-web3-server` | Minimal JSON-RPC client, ERC-20 calls, built-in USDC contract addresses |
+| `StablecoinCheckout` | `vaadin-web3-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders |
+| `EthRpcClient`, `Erc20`, `Tokens` | `vaadin-web3-server` | Minimal JSON-RPC client, ERC-20 calls, built-in stablecoin contract addresses |
 
 The `vaadin-web3` component module has **no third-party dependencies**. The
 `vaadin-web3-server` module adds `org.web3j:crypto` for signature
@@ -347,7 +347,7 @@ The server module provides an `EthRpcClient` that works over either a JSON-RPC
 URL or a custom `JsonRpcTransport`.
 
 - `Erc20` builds common ERC-20 calls and reads `balanceOf` / `decimals`.
-- `Tokens.usdc(chainId)` returns the built-in USDC contracts.
+- `Tokens.find(symbol, chainId)` looks up built-in USDC, USDT, EURC and PYUSD contracts. `Tokens.usdc(chainId)` remains available for USDC.
 - `Tokens.toBaseUnits()` converts display amounts without rounding.
 
 Register your RPC clients in an application-scoped `ChainRegistry` and store
@@ -379,6 +379,20 @@ Built-in USDC addresses come from Circle's documentation:
 | Polygon Amoy | 80002 |
 | Avalanche C-Chain | 43114 |
 
+### Supported stablecoins
+
+Every registered token has 6 decimal places. Addresses in the registry are
+from issuer documentation: [Circle](https://developers.circle.com/stablecoins/eurc-contract-addresses),
+[Tether](https://tether.to/en/supported-protocols/) / [USDT0](https://docs.usdt0.to/) and
+[Paxos](https://docs.paxos.com/guides/stablecoin/pyusd/mainnet).
+
+| Token | Networks (chain id) | Notes |
+|---|---|---|
+| USDC | Ethereum (1), Sepolia (11155111), Base (8453), Base Sepolia (84532), Arbitrum One (42161), Arbitrum Sepolia (421614), OP Mainnet (10), OP Sepolia (11155420), Polygon (137), Polygon Amoy (80002), Avalanche C-Chain (43114) | Circle |
+| USDT | Ethereum (1), Avalanche C-Chain (43114), Arbitrum One (42161), OP Mainnet (10), Polygon (137) | USDT0 on Arbitrum, OP Mainnet and Polygon |
+| EURC | Ethereum (1), Base (8453), Avalanche C-Chain (43114), Sepolia (11155111), Base Sepolia (84532), Avalanche Fuji (43113) | Circle |
+| PYUSD | Ethereum (1), Arbitrum One (42161), Polygon (137), Sepolia (11155111), Arbitrum Sepolia (421614), Polygon Amoy (80002) | Paxos |
+
 ### Token-gated views
 
 Add `@RequiresToken` to a route to require a wallet balance. A route listener
@@ -390,6 +404,10 @@ reports is never used.
 @Route("holders")
 @RequiresToken(chainId = 11155111, token = "USDC", minBalance = "1")
 public class HoldersView extends VerticalLayout { }
+
+// Built-in symbols are case-insensitive; contract addresses can also be used.
+@RequiresToken(chainId = 42161, token = "usdt", minBalance = "10")
+public class UsdtHoldersView extends VerticalLayout { }
 
 // Any ERC-20 or ERC-721 contract; decimals = 0 means "owns at least one NFT"
 @RequiresToken(chainId = 1, token = "0xYourNftContract", minBalance = "1", decimals = 0)
@@ -414,9 +432,11 @@ tokens away therefore keeps access for at most that long.
 
 ### Stablecoin checkout
 
-`StablecoinCheckout` asks the connected wallet to transfer USDC. It then
-checks the transaction receipt and Transfer logs on chain before it reports
-success.
+`StablecoinCheckout` asks the connected wallet to transfer a built-in
+stablecoin. By default it accepts USDC; use `setTokens("USDC", "PYUSD")` to
+show a token selector. Accepted tokens must share a currency because the
+checkout has one amount. It checks the transaction receipt and Transfer logs
+on chain before it reports success.
 
 ```java
 StablecoinCheckout checkout = new StablecoinCheckout(chains, ledger, recipient, new BigDecimal("25.00"))
@@ -433,7 +453,7 @@ How it works:
 
 - **Accepted payment**: a payment is confirmed only when all of these hold:
   - The receipt succeeded.
-  - The USDC Transfer logs sent to `recipient` add up to at least the amount.
+  - The selected token's Transfer logs sent to `recipient` add up to at least the amount.
   - The transaction has reached the required number of confirmations
     (`setMinConfirmations`).
 - **Payer check**: when the user signed in with SIWE, the payer must also
@@ -455,6 +475,10 @@ How it works:
 If you verify payments yourself with `PaymentVerifier`, always build the
 `PaymentRequest` on the server from your own order data. Never build it from
 values sent by the browser.
+
+Payment events expose `getToken()` so applications can identify the token
+contract and symbol used. It can be `null` when a failure occurs before the
+token is determined.
 
 ## Security model
 
@@ -484,11 +508,12 @@ mvn spring-boot:run -pl demo    # http://localhost:8080
 | `/` | Wallet connection, EIP-6963 wallets, signing, transactions, chain switching |
 | `/login` | Sign-In with Ethereum |
 | `/holders` | A view gated on 1 Sepolia USDC |
-| `/checkout` | A 1.00 Sepolia USDC checkout |
+| `/checkout` | A 1.00 Sepolia USDC or PYUSD checkout |
 
 You need a browser wallet extension such as MetaMask on the Sepolia test
 network. You can get test USDC from the
-[Circle faucet](https://faucet.circle.com/). Before trying the checkout, set
+[Circle faucet](https://faucet.circle.com/), and test PYUSD from the
+[Paxos faucet](https://faucet.paxos.com/). Before trying the checkout, set
 `web3.demo.recipient` in `demo/src/main/resources/application.properties` to
 an address you control.
 
@@ -510,10 +535,6 @@ mvn verify                               # build everything and run the unit tes
 (cd walletconnect && npm ci && npm test) # WalletConnect frontend unit tests
 mvn install -Pdirectory -pl addon -am    # also builds the Vaadin Directory zip
 ```
-
-## Roadmap
-
-- More stablecoins (USDT, EURC)
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
