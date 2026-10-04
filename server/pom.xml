@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <name>Vaadin Web3 Server</name>
-    <description>Server-side Sign-In with Ethereum support for Vaadin.</description>
+    <description>Server-side web3 features for Vaadin: Sign-In with Ethereum (EIP-4361), token-gated routes and verified USDC checkout.</description>
     <url>https://github.com/wontlost-ltd/vaadin-web3</url>
 
     <licenses>
