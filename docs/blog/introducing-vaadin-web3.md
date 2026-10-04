@@ -38,8 +38,10 @@ The server does all the work:
 - It checks the domain, URI, chain and time window of the signed message.
 - It recovers the signer and stores the verified identity in `Web3Session`.
 
-Our test suite checks the message parser against messages produced by the
-reference `siwe` and `ethers` libraries.
+Smart-contract wallets work too. Safe and Coinbase Smart Wallet are checked
+on chain through ERC-1271. Wallets that haven't been deployed yet are checked
+through ERC-6492. Our test suite checks the message parser against messages
+produced by the reference `siwe` and `ethers` libraries.
 
 ## 3. Gate a view on token ownership
 
@@ -99,6 +101,5 @@ built in.
 ```
 
 The repository includes a Spring Boot demo with every feature wired up on the
-Sepolia testnet. Next on the roadmap are smart-contract wallet signatures
-(EIP-1271) and WalletConnect for mobile wallets. Feedback and issues are
+Sepolia testnet. Next on the roadmap is WalletConnect for mobile wallets. Feedback and issues are
 welcome.
