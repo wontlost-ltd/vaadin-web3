@@ -17,6 +17,7 @@ import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.Composite;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.router.QueryParameters;
 import com.vaadin.flow.server.VaadinRequest;
 import com.vaadin.flow.server.VaadinContext;
 import com.vaadin.flow.server.VaadinService;
@@ -44,6 +45,8 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     private String statement;
     private Set<Long> allowedChainIds = Set.of();
     private boolean flowInProgress;
+    private boolean disconnectWalletOnSignOut = true;
+    private boolean navigateToContinueTarget = true;
 
     /** Creates a SIWE component using the supplied one-time nonce store. */
     public SiweLogin(NonceStore nonces) {
@@ -101,6 +104,23 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     public Web3Connect getWallet() { return wallet; }
     /** Sets the sign-in button label. */
     public SiweLogin setButtonText(String text) { signInButton.setText(Objects.requireNonNull(text)); return this; }
+    /** Sets whether signing out also disconnects the wallet. */
+    public SiweLogin setDisconnectWalletOnSignOut(boolean value) {
+        disconnectWalletOnSignOut = value;
+        return this;
+    }
+    /** Sets whether a successful sign-in navigates to a safe continue target in the current URL. */
+    public SiweLogin setNavigateToContinueTarget(boolean value) {
+        navigateToContinueTarget = value;
+        return this;
+    }
+
+    /** Clears the verified session, disconnects the wallet by default, and fires a signed-out event. */
+    public void signOut() {
+        Web3Session.signOut();
+        if (disconnectWalletOnSignOut) wallet.disconnect();
+        fireEvent(new SignedOutEvent(this));
+    }
 
     private void beginSignIn() {
         if (flowInProgress) {
@@ -191,7 +211,20 @@ public class SiweLogin extends Composite<HorizontalLayout> {
         }
         flowInProgress = false;
         signInButton.setEnabled(true);
+        if (navigateToContinueTarget) {
+            var ui = getUI().orElse(null);
+            if (ui != null) {
+                QueryParameters parameters = ui.getInternals().getActiveViewLocation().getQueryParameters();
+                parameters.getSingleParameter("continue").filter(SiweLogin::isSafeContinueTarget)
+                        .ifPresent(ui::navigate);
+            }
+        }
         fireEvent(new SignedInEvent(this, verified));
+    }
+
+    static boolean isSafeContinueTarget(String target) {
+        return target != null && !target.isBlank() && !target.contains("://")
+                && !target.startsWith("//") && !target.contains("\\");
     }
 
     private void finishFailure(SiweException.Reason reason, int walletErrorCode, boolean userRejected) {
@@ -336,5 +369,15 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     /** Registers a listener for failed sign-ins. */
     public Registration addSignInFailedListener(ComponentEventListener<SignInFailedEvent> listener) {
         return addListener(SignInFailedEvent.class, listener);
+    }
+
+    /** Registers a listener for signed-out events. */
+    public Registration addSignedOutListener(ComponentEventListener<SignedOutEvent> listener) {
+        return addListener(SignedOutEvent.class, listener);
+    }
+
+    /** Event fired after the verified session is cleared. */
+    public static class SignedOutEvent extends ComponentEvent<SiweLogin> {
+        public SignedOutEvent(SiweLogin source) { super(source, false); }
     }
 }

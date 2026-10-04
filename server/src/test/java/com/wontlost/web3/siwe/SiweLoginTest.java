@@ -15,6 +15,29 @@ import org.junit.jupiter.api.Test;
 class SiweLoginTest {
 
     @Test
+    void acceptsOnlyApplicationRelativeContinueTargets() {
+        assertEquals(true, SiweLogin.isSafeContinueTarget("/holders?tab=owned"));
+        assertEquals(false, SiweLogin.isSafeContinueTarget("https://evil"));
+        assertEquals(false, SiweLogin.isSafeContinueTarget("//evil"));
+        assertEquals(false, SiweLogin.isSafeContinueTarget("\\\\evil"));
+    }
+
+    @Test
+    void signOutCanSkipWalletDisconnectAndFiresEvent() throws Exception {
+        SiweLogin login = new SiweLogin(new InMemoryNonceStore(java.time.Duration.ofMinutes(5)))
+                .setDisconnectWalletOnSignOut(false);
+        boolean[] fired = { false };
+        login.addSignedOutListener(event -> fired[0] = true);
+
+        login.signOut();
+
+        assertEquals(true, fired[0]);
+        Field field = SiweLogin.class.getDeclaredField("disconnectWalletOnSignOut");
+        field.setAccessible(true);
+        assertEquals(false, field.get(login));
+    }
+
+    @Test
     void derivesDomainAndUriFromRequestValues() {
         assertEquals("example.com:8443", SiweLogin.deriveDomain("example.com:8443"));
         assertEquals("https://example.com:8443", SiweLogin.deriveUri("https", "example.com:8443"));

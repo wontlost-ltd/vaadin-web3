@@ -28,7 +28,7 @@ import com.wontlost.web3.Web3Utils;
  * address display, message signing, transactions, balance and chain
  * switching.
  */
-@Route("")
+@Route(value = "", layout = MainLayout.class)
 public class DemoView extends VerticalLayout {
 
     private final Web3Connect wallet = new Web3Connect();

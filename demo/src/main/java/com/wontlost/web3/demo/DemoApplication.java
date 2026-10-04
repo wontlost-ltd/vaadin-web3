@@ -5,6 +5,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.component.page.Push;
+import com.vaadin.flow.component.dependency.StyleSheet;
+import com.vaadin.flow.theme.lumo.Lumo;
 
 /**
  * Demo application for the Vaadin web3 add-on.
@@ -14,6 +16,7 @@ import com.vaadin.flow.component.page.Push;
  * (e.g. MetaMask) installed.
  */
 @Push
+@StyleSheet(Lumo.STYLESHEET)
 @SpringBootApplication
 public class DemoApplication implements AppShellConfigurator {
 
