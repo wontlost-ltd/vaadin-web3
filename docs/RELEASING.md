@@ -1,6 +1,7 @@
 # Releasing
 
-Two artifacts are published to Maven Central, `com.wontlost:vaadin-web3` and
+Three artifacts are published to Maven Central: `com.wontlost:vaadin-web3`,
+`com.wontlost:vaadin-web3-walletconnect`, and
 `com.wontlost:vaadin-web3-server`. The parent POM and the demo are never
 deployed.
 
@@ -16,7 +17,7 @@ deployed.
    anything:
 
    ```bash
-   mvn -B -Prelease -Dgpg.skip verify -pl addon,server -am
+   mvn -B -Prelease -Dgpg.skip verify -pl addon,walletconnect,server -am
    ```
 
 3. Set the version, move the `Unreleased` heading in `CHANGELOG.md` to today's
@@ -26,10 +27,10 @@ deployed.
    mvn versions:set -DnewVersion=1.0.0 -DgenerateBackupPoms=false
    ```
 
-4. Deploy both modules:
+4. Deploy the three published modules:
 
    ```bash
-   mvn -B -Prelease deploy -pl addon,server -am
+   mvn -B -Prelease deploy -pl addon,walletconnect,server -am
    ```
 
 5. Tag the release and push the tag (`git tag v1.0.0 && git push origin v1.0.0`),
@@ -38,11 +39,11 @@ deployed.
    [`vaadin-directory.md`](vaadin-directory.md):
 
    ```bash
-   mvn clean package -Pdirectory -pl addon -am -DskipTests
+   mvn clean package -Pdirectory -pl addon,walletconnect -am -DskipTests
    ```
 
 7. Move to the next development version, for example
    `mvn versions:set -DnewVersion=1.1.0-SNAPSHOT`.
 
-The Directory zip contains the component module only. The server module's
+Each component module produces a Directory zip. The server module's
 documentation lives in the README.

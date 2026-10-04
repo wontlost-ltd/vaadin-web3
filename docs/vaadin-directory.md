@@ -18,6 +18,9 @@ Bring Ethereum wallets to your Vaadin application without writing JavaScript.
   Rabby, Brave and any other EIP-1193 provider. When several wallets are
   installed, it finds them through EIP-6963 and shows a built-in, accessible
   picker.
+- **Connect mobile wallets.** The optional `vaadin-web3-walletconnect` module
+  adds WalletConnect to the same picker, with desktop QR codes and mobile app
+  deep links. It requires a Reown project ID and supports the configured chains.
 - **Sign in with Ethereum.** `SiweLogin` follows EIP-4361. The server issues
   single-use nonces, recovers the signature and stores a verified identity in
   `Web3Session`.
