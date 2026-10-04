@@ -35,8 +35,16 @@ class Web3UtilsTest {
         assertEquals(0, Web3Utils.weiHexToEther("0xde0b6b3a7640000")
                 .compareTo(BigDecimal.ONE));
         assertEquals("0x0", Web3Utils.etherToWeiHex(BigDecimal.ZERO));
+        assertEquals("0x0", Web3Utils.etherToWeiHex(new BigDecimal("0.000000000000000000")));
         assertThrows(IllegalArgumentException.class,
                 () -> Web3Utils.etherToWeiHex(new BigDecimal("-1")));
+        IllegalArgumentException missingEther = assertThrows(IllegalArgumentException.class,
+                () -> Web3Utils.etherToWeiHex(null));
+        assertEquals("ether amount is required", missingEther.getMessage());
+        IllegalArgumentException precisionError = assertThrows(IllegalArgumentException.class,
+                () -> Web3Utils.etherToWeiHex(new BigDecimal("0.0000000000000000001")));
+        assertTrue(precisionError.getMessage().contains("18 decimal places"));
+        assertThrows(IllegalArgumentException.class, () -> Web3Utils.weiHexToEther(null));
     }
 
     @Test
