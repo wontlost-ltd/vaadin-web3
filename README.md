@@ -116,7 +116,7 @@ add(login);
 
 Web3Session.current().ifPresent(user ->
         Notification.show("Current account: " + user.address()));
-Web3Session.signOut();
+login.signOut(); // Clears the verified session and disconnects the wallet by default
 ```
 
 When domain and URI are omitted, the component derives them from the first
@@ -208,6 +208,41 @@ The demo includes `vaadin-dev` for Vaadin development mode.
 
 The demo needs a browser wallet extension (e.g. MetaMask); use a test
 network such as Sepolia when trying transactions.
+
+## On-chain reads
+
+The server module provides an `EthRpcClient` over either a JSON-RPC URL or a
+custom `JsonRpcTransport`. `Erc20` builds common ERC-20 calls and reads
+`balanceOf` / `decimals`; `Tokens.usdc(chainId)` contains the supported USDC
+contracts and `Tokens.toBaseUnits()` converts display amounts without rounding.
+Register clients in the application-scoped `ChainRegistry` before using token
+gates or payment verification.
+
+## Token-gated views
+
+Annotate a Vaadin route with `@RequiresToken` to require a wallet balance. The
+automatic route listener checks the SIWE-verified address in `Web3Session` and
+forwards unsigned visitors to the configured login route. Balances are cached
+per browser tab for 30 seconds, so a holder who moves their tokens away keeps
+access for at most that long. For example, the demo's `/holders` route requires
+at least 1 Sepolia USDC. Test USDC can be claimed from the
+[Circle testnet faucet](https://faucet.circle.com/).
+
+## Stablecoin checkout
+
+`StablecoinCheckout` asks the connected wallet to transfer USDC and verifies
+the transaction receipt and Transfer logs against a `PaymentRequest`. The
+demo's `/checkout` route requests 1.00 Sepolia USDC; replace
+`web3.demo.recipient` in `application.properties` with the receiving wallet
+address. A process-local ledger prevents one transaction from satisfying two
+orders. The checkout uses the SIWE-verified address as the expected payer when
+available; otherwise it uses the connected wallet account reported by the
+client.
+Receipt verification runs on a bounded background executor; the UI is updated
+through `UI.access()` and the existing Vaadin polling cycle delivers the update
+to the browser without requiring `@Push`. A confirmed checkout remains disabled
+and displays “Paid”; call `reset(newOrderId)` to begin another order. A transfer
+without a matching token and recipient is reported as `NO_MATCHING_TRANSFER`.
 
 ## License
 

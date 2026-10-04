@@ -9,10 +9,9 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.Route;
 import com.wontlost.web3.siwe.InMemoryNonceStore;
 import com.wontlost.web3.siwe.SiweLogin;
-import com.wontlost.web3.siwe.Web3Session;
 
 /** Demonstrates server-verified Sign-In with Ethereum. */
-@Route("login")
+@Route(value = "login", layout = MainLayout.class)
 public class LoginView extends VerticalLayout {
 
     private static final InMemoryNonceStore NONCES = new InMemoryNonceStore(Duration.ofMinutes(5));
@@ -23,7 +22,7 @@ public class LoginView extends VerticalLayout {
     public LoginView() {
         setMaxWidth("720px");
         getStyle().set("margin", "0 auto");
-        signOut = new Button("Sign out", event -> signOut());
+        signOut = new Button("Sign out");
         signOut.setVisible(false);
 
         SiweLogin login = new SiweLogin(NONCES);
@@ -40,12 +39,12 @@ public class LoginView extends VerticalLayout {
                         + (event.isUserRejected() ? " (user rejected)" : ""));
             }
         });
+        login.addSignedOutListener(event -> {
+            status.setText("Signed out.");
+            signOut.setVisible(false);
+        });
+        signOut.addClickListener(event -> login.signOut());
         add(new H1("Sign-In with Ethereum"), login, status, signOut);
     }
 
-    private void signOut() {
-        Web3Session.signOut();
-        status.setText("Signed out.");
-        signOut.setVisible(false);
-    }
 }
