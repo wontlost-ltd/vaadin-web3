@@ -1,0 +1,340 @@
+package com.wontlost.web3.siwe;
+
+import java.io.Serializable;
+import java.net.URI;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
+
+import org.web3j.crypto.Keys;
+
+import com.vaadin.flow.component.ComponentEvent;
+import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.Composite;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.server.VaadinRequest;
+import com.vaadin.flow.server.VaadinContext;
+import com.vaadin.flow.server.VaadinService;
+import com.vaadin.flow.shared.Registration;
+import com.wontlost.web3.Chains;
+import com.wontlost.web3.Web3Connect;
+
+/**
+ * Vaadin sign-in control that requests an EIP-4361 signature and verifies it on the server.
+ * <p>
+ * Supply an application-scoped {@link NonceStore}; it is registered with the current
+ * {@link VaadinContext} when a service is available and restored after UI deserialization.
+ * Configure the public domain and URI explicitly in production, especially behind a proxy.
+ * EIP-1271 smart-contract wallet signatures are not supported yet.
+ */
+public class SiweLogin extends Composite<HorizontalLayout> {
+
+    private final Web3Connect wallet = new Web3Connect(true);
+    private final Button signInButton = new Button("Sign in with Ethereum");
+    private transient NonceStore nonces;
+    private transient SiweVerifier verifier;
+    private transient Supplier<VaadinContext> contextLookup = SiweLogin::currentContext;
+    private String domain;
+    private String uri;
+    private String statement;
+    private Set<Long> allowedChainIds = Set.of();
+    private boolean flowInProgress;
+
+    /** Creates a SIWE component using the supplied one-time nonce store. */
+    public SiweLogin(NonceStore nonces) {
+        this.nonces = Objects.requireNonNull(nonces, "nonces");
+        verifier = new SiweVerifier(nonces, Clock.systemUTC());
+        VaadinContext context = currentContext();
+        if (context != null) {
+            registerNonceStore(context, nonces);
+        }
+        signInButton.addClickListener(event -> beginSignIn());
+        wallet.addErrorListener(event -> {
+            if (flowInProgress) {
+                finishFailure(null, event.getCode(), event.isUserRejected());
+            }
+        });
+        getContent().add(wallet, signInButton);
+    }
+
+    /** Sets the expected domain. Configure this explicitly in production, especially behind a proxy. */
+    public SiweLogin setDomain(String value) { domain = value; return this; }
+    /** Sets the expected URI. Configure this explicitly in production, especially behind a proxy. */
+    public SiweLogin setUri(String value) { uri = value; return this; }
+    /** Sets an optional EIP-4361 statement. */
+    public SiweLogin setStatement(String value) { statement = value; return this; }
+    /** Restricts accepted chain ids; an empty set allows any positive chain id. */
+    public SiweLogin setAllowedChainIds(Set<Long> values) { allowedChainIds = Set.copyOf(values); return this; }
+    /** Replaces the verifier, for example to provide a custom clock or policy. */
+    public SiweLogin setVerifier(SiweVerifier value) { verifier = Objects.requireNonNull(value); return this; }
+
+    /** Reattaches the application nonce store after UI deserialization. */
+    public SiweLogin setNonceStore(NonceStore value) {
+        nonces = Objects.requireNonNull(value);
+        verifier = new SiweVerifier(value, Clock.systemUTC());
+        VaadinContext context = currentContext();
+        if (context != null) {
+            registerNonceStore(context, value);
+        }
+        return this;
+    }
+
+    /** Registers the application-scoped nonce store for UI restoration after deserialization. */
+    public static void registerNonceStore(VaadinContext context, NonceStore store) {
+        Objects.requireNonNull(context, "context").setAttribute(NonceStore.class, Objects.requireNonNull(store, "store"));
+    }
+
+    private static VaadinContext currentContext() {
+        VaadinService service = VaadinService.getCurrent();
+        return service == null ? null : service.getContext();
+    }
+
+    void setContextLookup(Supplier<VaadinContext> lookup) {
+        contextLookup = Objects.requireNonNull(lookup);
+    }
+    /** Returns the wallet component for external customization. */
+    public Web3Connect getWallet() { return wallet; }
+    /** Sets the sign-in button label. */
+    public SiweLogin setButtonText(String text) { signInButton.setText(Objects.requireNonNull(text)); return this; }
+
+    private void beginSignIn() {
+        if (flowInProgress) {
+            return;
+        }
+        flowInProgress = true;
+        signInButton.setEnabled(false);
+        String expectedDomain;
+        String expectedUri;
+        try {
+            expectedDomain = domain == null ? requestDomain(VaadinRequest.getCurrent()) : domain;
+            expectedUri = uri == null ? requestUri(VaadinRequest.getCurrent()) : uri;
+        } catch (RuntimeException exception) {
+            finishFailure(SiweException.Reason.MALFORMED, -1, false);
+            return;
+        }
+
+        var connected = wallet.isConnected()
+                ? java.util.concurrent.CompletableFuture.completedFuture(wallet.getAccount()) : wallet.connect();
+        connected.thenCompose(address -> {
+            String canonicalAddress = Keys.toChecksumAddress(address);
+            long chainId = Chains.toDecimal(wallet.getChainId()).longValueExact();
+            String nonce = requireNonces().issue();
+            Instant now = Clock.systemUTC().instant();
+            SiweMessage message = SiweMessage.builder()
+                    .scheme(URI.create(expectedUri).getScheme())
+                    .domain(expectedDomain)
+                    .address(canonicalAddress)
+                    .statement(statement)
+                    .uri(expectedUri)
+                    .chainId(chainId)
+                    .nonce(nonce)
+                    .issuedAt(now)
+                    .expirationTime(now.plus(Duration.ofMinutes(10)))
+                    .build();
+            return wallet.signMessage(message.toMessage()).thenApply(signature -> new SignedPayload(message, signature));
+        }).whenComplete((payload, error) -> {
+            if (error != null) {
+                Throwable cause = unwrap(error);
+                if (cause instanceof SiweException siweException) {
+                    finishFailure(siweException.getReason(), -1, false);
+                } else if (cause instanceof Web3Connect.Web3Exception walletException) {
+                    finishFailure(null, walletException.getCode(), walletException.isUserRejected());
+                } else {
+                    finishFailure(SiweException.Reason.MALFORMED, -1, false);
+                }
+                return;
+            }
+            try {
+                SiweExpectations expectations = SiweExpectations.forDomain(expectedDomain)
+                        .withUri(expectedUri).withAllowedChainIds(allowedChainIds);
+                VerifiedSignIn verified = requireVerifier().verify(payload.message().toMessage(),
+                        payload.signature(), expectations);
+                Web3Session.store(verified);
+                finishSuccess(verified);
+            } catch (SiweException exception) {
+                finishFailure(exception.getReason(), -1, false);
+            }
+        });
+    }
+
+    private NonceStore requireNonces() {
+        if (nonces == null) {
+            VaadinContext context = contextLookup == null ? currentContext() : contextLookup.get();
+            NonceStore restored = context == null ? null : context.getAttribute(NonceStore.class);
+            if (restored == null) {
+                throw new IllegalStateException("No application NonceStore is registered; call "
+                        + "SiweLogin.registerNonceStore(VaadinContext, NonceStore) before restoring the UI");
+            }
+            nonces = restored;
+            if (verifier == null) {
+                verifier = new SiweVerifier(restored, Clock.systemUTC());
+            }
+        }
+        return nonces;
+    }
+
+    private SiweVerifier requireVerifier() {
+        if (verifier == null) {
+            verifier = new SiweVerifier(requireNonces(), Clock.systemUTC());
+        }
+        return verifier;
+    }
+
+    private void finishSuccess(VerifiedSignIn verified) {
+        if (!flowInProgress) {
+            return;
+        }
+        flowInProgress = false;
+        signInButton.setEnabled(true);
+        fireEvent(new SignedInEvent(this, verified));
+    }
+
+    private void finishFailure(SiweException.Reason reason, int walletErrorCode, boolean userRejected) {
+        if (!flowInProgress) {
+            return;
+        }
+        flowInProgress = false;
+        signInButton.setEnabled(true);
+        fireEvent(new SignInFailedEvent(this, reason, walletErrorCode, userRejected));
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while ((current instanceof CompletionException || current instanceof java.util.concurrent.ExecutionException)
+                && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    static String requestDomain(VaadinRequest request) {
+        return deriveDomain(header(request, "Forwarded"), header(request, "X-Forwarded-Host"),
+                header(request, "Host"));
+    }
+
+    static String requestUri(VaadinRequest request) {
+        String scheme = request == null ? null : request.isSecure() ? "https" : "http";
+        return deriveUri(header(request, "Forwarded"), header(request, "X-Forwarded-Proto"),
+                header(request, "X-Forwarded-Host"), header(request, "Host"), scheme);
+    }
+
+    private static String header(VaadinRequest request, String name) {
+        return request == null ? null : request.getHeader(name);
+    }
+
+    static String deriveDomain(String forwarded, String forwardedHost, String host) {
+        String value = forwardedParameter(forwarded, "host");
+        if (value == null) value = firstValue(forwardedHost);
+        return deriveDomain(value == null ? host : value);
+    }
+
+    static String deriveUri(String forwarded, String forwardedProto, String forwardedHost,
+            String host, String requestScheme) {
+        String scheme = forwardedParameter(forwarded, "proto");
+        if (scheme == null) scheme = firstValue(forwardedProto);
+        if (scheme == null) scheme = requestScheme;
+        return deriveUri(scheme, deriveDomain(forwarded, forwardedHost, host));
+    }
+
+    private static String firstValue(String value) {
+        if (value == null) return null;
+        String first = value.split(",", 2)[0].trim();
+        return first.isEmpty() ? null : first;
+    }
+
+    private static String forwardedParameter(String header, String name) {
+        String element = firstForwardedElement(header);
+        if (element == null) return null;
+        for (String parameter : element.split(";")) {
+            String[] pair = parameter.trim().split("=", 2);
+            if (pair.length == 2 && pair[0].trim().equalsIgnoreCase(name)) {
+                String value = pair[1].trim();
+                if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                return value.isEmpty() ? null : value;
+            }
+        }
+        return null;
+    }
+
+    private static String firstForwardedElement(String header) {
+        if (header == null) return null;
+        boolean quoted = false;
+        for (int i = 0; i < header.length(); i++) {
+            char current = header.charAt(i);
+            if (current == '"' && (i == 0 || header.charAt(i - 1) != '\\')) quoted = !quoted;
+            if (current == ',' && !quoted) return header.substring(0, i);
+        }
+        return header;
+    }
+
+    static String deriveDomain(String host) {
+        if (host == null || host.isBlank()) {
+            throw new IllegalStateException("Host header is unavailable");
+        }
+        return host;
+    }
+
+    static String deriveUri(String scheme, String host) {
+        if (scheme == null || scheme.isBlank()) {
+            throw new IllegalStateException("Request scheme is unavailable");
+        }
+        return scheme + "://" + deriveDomain(host);
+    }
+
+    private record SignedPayload(SiweMessage message, String signature) implements Serializable {
+    }
+
+    /** Event fired after a SIWE message and its signature have been verified. */
+    public static class SignedInEvent extends ComponentEvent<SiweLogin> {
+        private final VerifiedSignIn signIn;
+
+        /** Creates the successful sign-in event. */
+        public SignedInEvent(SiweLogin source, VerifiedSignIn signIn) {
+            super(source, false);
+            this.signIn = signIn;
+        }
+
+        /** Returns the verified identity. */
+        public VerifiedSignIn getSignIn() { return signIn; }
+    }
+
+    /** Event fired when signing or verification fails. */
+    public static class SignInFailedEvent extends ComponentEvent<SiweLogin> {
+        private final SiweException.Reason reason;
+        private final int walletErrorCode;
+        private final boolean userRejected;
+
+        /** Creates the failed sign-in event. */
+        public SignInFailedEvent(SiweLogin source, SiweException.Reason reason,
+                int walletErrorCode, boolean userRejected) {
+            super(source, false);
+            this.reason = reason;
+            this.walletErrorCode = walletErrorCode;
+            this.userRejected = userRejected;
+        }
+
+        /** Returns the SIWE rejection reason, or {@code null} for a wallet error. */
+        public SiweException.Reason getReason() { return reason; }
+        /** Returns the wallet error code, or {@code -1} when unavailable. */
+        public int getWalletErrorCode() { return walletErrorCode; }
+        /** Returns whether the wallet reports that the user rejected the request. */
+        public boolean isUserRejected() { return userRejected; }
+    }
+
+    /** Registers a listener for successful sign-ins. */
+    public Registration addSignedInListener(ComponentEventListener<SignedInEvent> listener) {
+        return addListener(SignedInEvent.class, listener);
+    }
+
+    /** Registers a listener for failed sign-ins. */
+    public Registration addSignInFailedListener(ComponentEventListener<SignInFailedEvent> listener) {
+        return addListener(SignInFailedEvent.class, listener);
+    }
+}

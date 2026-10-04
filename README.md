@@ -82,6 +82,52 @@ The `CompletableFuture` callbacks run while the Vaadin session is locked, so no 
 
 EIP-712 typed data is supported through `wallet.signTypedData(jsonPayload)`.
 
+### Sign-In with Ethereum (SIWE)
+
+Add the server module alongside the Vaadin web3 add-on:
+
+```xml
+<dependency>
+    <groupId>com.wontlost</groupId>
+    <artifactId>vaadin-web3-server</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+`SiweLogin` issues a one-time server nonce, asks the connected wallet to sign an
+[EIP-4361](https://eips.ethereum.org/EIPS/eip-4361) message, verifies the
+personal signature and stores the verified identity in the current Vaadin
+session. Keep a single `InMemoryNonceStore` for the application:
+
+```java
+private static final NonceStore NONCES = new InMemoryNonceStore();
+
+SiweLogin login = new SiweLogin(NONCES)
+        .setDomain("example.com")
+        .setUri("https://example.com")
+        .setStatement("Sign in to Example");
+login.addSignedInListener(event -> {
+    VerifiedSignIn user = event.getSignIn();
+    Notification.show("Signed in as " + user.address());
+});
+login.addSignInFailedListener(event ->
+        Notification.show("Sign-in failed: " + event.getReason()));
+add(login);
+
+Web3Session.current().ifPresent(user ->
+        Notification.show("Current account: " + user.address()));
+Web3Session.signOut();
+```
+
+When domain and URI are omitted, the component derives them from the first
+`Forwarded` value, then `X-Forwarded-Host` / `X-Forwarded-Proto`, and finally
+the request `Host` header and secure flag. Configure `setDomain()` and
+`setUri()` explicitly in production, especially behind a reverse proxy, so
+the SIWE origin matches the public page origin. Register the application
+nonce store with `SiweLogin.registerNonceStore(VaadinContext, NonceStore)` when
+the component may be deserialized outside the request that constructed it.
+`SiweLogin` does not support EIP-1271 smart-contract wallet signatures yet.
+
 ### Send a transaction
 
 ```java
@@ -142,6 +188,7 @@ Disconnect state applies per site and synchronizes with other instances on the s
 ## Project structure
 
 - `addon/` — the add-on itself (`com.wontlost:vaadin-web3`)
+- `server/` — server-side SIWE messages, nonce storage and signature verification (`com.wontlost:vaadin-web3-server`)
 - `demo/` — a Spring Boot demo application exercising all features
 
 ## Development
@@ -154,6 +201,8 @@ mvn -pl addon -am install
 mvn install -Pdirectory -pl addon -am   # also builds the Vaadin Directory zip
 mvn spring-boot:run -pl demo    # run the demo at http://localhost:8080
 ```
+
+The SIWE demo is available at `/login`.
 
 The demo includes `vaadin-dev` for Vaadin development mode.
 

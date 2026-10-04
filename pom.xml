@@ -34,6 +34,7 @@
 
     <modules>
         <module>addon</module>
+        <module>server</module>
         <module>demo</module>
     </modules>
 </project>
