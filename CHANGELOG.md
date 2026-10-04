@@ -21,6 +21,11 @@ First public release.
   copy.
 - `Chains` and `Web3Utils` helpers.
 
+### Added — `vaadin-web3-walletconnect`
+- Optional WalletConnect v2 mobile wallet support with EIP-6963 discovery,
+  desktop QR codes, mobile app deep links, configured chain limits, and lazy
+  provider loading.
+
 ### Added — `vaadin-web3-server` (new module)
 - Sign-In with Ethereum (EIP-4361):
   - `SiweMessage` builds messages and parses them strictly. It interoperates

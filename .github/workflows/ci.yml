@@ -21,13 +21,12 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: addon
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
-      - run: npm test
+      - run: npm ci && npm test
+        working-directory: addon
+      - run: npm ci && npm test
+        working-directory: walletconnect
