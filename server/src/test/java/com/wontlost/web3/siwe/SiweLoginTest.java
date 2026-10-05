@@ -14,6 +14,56 @@ import org.junit.jupiter.api.Test;
 
 class SiweLoginTest {
 
+    @Test void screeningRejectsBeforeSessionCanBeWrittenAndFailsClosedOnExceptions() {
+        VerifiedSignIn verified = new VerifiedSignIn("0x0000000000000000000000000000000000000001", 1, null,
+                java.time.Instant.now());
+        SiweException blocked = assertThrows(SiweException.class, () -> SiweLogin.screenVerifiedAddress(verified,
+                address -> com.wontlost.web3.screening.AddressScreening.ScreeningDecision.block("blocked")));
+        assertEquals(SiweException.Reason.ADDRESS_BLOCKED, blocked.getReason());
+        SiweException unavailable = assertThrows(SiweException.class, () -> SiweLogin.screenVerifiedAddress(verified,
+                address -> { throw new IllegalStateException("offline"); }));
+        assertEquals(SiweException.Reason.SCREENING_UNAVAILABLE, unavailable.getReason());
+        SiweLogin.screenVerifiedAddress(verified, null);
+        assertEquals(java.util.Optional.empty(), Web3Session.current());
+    }
+
+    @Test void blockedAndUnavailableScreeningFireFailedEventBeforeSessionWrite() throws Exception {
+        VerifiedSignIn verified = new VerifiedSignIn("0x0000000000000000000000000000000000000001", 1, null,
+                java.time.Instant.now());
+        record Scenario(com.wontlost.web3.screening.AddressScreening screening, SiweException.Reason reason) { }
+        var scenarios = java.util.List.of(
+                new Scenario(address -> com.wontlost.web3.screening.AddressScreening.ScreeningDecision.block("policy"),
+                        SiweException.Reason.ADDRESS_BLOCKED),
+                new Scenario(address -> { throw new IllegalStateException("oracle offline"); },
+                        SiweException.Reason.SCREENING_UNAVAILABLE));
+        for (Scenario scenario : scenarios) {
+            VaadinContext context = context(new HashMap<>());
+            com.wontlost.web3.screening.AddressScreening.register(context, scenario.screening());
+            SiweLogin login = new SiweLogin(new InMemoryNonceStore());
+            login.setContextLookup(() -> context);
+            setField(login, "flowInProgress", true);
+            java.util.concurrent.atomic.AtomicReference<SiweLogin.SignInFailedEvent> failed = new java.util.concurrent.atomic.AtomicReference<>();
+            login.addSignInFailedListener(failed::set);
+            var complete = SiweLogin.class.getDeclaredMethod("completeVerifiedSignIn", VerifiedSignIn.class);
+            complete.setAccessible(true);
+            complete.invoke(login, verified);
+            assertEquals(scenario.reason(), failed.get().getReason());
+            assertEquals(java.util.Optional.empty(), Web3Session.current());
+        }
+    }
+
+    @Test void addressScreeningRegistrationIsIdempotentButRejectsReplacement() {
+        Map<Class<?>, Object> attributes = new HashMap<>();
+        VaadinContext context = context(attributes);
+        var screening = (com.wontlost.web3.screening.AddressScreening)
+                address -> com.wontlost.web3.screening.AddressScreening.ScreeningDecision.allow();
+        com.wontlost.web3.screening.AddressScreening.register(context, screening);
+        com.wontlost.web3.screening.AddressScreening.register(context, screening);
+        assertEquals(screening, com.wontlost.web3.screening.AddressScreening.find(context));
+        assertThrows(IllegalStateException.class, () -> com.wontlost.web3.screening.AddressScreening.register(context,
+                address -> com.wontlost.web3.screening.AddressScreening.ScreeningDecision.allow()));
+    }
+
     @Test
     void acceptsOnlyApplicationRelativeContinueTargets() {
         assertEquals(true, SiweLogin.isSafeContinueTarget("/holders?tab=owned"));
@@ -102,6 +152,18 @@ class SiweLoginTest {
         Field chainsField = SiweVerifier.class.getDeclaredField("chains");
         chainsField.setAccessible(true);
         assertEquals(chains, chainsField.get(verifier));
+    }
+
+    private static VaadinContext context(Map<Class<?>, Object> attributes) {
+        InvocationHandler handler = (proxy, method, args) -> {
+            if ("setAttribute".equals(method.getName())) { attributes.put((Class<?>) args[0], args[1]); return null; }
+            if ("getAttribute".equals(method.getName())) {
+                Object value = attributes.get(args[0]);
+                return value == null && args.length == 2 ? ((java.util.function.Supplier<?>) args[1]).get() : value;
+            }
+            return null;
+        };
+        return (VaadinContext) Proxy.newProxyInstance(VaadinContext.class.getClassLoader(), new Class<?>[] { VaadinContext.class }, handler);
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {

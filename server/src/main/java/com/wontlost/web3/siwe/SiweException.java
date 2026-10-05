@@ -35,6 +35,8 @@ public class SiweException extends RuntimeException {
         ADDRESS_MISMATCH,
         NONCE_INVALID,
         /** A smart-contract wallet signature could not be checked because the RPC endpoint failed; retrying may succeed. */
-        SIGNATURE_UNVERIFIABLE
+        SIGNATURE_UNVERIFIABLE,
+        ADDRESS_BLOCKED,
+        SCREENING_UNAVAILABLE
     }
 }

@@ -1,31 +1,28 @@
 package com.wontlost.web3.demo;
 
-import java.time.Duration;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.Route;
-import com.wontlost.web3.siwe.InMemoryNonceStore;
+import com.wontlost.web3.pro.jdbc.JdbcNonceStore;
 import com.wontlost.web3.siwe.SiweLogin;
 
 /** Demonstrates server-verified Sign-In with Ethereum. */
 @Route(value = "login", layout = MainLayout.class)
 public class LoginView extends VerticalLayout {
 
-    private static final InMemoryNonceStore NONCES = new InMemoryNonceStore(Duration.ofMinutes(5));
-
     private final Paragraph status = new Paragraph("Not signed in.");
     private final Button signOut;
 
-    public LoginView() {
+    public LoginView(JdbcNonceStore nonces) {
         setMaxWidth("720px");
         getStyle().set("margin", "0 auto");
         signOut = new Button("Sign out");
         signOut.setVisible(false);
 
-        SiweLogin login = new SiweLogin(NONCES);
+        SiweLogin login = new SiweLogin(nonces);
         login.addSignedInListener(event -> {
             var verified = event.getSignIn();
             status.setText("Signed in as " + verified.address() + " on chain " + verified.chainId());

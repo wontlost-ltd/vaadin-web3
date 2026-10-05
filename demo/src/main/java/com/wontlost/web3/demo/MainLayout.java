@@ -20,6 +20,7 @@ public class MainLayout extends AppLayout {
         navigation.addItem(new SideNavItem("Sign in", "/login"));
         navigation.addItem(new SideNavItem("Token holders", "/holders"));
         navigation.addItem(new SideNavItem("Checkout", "/checkout"));
+        navigation.addItem(new SideNavItem("Payments", "/payments"));
         addToDrawer(navigation);
 
         if (!projectId.isBlank()) {

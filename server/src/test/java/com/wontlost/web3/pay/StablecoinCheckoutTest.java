@@ -15,6 +15,60 @@ import com.wontlost.web3.chain.ChainRegistry;
 class StablecoinCheckoutTest {
     private static final String RECIPIENT = "0x0000000000000000000000000000000000000001";
 
+    @Test void screeningBlockFiresFailureDoesNotSubmitAndRestoresPay() {
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        // 排队执行器：筛查在后台执行，便于断言"调用返回时尚未阻塞等待结果"
+        java.util.List<Runnable> queued = new java.util.ArrayList<>();
+        StablecoinCheckout checkout = new StablecoinCheckout(chains, new InMemoryPaymentLedger(), RECIPIENT, BigDecimal.ONE, queued::add);
+        com.vaadin.flow.server.VaadinContext context = (com.vaadin.flow.server.VaadinContext)
+                java.lang.reflect.Proxy.newProxyInstance(com.vaadin.flow.server.VaadinContext.class.getClassLoader(),
+                        new Class<?>[] { com.vaadin.flow.server.VaadinContext.class }, (proxy, method, args) -> {
+                            if ("setAttribute".equals(method.getName())) { screeningContext.put((Class<?>) args[0], args[1]); return null; }
+                            if ("getAttribute".equals(method.getName())) {
+                                Object value = screeningContext.get(args[0]);
+                                return value == null && args.length == 2 ? ((java.util.function.Supplier<?>) args[1]).get() : value;
+                            }
+                            return null;
+                        });
+        com.wontlost.web3.screening.AddressScreening.register(context, address ->
+                com.wontlost.web3.screening.AddressScreening.ScreeningDecision.block("sanctions"));
+        checkout.setScreeningContextLookup(() -> context);
+        java.util.concurrent.atomic.AtomicReference<StablecoinCheckout.PaymentFailedEvent> event = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<StablecoinCheckout.PaymentSubmittedEvent> submitted = new java.util.concurrent.atomic.AtomicReference<>();
+        checkout.addPaymentFailedListener(event::set);
+        checkout.addPaymentSubmittedListener(submitted::set);
+        var wallet = checkout.getChildren().filter(com.wontlost.web3.Web3Connect.class::isInstance)
+                .map(com.wontlost.web3.Web3Connect.class::cast).findFirst().orElseThrow();
+        wallet.getElement().setProperty("chainId", "0x1");
+        checkout.onWalletConnected(checkout.capturePaymentIntent(), "order-1", null, null, 0,
+                "0x0000000000000000000000000000000000000002", null);
+        // 筛查不在调用线程同步执行：任务入队、此刻还没有结果
+        assertEquals(1, queued.size());
+        assertEquals(null, event.get());
+        queued.removeFirst().run();
+        assertEquals(PaymentStatus.FAILED, event.get().getResult().status());
+        assertEquals("sanctions", event.get().getBlockedReason());
+        assertTrue(button(checkout).isEnabled());
+        assertEquals(null, readField(checkout, "transactionHash"));
+        assertEquals(null, submitted.get());
+        assertTrue(readField(checkout, "submittedRequest") != null);
+        screeningContext.clear();
+        com.wontlost.web3.screening.AddressScreening.register(context, address -> { throw new IllegalStateException("offline"); });
+        checkout.onWalletConnected(checkout.capturePaymentIntent(), "order-2", null, null, 0,
+                "0x0000000000000000000000000000000000000002", null);
+        queued.removeFirst().run();
+        assertEquals(PaymentStatus.FAILED, event.get().getResult().status());
+        assertEquals("SCREENING_UNAVAILABLE", event.get().getBlockedReason());
+        assertTrue(button(checkout).isEnabled());
+        screeningContext.clear();
+    }
+    private static final java.util.Map<Class<?>, Object> screeningContext = new java.util.HashMap<>();
+    private static Object readField(Object target, String name) {
+        try { var field = target.getClass().getDeclaredField(name); field.setAccessible(true); return field.get(target); }
+        catch (ReflectiveOperationException exception) { throw new AssertionError(exception); }
+    }
+
     @Test void defaultsToUsdcAndSupportsValidatedTokenSelection() {
         StablecoinCheckout checkout = new StablecoinCheckout(new ChainRegistry(), new InMemoryPaymentLedger(),
                 RECIPIENT, new BigDecimal("25.00"));

@@ -37,6 +37,7 @@
         <module>walletconnect</module>
         <module>server</module>
         <module>onramp</module>
+        <module>pro</module>
         <module>monitor</module>
         <module>demo</module>
     </modules>

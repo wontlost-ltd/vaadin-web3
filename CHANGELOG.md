@@ -81,4 +81,10 @@ First public release.
 - Spring Boot demo with routes for wallet features, SIWE login, a token-gated
   view and a checkout.
 
+### Added — `vaadin-web3-pro` (commercial module, license DRAFT)
+- JDBC nonce storage and payment claims for multi-node applications.
+- Optional Chainalysis sanctions screening with cached decisions, screening audit records and local deny-list composition.
+- JDBC payment records, a filtered Vaadin payments view and CSV export with spreadsheet formula-injection mitigation.
+- The Apache `server` module adds the optional `AddressScreening` extension point; behavior is unchanged when it is not registered.
+
 [1.0.0]: https://github.com/wontlost-ltd/vaadin-web3/releases/tag/v1.0.0
