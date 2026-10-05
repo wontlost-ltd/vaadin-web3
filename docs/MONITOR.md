@@ -7,10 +7,10 @@ The monitor is an optional, non-custodial service. It watches configured EVM JSO
 Build and run the executable service from the repository root:
 
 ```bash
-mvn -B -ntp -pl monitor -am package
+mvn -B -ntp -pl web3-vaadin-monitor -am package
 MONITOR_ADMIN_TOKEN='replace-with-a-long-random-value' \
 MONITOR_RPC_11155111='https://your-sepolia-rpc.example' \
-java -jar monitor/target/vaadin-web3-monitor-1.0.0-SNAPSHOT.jar
+java -jar web3-vaadin-monitor/target/web3-vaadin-monitor-1.0.0-SNAPSHOT.jar
 ```
 
 By default, H2 stores data in `./data/monitor`; port 8080 is used. Only `/actuator/health` is exposed by Actuator. The database directory must persist across restarts.

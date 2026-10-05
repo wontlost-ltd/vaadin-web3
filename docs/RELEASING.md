@@ -1,8 +1,8 @@
 # Releasing
 
-Four artifacts are published to Maven Central: `com.wontlost:vaadin-web3`,
-`com.wontlost:vaadin-web3-walletconnect`, `com.wontlost:vaadin-web3-server`, and
-`com.wontlost:vaadin-web3-onramp`. The parent POM and the demo are never
+Four artifacts are published to Maven Central: `com.wontlost:web3-vaadin`,
+`com.wontlost:web3-vaadin-walletconnect`, `com.wontlost:web3-vaadin-server`, and
+`com.wontlost:web3-vaadin-onramp`. The parent POM and the demo are never
 deployed.
 
 ## Prerequisites
@@ -17,7 +17,7 @@ deployed.
    anything:
 
    ```bash
-   mvn -B -Prelease -Dgpg.skip verify -pl addon,walletconnect,server,onramp -am
+   mvn -B -Prelease -Dgpg.skip verify -pl web3-vaadin,web3-vaadin-walletconnect,web3-vaadin-server,web3-vaadin-onramp -am
    ```
 
 3. Set the version, move the `Unreleased` heading in `CHANGELOG.md` to today's
@@ -30,7 +30,7 @@ deployed.
 4. Deploy the four published modules:
 
    ```bash
-   mvn -B -Prelease deploy -pl addon,walletconnect,server,onramp -am
+   mvn -B -Prelease deploy -pl web3-vaadin,web3-vaadin-walletconnect,web3-vaadin-server,web3-vaadin-onramp -am
    ```
 
 5. Tag the release and push the tag (`git tag v1.0.0 && git push origin v1.0.0`),
@@ -39,7 +39,7 @@ deployed.
    [`vaadin-directory.md`](vaadin-directory.md):
 
    ```bash
-   mvn clean package -Pdirectory -pl addon,walletconnect -am -DskipTests
+   mvn clean package -Pdirectory -pl web3-vaadin,web3-vaadin-walletconnect -am -DskipTests
    ```
 
 7. Move to the next development version, for example

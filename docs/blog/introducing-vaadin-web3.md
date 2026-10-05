@@ -95,7 +95,7 @@ built in.
 ```xml
 <dependency>
     <groupId>com.wontlost</groupId>
-    <artifactId>vaadin-web3-server</artifactId>
+    <artifactId>web3-vaadin-server</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```

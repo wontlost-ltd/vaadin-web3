@@ -6,13 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.0.0] - Unreleased
 
+Modules use the `web3-vaadin-*` naming (for example `com.wontlost:web3-vaadin`),
+matching the other WontLost add-ons.
+
 First public release.
 
-### Added — `vaadin-web3-monitor`
+### Added — `web3-vaadin-monitor`
 - Optional Spring Boot hosted payment monitor with JDBC/Flyway persistence,
   H2 and PostgreSQL support, merchant/admin APIs, leased payment verification,
   signed retrying webhooks and webhook URL address checks.
-- `PaymentMonitorClient` and `WebhookSignatures` in `vaadin-web3-server`;
+- `PaymentMonitorClient` and `WebhookSignatures` in `web3-vaadin-server`;
   `StablecoinCheckout.setPaymentMonitor(true)` can keep tracking after the
   buyer leaves the page.
 - Monitor API, deployment and webhook verification guide at `docs/MONITOR.md`.
@@ -20,7 +23,7 @@ First public release.
   even during a long network outage; it keeps verifying and tells the user not
   to pay again.
 
-### Added — `vaadin-web3`
+### Added — `web3-vaadin`
 - `Web3Connect`: EIP-1193 wallet connection with connect, restore, disconnect
   (including `wallet_revokePermissions`), message and EIP-712 signing,
   transactions, and switching or adding chains. Calls return a
@@ -33,12 +36,12 @@ First public release.
   copy.
 - `Chains` and `Web3Utils` helpers.
 
-### Added — `vaadin-web3-walletconnect`
+### Added — `web3-vaadin-walletconnect`
 - Optional WalletConnect v2 mobile wallet support with EIP-6963 discovery,
   desktop QR codes, mobile app deep links, configured chain limits, and lazy
   provider loading.
 
-### Added — `vaadin-web3-server` (new module)
+### Added — `web3-vaadin-server` (new module)
 - Sign-In with Ethereum (EIP-4361):
   - `SiweMessage` builds messages and parses them strictly. It interoperates
     with `siwe` and `ethers`.
@@ -72,7 +75,7 @@ First public release.
 - Built-in USDT, EURC and PYUSD contract registries; token gates accept
   built-in symbols, and checkout supports same-currency token selection.
 
-### Added — `vaadin-web3-onramp` (new module)
+### Added — `web3-vaadin-onramp` (new module)
 - `OnrampProvider`, `OnrampOrder` and `FiatOnrampButton` with MoonPay, Transak and Coinbase hosted purchase sessions.
 - Provider live currencies are matched against registered chain IDs and contract addresses; staging and sandbox match provider test tokens by symbol and chain.
 - `StablecoinCheckout.setOnrampAction(...)` can show a card-purchase action below the checkout button.
@@ -81,10 +84,3 @@ First public release.
 - Spring Boot demo with routes for wallet features, SIWE login, a token-gated
   view and a checkout.
 
-### Added — `vaadin-web3-pro` (commercial module, license DRAFT)
-- JDBC nonce storage and payment claims for multi-node applications.
-- Optional Chainalysis sanctions screening with cached decisions, screening audit records and local deny-list composition.
-- JDBC payment records, a filtered Vaadin payments view and CSV export with spreadsheet formula-injection mitigation.
-- The Apache `server` module adds the optional `AddressScreening` extension point; behavior is unchanged when it is not registered.
-
-[1.0.0]: https://github.com/wontlost-ltd/vaadin-web3/releases/tag/v1.0.0
