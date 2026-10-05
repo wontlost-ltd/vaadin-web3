@@ -142,6 +142,9 @@ public class OnChainSupportTest {
     public static final class FixtureTransport implements JsonRpcTransport {
         private final JsonNode fixture;
         public String blockNumber = "0x18e8a45";
+        /** 夹具交易所在区块（0x18e8a45）的真实主网时间戳：2026-10-04T11:35:23Z。 */
+        public String blockTimestamp = "0x6ac239fb";
+        public int blockRequests;
         public JsonNode receipt;
         public boolean missingReceipt;
         public FixtureTransport(JsonNode fixture) { this.fixture = fixture; }
@@ -158,6 +161,10 @@ public class OnChainSupportTest {
                         : receipt == null ? fixture.path("simpleTransfer").path("receipt") : receipt;
                 case "eth_getTransactionByHash" -> fixtureHash.equalsIgnoreCase(requestedHash)
                         ? fixture.path("simpleTransfer").path("transaction") : MAPPER.nullNode();
+                case "eth_getBlockByNumber" -> {
+                    blockRequests++;
+                    yield MAPPER.createObjectNode().put("number", requestedHash).put("timestamp", blockTimestamp);
+                }
                 default -> MAPPER.nullNode();
             };
             ObjectNode response = MAPPER.createObjectNode();

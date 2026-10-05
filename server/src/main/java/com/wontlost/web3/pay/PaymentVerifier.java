@@ -28,6 +28,10 @@ public final class PaymentVerifier {
         TransactionReceipt receipt = rpc.getTransactionReceipt(txHash).orElse(null);
         if (receipt == null) return result(PaymentStatus.PENDING, txHash, request.payer(), BigInteger.ZERO, 0);
         if (!receipt.status()) return result(PaymentStatus.FAILED, txHash, receipt.from(), BigInteger.ZERO, 0);
+        // 早于下单时间的交易不能拿来付新订单（防止重放他人历史付款或账本重置后复用旧付款）
+        if (request.notBefore() != null && rpc.blockTimestamp(receipt.blockNumber()).isBefore(request.notBefore())) {
+            return result(PaymentStatus.PREDATES_ORDER, txHash, receipt.from(), BigInteger.ZERO, 0);
+        }
         BigInteger paid = BigInteger.ZERO;
         String payer = receipt.from();
         for (Transfer transfer : Erc20.transfers(receipt, request.token())) {
