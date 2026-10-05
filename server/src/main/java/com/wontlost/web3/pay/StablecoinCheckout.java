@@ -38,6 +38,9 @@ import com.wontlost.web3.monitor.MonitoredStatus;
 import com.wontlost.web3.monitor.PaymentMonitorClient;
 import com.wontlost.web3.siwe.Web3Session;
 import com.vaadin.flow.server.VaadinService;
+import com.wontlost.web3.screening.AddressScreening;
+import com.vaadin.flow.server.VaadinContext;
+import java.util.function.Supplier;
 
 /**
  * A wallet-backed ERC-20 checkout that polls the server-side payment verifier.
@@ -91,6 +94,7 @@ public class StablecoinCheckout extends VerticalLayout {
     private boolean paid;
     /** 校验代次：reset/停止轮询时递增，使之前发起的异步校验与钱包回调失效。 */
     private long generation;
+    private transient Supplier<VaadinContext> screeningContextLookup = StablecoinCheckout::currentContext;
 
     public StablecoinCheckout(ChainRegistry chains, PaymentLedger ledger, String recipient, BigDecimal amount) {
         this(chains, ledger, recipient, amount, DEFAULT_EXECUTOR);
@@ -323,7 +327,7 @@ public class StablecoinCheckout extends VerticalLayout {
                 () -> onWalletConnected(intent, currentOrderId, monitorClient, ui, started, account, error)));
     }
 
-    private void onWalletConnected(PaymentIntent intent, String currentOrderId, PaymentMonitorClient monitorClient,
+    void onWalletConnected(PaymentIntent intent, String currentOrderId, PaymentMonitorClient monitorClient,
             UI ui, long started, String account, Throwable error) {
         if (started != generation) return;
         if (error != null) { paymentError(error); return; }
@@ -338,10 +342,31 @@ public class StablecoinCheckout extends VerticalLayout {
         submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, intent.amountUnits(), payer,
                 minConfirmations, intent.notBefore());
         submittedOrderId = currentOrderId;
-        java.util.concurrent.CompletableFuture<MonitoredPayment> registration = registerIntent(
-                monitorClient, currentOrderId, targetChain, targetToken, intent, payer);
-        registration.whenComplete((payment, registrationError) -> dispatch(ui, () -> onIntentRegistered(intent,
-                monitorClient, ui, started, activeChain, targetChain, targetToken, payment, registrationError)));
+        // 地址筛查可能是一次 RPC（最长到传输超时）：放到后台执行器，结果回到 UI 线程后再继续，避免阻塞界面
+        screenPayer(currentAddressScreening(), payer).whenComplete((decision, screeningError) -> dispatch(ui, () -> {
+            if (started != generation) return;
+            if (screeningError != null) { paymentError(screeningError, "SCREENING_UNAVAILABLE"); return; }
+            if (decision != null && !decision.allowed()) {
+                String reason = decision.reason() == null ? "ADDRESS_BLOCKED" : decision.reason();
+                paymentError(new IllegalStateException(reason), reason);
+                return;
+            }
+            java.util.concurrent.CompletableFuture<MonitoredPayment> registration = registerIntent(
+                    monitorClient, currentOrderId, targetChain, targetToken, intent, payer);
+            registration.whenComplete((payment, registrationError) -> dispatch(ui, () -> onIntentRegistered(intent,
+                    monitorClient, ui, started, activeChain, targetChain, targetToken, payment, registrationError)));
+        }));
+    }
+
+    private java.util.concurrent.CompletableFuture<AddressScreening.ScreeningDecision> screenPayer(
+            AddressScreening screening, String payer) {
+        if (screening == null) return java.util.concurrent.CompletableFuture.completedFuture(null);
+        try {
+            return java.util.concurrent.CompletableFuture.supplyAsync(
+                    () -> Objects.requireNonNull(screening.screen(payer), "screening decision"), verificationExecutor);
+        } catch (java.util.concurrent.RejectedExecutionException saturated) {
+            return java.util.concurrent.CompletableFuture.failedFuture(saturated);
+        }
     }
 
     private java.util.concurrent.CompletableFuture<MonitoredPayment> registerIntent(PaymentMonitorClient monitorClient,
@@ -404,7 +429,7 @@ public class StablecoinCheckout extends VerticalLayout {
             status.setText("Transaction sent; reconnecting to payment monitor…");
         } else { paymentError(error); return; }
         if (error == null) status.setText("Payment submitted: " + hash);
-        fireEvent(new PaymentSubmittedEvent(this, hash, submittedToken));
+        fireEvent(new PaymentSubmittedEvent(this, hash, submittedToken, submittedRequest));
         startPolling();
     }
 
@@ -417,6 +442,18 @@ public class StablecoinCheckout extends VerticalLayout {
         VaadinService service = VaadinService.getCurrent();
         return service == null ? null : PaymentMonitorClient.find(service.getContext()).orElse(null);
     }
+
+    private AddressScreening currentAddressScreening() {
+        VaadinContext context = screeningContextLookup == null ? currentContext() : screeningContextLookup.get();
+        return AddressScreening.find(context);
+    }
+
+    private static VaadinContext currentContext() {
+        VaadinService service = VaadinService.getCurrent();
+        return service == null ? null : service.getContext();
+    }
+
+    void setScreeningContextLookup(Supplier<VaadinContext> lookup) { screeningContextLookup = Objects.requireNonNull(lookup); }
 
     PaymentIntent capturePaymentIntent() {
         Long selectedChain = network.getValue();
@@ -454,12 +491,17 @@ public class StablecoinCheckout extends VerticalLayout {
     }
 
     private void paymentError(Throwable error) {
+        paymentError(error, null);
+    }
+
+    private void paymentError(Throwable error, String blockedReason) {
         Throwable cause = error;
         while ((cause instanceof CompletionException || cause instanceof java.util.concurrent.ExecutionException) && cause.getCause() != null) cause = cause.getCause();
         boolean rejected = cause instanceof Web3Connect.Web3Exception walletError && walletError.isUserRejected();
         PaymentResult result = new PaymentResult(PaymentStatus.FAILED, null, null, BigInteger.ZERO, 0);
-        status.setText(rejected ? "Payment was rejected in the wallet." : "Payment failed: " + cause.getMessage());
-        fireEvent(new PaymentFailedEvent(this, result, rejected, submittedToken));
+        status.setText(blockedReason != null ? "Payment blocked: " + blockedReason
+                : rejected ? "Payment was rejected in the wallet." : "Payment failed: " + cause.getMessage());
+        fireEvent(new PaymentFailedEvent(this, result, rejected, submittedToken, blockedReason, submittedRequest));
         setPayEnabled(true);
     }
 
@@ -584,11 +626,11 @@ public class StablecoinCheckout extends VerticalLayout {
             pay.setText("Paid");
             setPayEnabled(false);
             stopPolling();
-            fireEvent(new PaymentConfirmedEvent(this, result, submittedToken));
+            fireEvent(new PaymentConfirmedEvent(this, result, submittedToken, submittedRequest));
         } else if (Set.of(PaymentStatus.FAILED, PaymentStatus.UNDERPAID, PaymentStatus.NO_MATCHING_TRANSFER,
                 PaymentStatus.ALREADY_CLAIMED, PaymentStatus.PREDATES_ORDER).contains(result.status())) {
             stopPolling();
-            fireEvent(new PaymentFailedEvent(this, result, false, submittedToken));
+            fireEvent(new PaymentFailedEvent(this, result, false, submittedToken, null, submittedRequest));
             setPayEnabled(true);
         }
     }
@@ -626,32 +668,59 @@ public class StablecoinCheckout extends VerticalLayout {
     public static class PaymentSubmittedEvent extends ComponentEvent<StablecoinCheckout> {
         private final String hash;
         private final TokenInfo token;
-        public PaymentSubmittedEvent(StablecoinCheckout source, String hash) { this(source, hash, null); }
-        public PaymentSubmittedEvent(StablecoinCheckout source, String hash, TokenInfo token) { super(source, false); this.hash = hash; this.token = token; }
+        private final PaymentRequest request;
+        private final String orderId;
+        public PaymentSubmittedEvent(StablecoinCheckout source, String hash) { this(source, hash, null, null); }
+        public PaymentSubmittedEvent(StablecoinCheckout source, String hash, TokenInfo token) { this(source, hash, token, null); }
+        public PaymentSubmittedEvent(StablecoinCheckout source, String hash, TokenInfo token, PaymentRequest request) { super(source, false); this.hash = hash; this.token = token; this.request = request; this.orderId = source.eventOrderId(); }
         public String getHash() { return hash; }
         /** Returns the token used by this payment, or null when the token had not yet been determined. */
         public TokenInfo getToken() { return token; }
+        /** Returns the captured payment request, or null when payment intent creation had not completed. */
+        public PaymentRequest getRequest() { return request; }
+        /** Returns the order identifier captured for this payment event. */
+        public String getOrderId() { return orderId; }
     }
     /** Event fired after the payment satisfies all on-chain requirements. */
     public static class PaymentConfirmedEvent extends ComponentEvent<StablecoinCheckout> {
         private final PaymentResult result;
         private final TokenInfo token;
-        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result) { this(source, result, null); }
-        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result, TokenInfo token) { super(source, false); this.result = result; this.token = token; }
+        private final PaymentRequest request;
+        private final String orderId;
+        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result) { this(source, result, null, null); }
+        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result, TokenInfo token) { this(source, result, token, null); }
+        public PaymentConfirmedEvent(StablecoinCheckout source, PaymentResult result, TokenInfo token, PaymentRequest request) { super(source, false); this.result = result; this.token = token; this.request = request; this.orderId = source.eventOrderId(); }
         public PaymentResult getResult() { return result; }
         /** Returns the token used by this payment, or null when the token had not yet been determined. */
         public TokenInfo getToken() { return token; }
+        /** Returns the captured payment request, or null when payment intent creation had not completed. */
+        public PaymentRequest getRequest() { return request; }
+        /** Returns the order identifier captured for this payment event. */
+        public String getOrderId() { return orderId; }
     }
     /** Event fired when a submitted payment cannot be accepted. */
     public static class PaymentFailedEvent extends ComponentEvent<StablecoinCheckout> {
         private final PaymentResult result;
         private final boolean userRejected;
         private final TokenInfo token;
-        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected) { this(source, result, userRejected, null); }
-        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected, TokenInfo token) { super(source, false); this.result = result; this.userRejected = userRejected; this.token = token; }
+        private final String blockedReason;
+        private final PaymentRequest request;
+        private final String orderId;
+        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected) { this(source, result, userRejected, null, null); }
+        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected, TokenInfo token) { this(source, result, userRejected, token, null); }
+        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected, TokenInfo token, String blockedReason) { this(source, result, userRejected, token, blockedReason, null); }
+        public PaymentFailedEvent(StablecoinCheckout source, PaymentResult result, boolean userRejected, TokenInfo token, String blockedReason, PaymentRequest request) { super(source, false); this.result = result; this.userRejected = userRejected; this.token = token; this.blockedReason = blockedReason; this.request = request; this.orderId = source.eventOrderId(); }
         public PaymentResult getResult() { return result; }
         public boolean isUserRejected() { return userRejected; }
         /** Returns the token used by this payment, or null when the token had not yet been determined. */
         public TokenInfo getToken() { return token; }
+        /** Returns the captured payment request, or null when payment intent creation had not completed. */
+        public PaymentRequest getRequest() { return request; }
+        /** Returns the order identifier captured for this payment event. */
+        public String getOrderId() { return orderId; }
+        /** Returns the screening rejection reason, or {@code null} when payment was not blocked by screening. */
+        public String getBlockedReason() { return blockedReason; }
     }
+
+    private String eventOrderId() { return submittedOrderId == null ? orderId : submittedOrderId; }
 }
