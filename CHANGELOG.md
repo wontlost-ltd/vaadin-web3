@@ -8,6 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 First public release.
 
+### Added — `vaadin-web3-monitor`
+- Optional Spring Boot hosted payment monitor with JDBC/Flyway persistence,
+  H2 and PostgreSQL support, merchant/admin APIs, leased payment verification,
+  signed retrying webhooks and webhook URL address checks.
+- `PaymentMonitorClient` and `WebhookSignatures` in `vaadin-web3-server`;
+  `StablecoinCheckout.setPaymentMonitor(true)` can keep tracking after the
+  buyer leaves the page.
+- Monitor API, deployment and webhook verification guide at `docs/MONITOR.md`.
+- `StablecoinCheckout` never re-enables Pay once a transaction has been sent,
+  even during a long network outage; it keeps verifying and tells the user not
+  to pay again.
+
 ### Added — `vaadin-web3`
 - `Web3Connect`: EIP-1193 wallet connection with connect, restore, disconnect
   (including `wallet_revokePermissions`), message and EIP-712 signing,
