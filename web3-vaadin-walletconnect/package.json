@@ -1,0 +1,13 @@
+{
+  "name": "web3-vaadin-walletconnect-frontend-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.1.2",
+    "vitest": "^5.0.3"
+  }
+}

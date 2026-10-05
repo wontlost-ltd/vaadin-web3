@@ -24,36 +24,36 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 
 | Feature | Module | Highlights |
 |---|---|---|
-| `Web3Connect` wallet button and API | `vaadin-web3` | Connect, restore, disconnect, sign, EIP-712, send transactions, switch or add chains |
-| Multi-wallet discovery | `vaadin-web3` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
-| `Web3Address` | `vaadin-web3` | Shortened address, colour badge, click to copy |
-| WalletConnect mobile wallets | `vaadin-web3-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
-| `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
-| `@RequiresToken` | `vaadin-web3-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
-| `StablecoinCheckout` | `vaadin-web3-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders; optional hosted monitoring |
-| `PaymentMonitorClient`, `WebhookSignatures` | `vaadin-web3-server` | Connect a checkout to the hosted monitor and verify timestamped HMAC webhooks |
-| Hosted payment monitor service | `vaadin-web3-monitor` | Continuously verifies intents using configured RPC endpoints and retries signed merchant webhooks; executable Spring Boot service |
-| `FiatOnrampButton` | `vaadin-web3-onramp` | Hosted card purchases through MoonPay, Transak or Coinbase with registered contract matching and popup fallback |
-| `EthRpcClient`, `Erc20`, `Tokens` | `vaadin-web3-server` | Minimal JSON-RPC client, ERC-20 calls, built-in stablecoin contract addresses |
+| `Web3Connect` wallet button and API | `web3-vaadin` | Connect, restore, disconnect, sign, EIP-712, send transactions, switch or add chains |
+| Multi-wallet discovery | `web3-vaadin` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
+| `Web3Address` | `web3-vaadin` | Shortened address, colour badge, click to copy |
+| WalletConnect mobile wallets | `web3-vaadin-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
+| `SiweLogin` | `web3-vaadin-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
+| `@RequiresToken` | `web3-vaadin-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
+| `StablecoinCheckout` | `web3-vaadin-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders; optional hosted monitoring |
+| `PaymentMonitorClient`, `WebhookSignatures` | `web3-vaadin-server` | Connect a checkout to the hosted monitor and verify timestamped HMAC webhooks |
+| Hosted payment monitor service | `web3-vaadin-monitor` | Continuously verifies intents using configured RPC endpoints and retries signed merchant webhooks; executable Spring Boot service |
+| `FiatOnrampButton` | `web3-vaadin-onramp` | Hosted card purchases through MoonPay, Transak or Coinbase with registered contract matching and popup fallback |
+| `EthRpcClient`, `Erc20`, `Tokens` | `web3-vaadin-server` | Minimal JSON-RPC client, ERC-20 calls, built-in stablecoin contract addresses |
 
-The `vaadin-web3` component module has **no third-party dependencies**. The
-`vaadin-web3-server` module adds `org.web3j:crypto` for signature
+The `web3-vaadin` component module has **no third-party dependencies**. The
+`web3-vaadin-server` module adds `org.web3j:crypto` for signature
 verification.
 
 ## Quick start
 
-1. Add the dependencies. Add `vaadin-web3-server` only if you need the
+1. Add the dependencies. Add `web3-vaadin-server` only if you need the
    server-side features.
 
    ```xml
    <dependency>
        <groupId>com.wontlost</groupId>
-       <artifactId>vaadin-web3</artifactId>
+       <artifactId>web3-vaadin</artifactId>
        <version>1.0.0</version>
    </dependency>
    <dependency>
        <groupId>com.wontlost</groupId>
-       <artifactId>vaadin-web3-server</artifactId>
+       <artifactId>web3-vaadin-server</artifactId>
        <version>1.0.0</version>
    </dependency>
    ```
@@ -88,9 +88,9 @@ verification.
    add(new StablecoinCheckout(chains, ledger, "0xYourReceivingAddress", new BigDecimal("25.00")));
    ```
 
-A full Spring Boot demo is in [`demo/`](demo). See [Running the demo](#running-the-demo).
+A full Spring Boot demo is in [`web3-vaadin-demo/`](web3-vaadin-demo). See [Running the demo](#running-the-demo).
 
-## Wallet components (`vaadin-web3`)
+## Wallet components (`web3-vaadin`)
 
 ### Connect a wallet
 
@@ -144,7 +144,7 @@ Add the optional dependency and a Reown project ID from
 ```xml
 <dependency>
     <groupId>com.wontlost</groupId>
-    <artifactId>vaadin-web3-walletconnect</artifactId>
+    <artifactId>web3-vaadin-walletconnect</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
@@ -180,7 +180,7 @@ wallet available, `connect()` uses it directly.
 The demo enables WalletConnect when `WEB3_WALLETCONNECT_PROJECT_ID` is set:
 
 ```bash
-WEB3_WALLETCONNECT_PROJECT_ID=<your project id> mvn spring-boot:run -pl demo
+WEB3_WALLETCONNECT_PROJECT_ID=<your project id> mvn spring-boot:run -pl web3-vaadin-demo
 ```
 
 ### Sign messages
@@ -254,7 +254,7 @@ After a disconnect, the add-on does not reconnect silently, either through
 applies to the whole site. It is shared with other instances on the same page
 and with other tabs.
 
-## Server features (`vaadin-web3-server`)
+## Server features (`web3-vaadin-server`)
 
 ### Sign-In with Ethereum (SIWE)
 
@@ -435,13 +435,13 @@ tokens away therefore keeps access for at most that long.
 
 ### Fiat on-ramp (buy with card)
 
-The optional `vaadin-web3-onramp` module opens hosted card-purchase sessions with
-MoonPay, Transak or Coinbase. Add it alongside `vaadin-web3-server`:
+The optional `web3-vaadin-onramp` module opens hosted card-purchase sessions with
+MoonPay, Transak or Coinbase. Add it alongside `web3-vaadin-server`:
 
 ```xml
 <dependency>
     <groupId>com.wontlost</groupId>
-    <artifactId>vaadin-web3-onramp</artifactId>
+    <artifactId>web3-vaadin-onramp</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
@@ -564,7 +564,7 @@ token is determined.
 
 #### Hosted payment monitor
 
-Use hosted monitoring when payment confirmation must continue after the buyer closes the checkout page, or when merchants should not operate their own chain RPC polling. The separate `vaadin-web3-monitor` service watches the chain through RPC, stores payment state in JDBC, and retries signed webhooks. It never holds funds or private keys.
+Use hosted monitoring when payment confirmation must continue after the buyer closes the checkout page, or when merchants should not operate their own chain RPC polling. The separate `web3-vaadin-monitor` service watches the chain through RPC, stores payment state in JDBC, and retries signed webhooks. It never holds funds or private keys.
 
 ```text
 Vaadin checkout -> PaymentMonitorClient -> monitor API -> JDBC intent/outbox
@@ -594,7 +594,7 @@ Register `PaymentMonitorClient` once in the application's `VaadinContext`, then 
 
 ```bash
 mvn install -DskipTests
-mvn spring-boot:run -pl demo    # http://localhost:8080
+mvn spring-boot:run -pl web3-vaadin-demo    # http://localhost:8080
 ```
 
 | Route | Shows |
@@ -603,49 +603,51 @@ mvn spring-boot:run -pl demo    # http://localhost:8080
 | `/login` | Sign-In with Ethereum |
 | `/holders` | A view gated on 1 Sepolia USDC |
 | `/checkout` | A 1.00 Sepolia USDC or PYUSD checkout |
-| `/payments` | Recorded payments, status/date filters and CSV download |
 
 You need a browser wallet extension such as MetaMask on the Sepolia test
 network. You can get test USDC from the
 [Circle faucet](https://faucet.circle.com/), and test PYUSD from the
 [Paxos faucet](https://faucet.paxos.com/). Before trying the checkout, set
-`web3.demo.recipient` in `demo/src/main/resources/application.properties` to
+`web3.demo.recipient` in `web3-vaadin-demo/src/main/resources/application.properties` to
 an address you control.
 
 ## Project structure
 
-- `addon/`: wallet components (`com.wontlost:vaadin-web3`), with no
+- `web3-vaadin/`: wallet components (`com.wontlost:web3-vaadin`), with no
   third-party dependencies.
-- `walletconnect/`: optional WalletConnect v2 mobile wallet integration
-  (`com.wontlost:vaadin-web3-walletconnect`).
-- `server/`: SIWE, on-chain reads, token gates and checkout (`com.wontlost:vaadin-web3-server`).
-- `onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:vaadin-web3-onramp`).
-- `pro/`: optional commercial persistence, screening and payment operations (`com.wontlost:vaadin-web3-pro`; license DRAFT).
-- `monitor/`: optional hosted payment tracking service (`com.wontlost:vaadin-web3-monitor`).
-- `demo/`: a Spring Boot demo application that exercises every feature.
+- `web3-vaadin-walletconnect/`: optional WalletConnect v2 mobile wallet integration
+  (`com.wontlost:web3-vaadin-walletconnect`).
+- `web3-vaadin-server/`: SIWE, on-chain reads, token gates and checkout (`com.wontlost:web3-vaadin-server`).
+- `web3-vaadin-onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:web3-vaadin-onramp`).
+- `web3-vaadin-monitor/`: optional hosted payment tracking service (`com.wontlost:web3-vaadin-monitor`).
+- `web3-vaadin-demo/`: a Spring Boot demo application that exercises every feature.
 
-## Pro (commercial)
+## Pro
 
-The optional `vaadin-web3-pro` module adds JDBC-backed SIWE nonce storage and
-payment claims for clustered applications, Chainalysis sanctions screening
-with an audit log and local deny-list composition, and payment records with a
-filtered Vaadin view and CSV export. The Apache 2.0 modules retain all existing
-features. `AddressScreening` is an open-source extension point that applications
-may implement themselves.
+The add-on is and stays Apache 2.0. For teams taking web3 features into
+production, WontLost is preparing **Web3Vaadin Pro**, a set of commercial
+modules on top of it:
 
-Pro is not included in the Maven Central release list. Its license is marked
-**DRAFT and has not been issued**; no commercial terms are available yet. For
-inquiries, contact [service@wontlost.com](mailto:service@wontlost.com).
-The demo enables audited screening only when `web3.rpc.1` is configured with an
-Ethereum mainnet RPC URL, for example `https://ethereum-rpc.publicnode.com`.
+- **Cluster storage**: JDBC-backed SIWE nonces and payment claims, so sign-in and
+  payment verification work across several application nodes.
+- **Compliance screening**: sanctions screening of wallet addresses with an
+  audit trail of every decision.
+- **Payment back office**: payment records, a filterable Vaadin view and CSV
+  export.
+
+These modules are not part of this repository. `AddressScreening` in
+`web3-vaadin-server` is an open-source extension point:
+applications can plug in their own screening without Pro.
+
+Inquiries: [service@wontlost.com](mailto:service@wontlost.com).
 
 ## Development
 
 ```bash
 mvn verify                               # build everything and run the unit tests
-(cd addon && npm ci && npm test)         # frontend unit tests (Vitest)
-(cd walletconnect && npm ci && npm test) # WalletConnect frontend unit tests
-mvn install -Pdirectory -pl addon -am    # also builds the Vaadin Directory zip
+(cd web3-vaadin && npm ci && npm test)         # frontend unit tests (Vitest)
+(cd web3-vaadin-walletconnect && npm ci && npm test) # WalletConnect frontend unit tests
+mvn install -Pdirectory -pl web3-vaadin -am    # also builds the Vaadin Directory zip
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.

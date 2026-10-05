@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.wontlost</groupId>
-    <artifactId>vaadin-web3-parent</artifactId>
+    <artifactId>web3-vaadin-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>Web3 Add-on for Vaadin (parent)</name>
+    <name>Web3Vaadin (parent)</name>
     <url>https://github.com/wontlost-ltd/vaadin-web3</url>
 
     <properties>
@@ -33,12 +33,11 @@
     </build>
 
     <modules>
-        <module>addon</module>
-        <module>walletconnect</module>
-        <module>server</module>
-        <module>onramp</module>
-        <module>pro</module>
-        <module>monitor</module>
-        <module>demo</module>
+        <module>web3-vaadin</module>
+        <module>web3-vaadin-walletconnect</module>
+        <module>web3-vaadin-server</module>
+        <module>web3-vaadin-onramp</module>
+        <module>web3-vaadin-monitor</module>
+        <module>web3-vaadin-demo</module>
     </modules>
 </project>

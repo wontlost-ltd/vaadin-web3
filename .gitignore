@@ -5,14 +5,14 @@ target/
 .DS_Store
 node_modules/
 # Vaadin generated frontend state
-demo/src/main/frontend/generated/
-demo/vite.generated.ts
-demo/package.json
-demo/package-lock.json
-demo/tsconfig.json
-demo/types.d.ts
-demo/vite.config.ts
-demo/src/main/bundles/
+web3-vaadin-demo/src/main/frontend/generated/
+web3-vaadin-demo/vite.generated.ts
+web3-vaadin-demo/package.json
+web3-vaadin-demo/package-lock.json
+web3-vaadin-demo/tsconfig.json
+web3-vaadin-demo/types.d.ts
+web3-vaadin-demo/vite.config.ts
+web3-vaadin-demo/src/main/bundles/
 .classpath
 .project
 .settings/

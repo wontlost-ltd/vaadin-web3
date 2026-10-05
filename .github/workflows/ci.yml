@@ -27,6 +27,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci && npm test
-        working-directory: addon
+        working-directory: web3-vaadin
       - run: npm ci && npm test
-        working-directory: walletconnect
+        working-directory: web3-vaadin-walletconnect
