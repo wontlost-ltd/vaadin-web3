@@ -54,6 +54,11 @@ First public release.
 - Built-in USDT, EURC and PYUSD contract registries; token gates accept
   built-in symbols, and checkout supports same-currency token selection.
 
+### Added — `vaadin-web3-onramp` (new module)
+- `OnrampProvider`, `OnrampOrder` and `FiatOnrampButton` with MoonPay, Transak and Coinbase hosted purchase sessions.
+- Provider live currencies are matched against registered chain IDs and contract addresses; staging and sandbox match provider test tokens by symbol and chain.
+- `StablecoinCheckout.setOnrampAction(...)` can show a card-purchase action below the checkout button.
+
 ### Demo
 - Spring Boot demo with routes for wallet features, SIWE login, a token-gated
   view and a checkout.

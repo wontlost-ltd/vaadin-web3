@@ -4,9 +4,9 @@ Use this text when publishing the add-on to https://vaadin.com/directory.
 
 **Name:** Web3 Add-on for Vaadin
 
-**Summary (one line):** Wallet login, token-gated views and stablecoin payments for Vaadin Flow, in plain Java.
+**Summary (one line):** Wallet login, token-gated views, stablecoin payments and card purchases for Vaadin Flow, in plain Java.
 
-**Tags:** web3, ethereum, wallet, metamask, siwe, authentication, payments, stablecoin, usdc, blockchain
+**Tags:** web3, ethereum, wallet, metamask, siwe, authentication, payments, stablecoin, usdc, blockchain, onramp, card
 
 **Compatibility:** Vaadin 25.3+, Java 21+
 
@@ -30,6 +30,7 @@ Bring Ethereum wallets to your Vaadin application without writing JavaScript.
   addresses.
   Visitors who aren't signed in go to your login view and come back
   afterwards. Visitors without enough balance see a 403 page.
+- **Buy stablecoins with a card.** The optional `vaadin-web3-onramp` module creates hosted MoonPay, Transak and Coinbase purchase sessions. Live offerings are checked against the registered chain and contract address; test environments may deliver provider test tokens that `StablecoinCheckout` will not accept as payment.
 - **Take stablecoin payments.** `StablecoinCheckout` accepts USDC, USDT, EURC
   and PYUSD on their supported built-in networks. Select multiple tokens that
   use the same currency, and it asks the wallet to transfer the selected token.
