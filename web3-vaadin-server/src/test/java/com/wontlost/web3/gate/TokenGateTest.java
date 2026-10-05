@@ -69,6 +69,9 @@ class TokenGateTest {
     @RequiresToken(chainId = 1, token = "USDT", minBalance = "1", decimals = 6)
     private static final class UsdtGatedView { }
 
+    @RequiresToken(chainId = 1, token = "USDC", minBalance = "1", decimals = 6)
+    private static final class MainnetUsdcGatedView { }
+
     @RequiresToken(chainId = 11155111, token = "pyusd", minBalance = "1", decimals = 6)
     private static final class PyusdGatedView { }
 
@@ -99,5 +102,33 @@ class TokenGateTest {
         org.junit.jupiter.api.Assertions.assertEquals(TokenGate.Decision.UNAVAILABLE,
                 new TokenGate(new com.wontlost.web3.chain.ChainRegistry())
                         .evaluate(requirement, "0x0000000000000000000000000000000000000001"));
+    }
+
+    @Test void balanceCacheIsBoundedAndExpiredEntriesAreRemovedOnInsert() {
+        var registry = new com.wontlost.web3.chain.ChainRegistry();
+        registry.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> {
+            var mapper = new tools.jackson.databind.ObjectMapper();
+            var rpcRequest = mapper.readTree(request);
+            var response = mapper.createObjectNode();
+            response.put("jsonrpc", "2.0");
+            response.set("id", rpcRequest.path("id"));
+            response.put("result", "0x" + "0".repeat(64));
+            return response.toString();
+        }));
+        org.junit.jupiter.api.Assertions.assertEquals(BigInteger.ZERO,
+                com.wontlost.web3.chain.Erc20.balanceOf(registry.get(1).orElseThrow(),
+                        com.wontlost.web3.chain.Tokens.usdc(1).orElseThrow().address(),
+                        "0x0000000000000000000000000000000000000001"));
+        var bounded = new TokenGate(registry, java.time.Duration.ofMinutes(1), 2);
+        var requirement = MainnetUsdcGatedView.class.getAnnotation(RequiresToken.class);
+        bounded.evaluate(requirement, "0x0000000000000000000000000000000000000001");
+        bounded.evaluate(requirement, "0x0000000000000000000000000000000000000002");
+        bounded.evaluate(requirement, "0x0000000000000000000000000000000000000003");
+        assertEquals(2, bounded.cachedBalanceCount());
+
+        var expiring = new TokenGate(registry, java.time.Duration.ZERO, 10);
+        expiring.evaluate(requirement, "0x0000000000000000000000000000000000000001");
+        expiring.evaluate(requirement, "0x0000000000000000000000000000000000000002");
+        assertEquals(1, expiring.cachedBalanceCount());
     }
 }

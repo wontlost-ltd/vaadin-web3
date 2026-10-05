@@ -20,6 +20,28 @@ step.
 
 Requires **Vaadin 25.3+** and **Java 21+**.
 
+## Finality and reorgs
+
+The default payment policy requires one confirmation for compatibility. A receipt can still be reorganized from the canonical chain at that depth, so applications should choose a stronger policy when the value or consequences of a payment justify it. Use `setMinConfirmations(n)` for a confirmation count, or `setFinality(Finality.finalized())` when the RPC node supports the `finalized` block tag. The checkout rechecks the receipt block hash against the canonical block before confirmation. Hosted monitoring currently supports confirmation counts only.
+
+Confirm finality guidance with the official documentation for each chain you support. L1s, rollups and sidechains can have different settlement and reorganization properties; do not assume one confirmation count is suitable across them.
+
+SIWE rotates the underlying HTTP session ID after successful verification when the callback runs on a servlet request. Use Vaadin's default `WEBSOCKET_XHR` or long-polling transport for this behavior. With a pure WebSocket push callback, rotation cannot set a response cookie; the component logs a warning and completes sign-in, so the application can disable component rotation with `setSessionIdRotation(false)` and perform its own session handling.
+
+## Localization
+
+Components expose serializable `*I18n` objects with English defaults and chainable setters. For example:
+
+```java
+Web3Connect wallet = new Web3Connect();
+wallet.setI18n(new Web3ConnectI18n()
+        .setConnect("Connect")
+        .setPickerTitle("Choose your wallet")
+        .setNoWallets("No compatible wallets were found."));
+```
+
+Existing text setters remain available; the most recently applied text or i18n setting controls the visible label.
+
 ## What you get
 
 | Feature | Module | Highlights |

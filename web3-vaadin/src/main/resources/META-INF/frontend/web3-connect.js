@@ -1,4 +1,7 @@
 import { LitElement, html, css } from 'lit';
+import { renderWalletPicker, walletPickerStyles, showWalletPicker, chooseWallet, closeWalletPicker,
+  handlePickerKeydown, registerDiscoveredWallet, waitForWallet, resolveWalletWaiters,
+  attachWalletProvider, detachWalletProvider, setProviderAvailable } from './web3-wallet-picker.js';
 
 /**
  * `<web3-connect>` — Vaadin web3 wallet connector.
@@ -23,6 +26,9 @@ export class Web3Connect extends LitElement {
       wallets: { type: Array },
       selectedWallet: { type: String, attribute: 'selected-wallet' },
       preferredWallet: { type: String, attribute: 'preferred-wallet' },
+      pickerTitle: { type: String, attribute: 'picker-title' },
+      noWalletText: { type: String, attribute: 'no-wallet-text' },
+      closeLabel: { type: String, attribute: 'close-label' },
       _busy: { state: true },
       _pickerOpen: { state: true }
     };
@@ -53,33 +59,7 @@ export class Web3Connect extends LitElement {
         font-family: var(--lumo-font-family, monospace);
         margin-inline-start: 0.5em;
       }
-      .wallet-picker {
-        position: fixed;
-        inset: 0;
-        z-index: 10000;
-        display: grid;
-        place-items: center;
-        background: var(--lumo-shade-30pct, rgb(0 0 0 / 30%));
-      }
-      .wallet-picker-content {
-        min-width: 18rem;
-        max-width: calc(100vw - 2rem);
-        padding: 1rem;
-        border-radius: var(--lumo-border-radius-l, 0.75rem);
-        color: var(--lumo-body-text-color, #222);
-        background: var(--lumo-base-color, #fff);
-        box-shadow: var(--lumo-box-shadow-l, 0 8px 24px rgb(0 0 0 / 20%));
-      }
-      .wallet-option {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        width: 100%;
-        margin-block: 0.5rem;
-        color: var(--lumo-body-text-color, #222);
-        background: var(--lumo-contrast-5pct, #f5f5f5);
-      }
-      .wallet-option img { width: 2rem; height: 2rem; object-fit: contain; }
+      ${walletPickerStyles}
     `;
   }
 
@@ -94,9 +74,13 @@ export class Web3Connect extends LitElement {
     this.wallets = [];
     this.selectedWallet = '';
     this.preferredWallet = '';
+    this.pickerTitle = 'Choose a wallet';
+    this.noWalletText = 'No wallets found.';
+    this.closeLabel = 'Close';
     this._walletProviders = new Map();
     this._lastWalletInfo = new Map();
     this._pickerResolver = null;
+    this._pickerPreviousFocus = null;
     this._pickerOpen = false;
     this._busy = false;
     this._listeningProvider = null;
@@ -127,9 +111,7 @@ export class Web3Connect extends LitElement {
       this._attachProvider(this.provider);
     };
     this._onAnnounceProvider = (event) => this._handleWalletAnnouncement(event);
-    this._onPickerKeydown = (event) => {
-      if (event.key === 'Escape' && this._pickerResolver) this._closeWalletPicker();
-    };
+    this._onPickerKeydown = (event) => this._handlePickerKeydown(event);
   }
 
   get provider() {
@@ -174,23 +156,17 @@ export class Web3Connect extends LitElement {
       ${!this.hideButton && this.account
         ? html`<span part="account" class="account">${this._short(this.account)}</span>`
         : ''}
-      ${this._pickerOpen ? html`
-        <div class="wallet-picker" part="wallet-picker" @click=${(event) => {
-          if (event.target === event.currentTarget) this._closeWalletPicker();
-        }}>
-          <div class="wallet-picker-content" role="dialog" aria-modal="true" aria-label="Choose a wallet">
-            <h2>Choose a wallet</h2>
-            ${this.wallets.map((wallet) => html`
-              <button class="wallet-option" part="wallet-option" @click=${() => this._chooseWallet(wallet.rdns)}>
-                ${typeof wallet.icon === 'string' && wallet.icon.startsWith('data:image/')
-                  ? html`<img src=${wallet.icon} alt="">`
-                  : ''}
-                <span>${wallet.name}</span>
-              </button>
-            `)}
-          </div>
-        </div>` : ''}
+      ${this._pickerOpen ? renderWalletPicker(this.wallets, this.pickerTitle, this.noWalletText,
+        this.closeLabel, (rdns) => this._chooseWallet(rdns), () => this._closeWalletPicker()) : ''}
     `;
+  }
+
+  updated(changed) {
+    if (changed.has('_pickerOpen') && this._pickerOpen) {
+      const target = this.shadowRoot.querySelector('.wallet-option') || this.shadowRoot.querySelector('.wallet-picker-close')
+        || this.shadowRoot.querySelector('[role="dialog"]');
+      target?.focus();
+    }
   }
 
   _short(addr) {
@@ -263,11 +239,15 @@ export class Web3Connect extends LitElement {
 
   /** Silently restores an already-authorized connection, if any. */
   async restore() {
+    const generation = this._connectionGeneration;
     if (this._isDisconnected()) return null;
     let p = this.provider;
     let lastRdns = '';
     try { lastRdns = localStorage.getItem('web3-connect:wallet') || ''; } catch (e) { /* 忽略不可用的存储。 */ }
-    if (lastRdns && !this._walletProviders.has(lastRdns)) await this._waitForWallet(lastRdns, 300);
+    if (lastRdns && !this._walletProviders.has(lastRdns)) {
+      await this._waitForWallet(lastRdns, 300);
+      if (generation !== this._connectionGeneration) return null;
+    }
     if (lastRdns && this._walletProviders.has(lastRdns)) {
       this.selectedWallet = lastRdns;
       p = this._walletProviders.get(lastRdns).provider;
@@ -277,8 +257,10 @@ export class Web3Connect extends LitElement {
     }
     try {
       const accounts = await p.request({ method: 'eth_accounts' });
+      if (generation !== this._connectionGeneration) return null;
       if (accounts && accounts.length) {
         this.chainId = await p.request({ method: 'eth_chainId' });
+        if (generation !== this._connectionGeneration) return null;
         this._applyAccounts(accounts);
       }
       return this.account || null;
@@ -294,75 +276,31 @@ export class Web3Connect extends LitElement {
   }
 
   _handleWalletAnnouncement(event) {
-    const detail = event.detail;
-    const info = detail && detail.info;
-    if (!info || !info.uuid || !info.rdns || !detail.provider) return;
-    const sameAnnouncement = [...this._walletProviders.values()].some((wallet) =>
-      wallet.uuid === info.uuid && wallet.rdns === info.rdns);
-    if (sameAnnouncement) return;
-    const existing = this._walletProviders.get(info.rdns);
-    if (existing) this._walletProviders.delete(info.rdns);
-    for (const [rdns, wallet] of [...this._walletProviders]) {
-      if (wallet.uuid === info.uuid) this._walletProviders.delete(rdns);
-    }
-    this._walletProviders.set(info.rdns, { uuid: info.uuid, rdns: info.rdns, provider: detail.provider });
-    this._lastWalletInfo.set(info.uuid, info);
-    this.wallets = [...this._walletProviders].map(([rdns, wallet]) => {
-      const announced = this._lastWalletInfo.get(wallet.uuid) || info;
-      return { uuid: wallet.uuid, name: announced.name || rdns, icon: announced.icon || '', rdns };
-    });
-    this._notify('web3-wallets-changed', { wallets: this.wallets });
-    this._attachProvider(this.provider);
-    this._resolveWalletWaiters(info.rdns);
+    registerDiscoveredWallet(this, event);
   }
 
   _showWalletPicker() {
-    this._pickerOpen = true;
-    window.addEventListener('keydown', this._onPickerKeydown);
-    return new Promise((resolve, reject) => { this._pickerResolver = { resolve, reject }; });
+    return showWalletPicker(this);
   }
 
   _chooseWallet(rdns) {
-    const resolver = this._pickerResolver;
-    if (!resolver) return;
-    this.selectedWallet = rdns;
-    this._pickerResolver = null;
-    this._pickerOpen = false;
-    window.removeEventListener('keydown', this._onPickerKeydown);
-    resolver.resolve(rdns);
+    chooseWallet(this, rdns);
   }
 
   _closeWalletPicker(dispatchError = true) {
-    const resolver = this._pickerResolver;
-    if (!resolver) return;
-    this._pickerResolver = null;
-    this._pickerOpen = false;
-    window.removeEventListener('keydown', this._onPickerKeydown);
-    const error = Object.assign(new Error('User closed the wallet picker'), { code: 4001 });
-    resolver.reject(error);
-    if (dispatchError) this._error(error);
+    closeWalletPicker(this, dispatchError);
+  }
+
+  _handlePickerKeydown(event) {
+    handlePickerKeydown(this, event);
   }
 
   _waitForWallet(rdns, timeout) {
-    if (this._walletProviders.has(rdns)) return Promise.resolve();
-    return new Promise((resolve) => {
-      const waiter = { rdns, resolve };
-      this._walletWaiters ||= [];
-      this._walletWaiters.push(waiter);
-      setTimeout(() => {
-        this._walletWaiters = this._walletWaiters.filter((item) => item !== waiter);
-        resolve();
-      }, timeout);
-    });
+    return waitForWallet(this, rdns, timeout);
   }
 
   _resolveWalletWaiters(rdns) {
-    for (const waiter of [...(this._walletWaiters || [])]) {
-      if (waiter.rdns === rdns) {
-        this._walletWaiters = this._walletWaiters.filter((item) => item !== waiter);
-        waiter.resolve();
-      }
-    }
+    resolveWalletWaiters(this, rdns);
   }
 
   /** personal_sign over the connected account. Resolves to the signature. */
@@ -523,7 +461,10 @@ export class Web3Connect extends LitElement {
   }
 
   _handleDisconnectState(disconnected) {
-    if (disconnected && this.account) this._applyAccounts([]);
+    if (disconnected) {
+      this._connectionGeneration += 1;
+      if (this.account) this._applyAccounts([]);
+    }
   }
 
   _ensureConnectionGeneration(generation) {
@@ -542,45 +483,17 @@ export class Web3Connect extends LitElement {
   }
 
   _attachProvider(provider) {
-    // 「是否有钱包」只看 provider 是否存在：只实现了 request() 而没有 on() 的 provider 仍可连接。
-    this._setProviderAvailable(!!provider || this.wallets.length > 0);
-    if (!provider || typeof provider.on !== 'function' || typeof provider.removeListener !== 'function') {
-      if (this._listeningProvider) this._detachProvider();
-      return !!provider;
-    }
-    if (this._listeningProvider !== provider) {
-      if (this._listeningProvider) this._detachProvider();
-      provider.on('accountsChanged', this._onAccountsChanged);
-      provider.on('chainChanged', this._onChainChanged);
-      provider.on('disconnect', this._onDisconnect);
-      this._listeningProvider = provider;
-    }
-    return true;
+    return attachWalletProvider(this, provider);
   }
 
-  /** 只在可用性变化（或挂载后首次）时派发 web3-provider-detected，避免每次 connect() 都向服务端发事件。 */
   _setProviderAvailable(available) {
-    if (this._providerAnnounced && this.providerAvailable === available) {
-      return;
-    }
-    this._providerAnnounced = true;
-    this.providerAvailable = available;
-    this._notify('web3-provider-detected', { available });
+    setProviderAvailable(this, available);
   }
-
   _detachProvider() {
-    const provider = this._listeningProvider;
-    if (provider) {
-      provider.removeListener('accountsChanged', this._onAccountsChanged);
-      provider.removeListener('chainChanged', this._onChainChanged);
-      provider.removeListener('disconnect', this._onDisconnect);
-    }
-    this._listeningProvider = null;
+    detachWalletProvider(this);
   }
-
   _notify(type, detail) {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 }
-
 if (!customElements.get(Web3Connect.is)) customElements.define(Web3Connect.is, Web3Connect);

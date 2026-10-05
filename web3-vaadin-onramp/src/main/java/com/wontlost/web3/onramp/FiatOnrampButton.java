@@ -2,6 +2,7 @@ package com.wontlost.web3.onramp;
 
 import java.net.URI;
 import java.util.Objects;
+import java.text.MessageFormat;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.Composite;
@@ -36,6 +37,7 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
     private final String providerName;
     private final Button button = new Button();
     private final Anchor fallback = new Anchor();
+    private FiatOnrampI18n i18n = new FiatOnrampI18n();
 
     /** Creates a purchase button for orders supplied at click time. */
     public FiatOnrampButton(OnrampProvider provider, SerializableSupplier<OnrampOrder> orderSupplier) {
@@ -46,7 +48,7 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
         this.provider = Objects.requireNonNull(provider);
         this.providerName = provider.name();
         this.orderSupplier = Objects.requireNonNull(orderSupplier);
-        button.setText("Buy with card");
+        button.setText(i18n.getButton());
         fallback.setTarget("_blank");
         fallback.getElement().setAttribute("rel", "noopener");
         fallback.setVisible(false);
@@ -54,8 +56,16 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
         getContent().add(button, fallback);
     }
 
-    /** Sets the button label. */
-    public FiatOnrampButton setText(String text) { button.setText(Objects.requireNonNull(text)); return this; }
+    /** Sets the button label; the most recently called text or i18n setter controls the visible label. */
+    public FiatOnrampButton setText(String text) { i18n.setButton(Objects.requireNonNull(text)); button.setText(text); return this; }
+    /** Sets localized labels and error text. */
+    public FiatOnrampButton setI18n(FiatOnrampI18n value) {
+        i18n = Objects.requireNonNull(value);
+        button.setText(value.getButton());
+        return this;
+    }
+    /** Returns localized labels and error text. */
+    public FiatOnrampI18n getI18n() { return i18n; }
     /** Registers for successfully opened checkout sessions. */
     public Registration addOnrampOpenedListener(com.vaadin.flow.component.ComponentEventListener<OnrampOpenedEvent> listener) {
         return addListener(OnrampOpenedEvent.class, listener);
@@ -69,7 +79,7 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
         OnrampProvider resolved = provider.resolve().orElse(null);
         if (resolved == null) {
             fireEvent(new OnrampFailedEvent(this, new OnrampException(providerName, -1,
-                    "No on-ramp provider named " + providerName + " is registered; call OnrampProviders.register at startup")));
+                    MessageFormat.format(i18n.getProviderMissing(), providerName))));
             return;
         }
         OnrampOrder order;
@@ -81,7 +91,7 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
             fallback.setVisible(false);
             uri = resolved.createSession(order);
             if (!uri.isAbsolute() || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme())) || uri.getHost() == null)
-                throw new IllegalArgumentException("Provider URL must be an absolute HTTP URL");
+                throw new IllegalArgumentException(i18n.getInvalidProviderUrl());
         } catch (RuntimeException failure) {
             OnrampException exception = failure instanceof OnrampException onramp ? onramp
                     : new OnrampException(providerName, failure.getMessage(), failure);
@@ -104,7 +114,7 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
         if (opened) fireEvent(new OnrampOpenedEvent(this, uri));
         else {
             fallback.getElement().setAttribute("href", uri.toString());
-            fallback.setText("Continue to " + providerName);
+            fallback.setText(MessageFormat.format(i18n.getContinueTo(), providerName));
             fallback.setVisible(true);
         }
         button.setEnabled(true);
@@ -133,16 +143,18 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
         return (checkout, token, amount) -> {
             OnrampProvider resolved = ref.resolve().orElse(null);
             if (resolved == null || !supportsQuietly(resolved, token)) return null;
+            FiatOnrampI18n messages = new FiatOnrampI18n();
             FiatOnrampButton button = new FiatOnrampButton(ref, () -> {
                 String address = Web3Session.current().map(signIn -> signIn.address()).orElse(checkout.getConnectedAccount());
                 if (address == null || address.isBlank()) {
-                    Notification.show("Connect your wallet first");
+                    Notification.show(messages.getConnectWallet());
                     return null;
                 }
                 String ip = VaadinService.getCurrentRequest() == null ? null : VaadinService.getCurrentRequest().getRemoteAddr();
                 return new OnrampOrder(token, address, amount, null, null, null, ip, checkout.getOrderId());
             });
-            button.setText("Need " + token.symbol() + "? Buy with card");
+            button.setI18n(messages);
+            button.setText(MessageFormat.format(messages.getNeedToken(), token.symbol()));
             return button;
         };
     }

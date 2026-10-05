@@ -42,8 +42,21 @@ public final class PaymentVerifier {
         }
         if (paid.signum() == 0) return result(PaymentStatus.NO_MATCHING_TRANSFER, txHash, payer, paid, 0);
         if (paid.compareTo(request.minAmount()) < 0) return result(PaymentStatus.UNDERPAID, txHash, payer, paid, 0);
+        EthRpcClient.BlockReference canonical = rpc.getBlockReference("0x" + Long.toHexString(receipt.blockNumber()));
+        if (canonical == null || receipt.blockHash() == null || canonical.hash() == null
+                || !canonical.hash().equalsIgnoreCase(receipt.blockHash())) {
+            return result(PaymentStatus.PENDING, txHash, payer, paid, 0);
+        }
         long confirmations = Math.max(0, rpc.blockNumber() - receipt.blockNumber() + 1);
-        if (confirmations < request.minConfirmations()) return result(PaymentStatus.CONFIRMING, txHash, payer, paid, confirmations);
+        Finality finality = request.finality();
+        if (finality.kind() == Finality.Kind.CONFIRMATIONS && confirmations < finality.confirmations())
+            return result(PaymentStatus.CONFIRMING, txHash, payer, paid, confirmations);
+        if (finality.kind() == Finality.Kind.FINALIZED) {
+            EthRpcClient.BlockReference finalized = rpc.getBlockReference("finalized");
+            if (finalized == null) throw new IllegalStateException("RPC node returned no finalized block");
+            if (finalized.number() < receipt.blockNumber())
+                return result(PaymentStatus.CONFIRMING, txHash, payer, paid, confirmations);
+        }
         boolean claimed = ledger.claim(request.chainId() + ":" + txHash.toLowerCase(), orderId);
         return result(claimed ? PaymentStatus.CONFIRMED : PaymentStatus.ALREADY_CLAIMED,
                 txHash, payer, paid, confirmations);

@@ -41,11 +41,13 @@ import com.wontlost.web3.screening.AddressScreening;
 public class SiweLogin extends Composite<HorizontalLayout> {
 
     private final Web3Connect wallet = new Web3Connect(true);
-    private final Button signInButton = new Button("Sign in with Ethereum");
+    private final Button signInButton = new Button();
     private transient NonceStore nonces;
     /** 使用者通过 setVerifier 提供的校验器；为空时每次按当前上下文构建默认校验器。 */
     private transient SiweVerifier customVerifier;
     private transient Supplier<VaadinContext> contextLookup = SiweLogin::currentContext;
+    /** 测试用：替换当前请求来源，以便验证 session ID 轮换；为空时使用 VaadinRequest.getCurrent()。 */
+    private transient Supplier<VaadinRequest> requestLookup;
     private String domain;
     private String uri;
     private String statement;
@@ -53,10 +55,13 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     private boolean flowInProgress;
     private boolean disconnectWalletOnSignOut = true;
     private boolean navigateToContinueTarget = true;
+    private boolean sessionIdRotation = true;
+    private SiweLoginI18n i18n = new SiweLoginI18n();
 
     /** Creates a SIWE component using the supplied one-time nonce store. */
     public SiweLogin(NonceStore nonces) {
         this.nonces = Objects.requireNonNull(nonces, "nonces");
+        signInButton.setText(i18n.getButton());
         VaadinContext context = currentContext();
         if (context != null) {
             registerNonceStore(context, nonces);
@@ -104,10 +109,25 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     void setContextLookup(Supplier<VaadinContext> lookup) {
         contextLookup = Objects.requireNonNull(lookup);
     }
+    void setRequestLookup(Supplier<VaadinRequest> lookup) {
+        requestLookup = Objects.requireNonNull(lookup);
+    }
     /** Returns the wallet component for external customization. */
     public Web3Connect getWallet() { return wallet; }
-    /** Sets the sign-in button label. */
-    public SiweLogin setButtonText(String text) { signInButton.setText(Objects.requireNonNull(text)); return this; }
+    /** Sets the sign-in button label; the most recently called text or i18n setter controls the visible label. */
+    public SiweLogin setButtonText(String text) {
+        i18n.setButton(Objects.requireNonNull(text));
+        signInButton.setText(text);
+        return this;
+    }
+    /** Sets localized sign-in labels and failure messages. */
+    public SiweLogin setI18n(SiweLoginI18n value) {
+        i18n = Objects.requireNonNull(value);
+        signInButton.setText(value.getButton());
+        return this;
+    }
+    /** Returns localized sign-in labels and failure messages. */
+    public SiweLoginI18n getI18n() { return i18n; }
     /** Sets whether signing out also disconnects the wallet. */
     public SiweLogin setDisconnectWalletOnSignOut(boolean value) {
         disconnectWalletOnSignOut = value;
@@ -118,6 +138,12 @@ public class SiweLogin extends Composite<HorizontalLayout> {
         navigateToContinueTarget = value;
         return this;
     }
+    /**
+     * Enables session ID rotation after successful verification; disable only when the application handles it itself.
+     * Rotation requires a servlet request capable of setting response cookies, such as the default {@code WEBSOCKET_XHR}
+     * or long-polling transport. Pure WebSocket callbacks log a warning and complete sign-in without rotation.
+     */
+    public SiweLogin setSessionIdRotation(boolean value) { sessionIdRotation = value; return this; }
 
     /** Clears the verified session, disconnects the wallet by default, and fires a signed-out event. */
     public void signOut() {
@@ -188,6 +214,7 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     private void completeVerifiedSignIn(VerifiedSignIn verified) {
         try {
             screenVerifiedAddress(verified, AddressScreening.find(contextLookup == null ? currentContext() : contextLookup.get()));
+            if (sessionIdRotation) SessionIds.rotate(requestLookup == null ? VaadinRequest.getCurrent() : requestLookup.get());
             Web3Session.store(verified);
             finishSuccess(verified);
         } catch (SiweException exception) {
@@ -386,6 +413,12 @@ public class SiweLogin extends Composite<HorizontalLayout> {
         public int getWalletErrorCode() { return walletErrorCode; }
         /** Returns whether the wallet reports that the user rejected the request. */
         public boolean isUserRejected() { return userRejected; }
+        /** Returns the localized failure message configured on this event's source component. */
+        public String getLocalizedMessage() {
+            SiweLoginI18n messages = getSource().getI18n();
+            if (reason != null) return messages.getMessage(reason);
+            return userRejected ? messages.getUserRejected() : messages.getNetworkError();
+        }
     }
 
     /** Registers a listener for successful sign-ins. */

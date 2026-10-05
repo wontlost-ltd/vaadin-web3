@@ -36,10 +36,21 @@ public final class EthRpcClient {
     }
     /** Returns the timestamp of a mined block. */
     public java.time.Instant blockTimestamp(long blockNumber) {
-        JsonNode block = result("eth_getBlockByNumber", List.of("0x" + Long.toHexString(blockNumber), false));
+        JsonNode block = getBlockByNumber("0x" + Long.toHexString(blockNumber));
         if (block.isNull()) throw new IllegalStateException("Block " + blockNumber + " is not available");
         return java.time.Instant.ofEpochSecond(hexLong(block.path("timestamp").asString()));
     }
+    /** Returns a canonical block's number and hash for the supplied block tag or hex height. */
+    public BlockReference getBlockReference(String blockTag) {
+        JsonNode block = getBlockByNumber(blockTag);
+        if (block.isNull()) return null;
+        return new BlockReference(hexLong(block.path("number").asString()), nullableString(block.path("hash")));
+    }
+    private JsonNode getBlockByNumber(String blockTag) {
+        return result("eth_getBlockByNumber", List.of(blockTag, false));
+    }
+    /** Canonical block identity returned by an Ethereum node. */
+    public record BlockReference(long number, String hash) { }
     /** Returns the receipt when the transaction has been mined. */
     public Optional<TransactionReceipt> getTransactionReceipt(String hash) {
         JsonNode node = result("eth_getTransactionReceipt", List.of(hash));
@@ -53,7 +64,8 @@ public final class EthRpcClient {
         }
         return Optional.of(new TransactionReceipt(node.path("transactionHash").asString(),
                 hexLong(node.path("blockNumber").asString()), "0x1".equalsIgnoreCase(node.path("status").asString()),
-                nullableString(node.path("from")), nullableString(node.path("to")), logs));
+                nullableString(node.path("from")), nullableString(node.path("to")), logs,
+                nullableString(node.path("blockHash"))));
     }
     /** Returns the transaction when it is known to this endpoint. */
     public Optional<EthTransaction> getTransactionByHash(String hash) {

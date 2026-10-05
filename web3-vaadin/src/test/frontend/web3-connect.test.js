@@ -64,6 +64,51 @@ describe('web3-connect', () => {
     expect(detected).not.toHaveBeenCalled();
   });
 
+  it('does not restore accounts when another instance disconnects during eth_accounts', async () => {
+    const { element, provider } = makeConnect();
+    let finishAccounts;
+    provider.handlers.eth_accounts = () => new Promise((resolve) => { finishAccounts = resolve; });
+    const restore = element.restore();
+    await Promise.resolve();
+    window.dispatchEvent(new CustomEvent('web3-connect:disconnect-state', { detail: { disconnected: true } }));
+    finishAccounts(['0x1234567890123456789012345678901234567890']);
+    await expect(restore).resolves.toBeNull();
+    expect(element.account).toBe('');
+  });
+
+  it('focuses inside the picker, traps Tab, and restores focus after closing', async () => {
+    const { element } = makeConnect();
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    element.wallets = [{ rdns: 'wallet.one', name: 'Wallet One', icon: '' }];
+    const picker = element._showWalletPicker();
+    await element.updateComplete;
+    const buttons = element.shadowRoot.querySelectorAll('.wallet-picker-content button');
+    expect(element.shadowRoot.activeElement).toBe(buttons[0]);
+    buttons[0].focus();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, shiftKey: true }));
+    expect(element.shadowRoot.activeElement).toBe(buttons[1]);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(element.shadowRoot.activeElement).toBe(buttons[0]);
+    element._closeWalletPicker(false);
+    await expect(picker).rejects.toThrow();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('renders localized picker labels', async () => {
+    const { element } = makeConnect();
+    element.pickerTitle = '選擇錢包';
+    element.noWalletText = '沒有錢包';
+    element.closeLabel = '關閉';
+    element.wallets = [];
+    element._pickerOpen = true;
+    await element.updateComplete;
+    expect(element.shadowRoot.querySelector('h2').textContent).toBe('選擇錢包');
+    expect(element.shadowRoot.querySelector('p').textContent).toBe('沒有錢包');
+    expect(element.shadowRoot.querySelector('[aria-label="關閉"]')).toBeTruthy();
+  });
+
   it('treats a provider without on() as available and still connects', async () => {
     window.ethereum = { request: async ({ method }) => (method === 'eth_chainId' ? '0x1' : ['0x1234567890123456789012345678901234567890']) };
     const element = new Web3Connect();

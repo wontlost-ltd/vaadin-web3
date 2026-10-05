@@ -11,12 +11,13 @@ import com.wontlost.web3.chain.Tokens;
 
 class FiatOnrampButtonTest {
     @Test void blockedPopupShowsFallbackLink() {
-        FiatOnrampButton button = new FiatOnrampButton(provider(), () -> null);
+        FiatOnrampButton button = new FiatOnrampButton(provider(), () -> null)
+                .setI18n(new FiatOnrampI18n().setContinueTo("Continuer vers {0}"));
         URI uri = URI.create("https://provider.test/one-time");
         button.handlePopupResult(uri, false);
         assertTrue(button.fallbackLink().isVisible());
         assertEquals(uri.toString(), button.fallbackLink().getElement().getAttribute("href"));
-        assertEquals("Continue to Test Provider", button.fallbackLink().getText());
+        assertEquals("Continuer vers Test Provider", button.fallbackLink().getText());
         assertEquals("noopener", button.fallbackLink().getElement().getAttribute("rel"));
     }
 
