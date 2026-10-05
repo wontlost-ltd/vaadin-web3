@@ -91,4 +91,26 @@ class PaymentVerifierTest {
         assertEquals(com.wontlost.web3.pay.PaymentStatus.NO_MATCHING_TRANSFER, usdtVerifier.verify("usdc", hash,
                 new PaymentRequest(1, Tokens.usdc(1).orElseThrow().address(), recipient, amount, payer)).status());
     }
+
+    @Test void rejectsTransactionsMinedBeforeTheOrderWasCreated() {
+        String token = Tokens.usdc(1).orElseThrow().address();
+        java.time.Instant mined = java.time.Instant.parse("2026-10-04T11:35:23Z");
+        // 下单早于出块：正常确认
+        assertEquals(PaymentStatus.CONFIRMED, verifier.verify("fresh", hash,
+                new PaymentRequest(1, token, recipient, amount, payer, 1, mined.minusSeconds(60))).status());
+        // 下单晚于出块：旧交易不能付新订单（即使账本里没有认领记录）
+        assertEquals(PaymentStatus.PREDATES_ORDER, new PaymentVerifier(registryFor(transport), new InMemoryPaymentLedger())
+                .verify("replay", hash, new PaymentRequest(1, token, recipient, amount, payer, 1, mined.plusSeconds(1))).status());
+        // 未设置 notBefore：不查询区块（保持旧行为与 RPC 开销）
+        int before = transport.blockRequests;
+        new PaymentVerifier(registryFor(transport), new InMemoryPaymentLedger())
+                .verify("legacy", hash, new PaymentRequest(1, token, recipient, amount, payer));
+        assertEquals(before, transport.blockRequests);
+    }
+
+    private static ChainRegistry registryFor(OnChainSupportTest.FixtureTransport transport) {
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(1, new com.wontlost.web3.chain.EthRpcClient(transport));
+        return registry;
+    }
 }

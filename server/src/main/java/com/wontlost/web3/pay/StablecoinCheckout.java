@@ -303,7 +303,7 @@ public class StablecoinCheckout extends VerticalLayout {
             submittedToken = targetToken;
             String payer = Web3Session.current().map(user -> user.address()).orElse(account);
             submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, intent.amountUnits(), payer,
-                    minConfirmations);
+                    minConfirmations, intent.notBefore());
             submittedOrderId = orderId;
             if (activeChain == targetChain) return send(targetToken, intent.amountUnits());
             return wallet.switchChain(Chains.toHex(targetChain)).thenCompose(ignored -> {
@@ -326,11 +326,31 @@ public class StablecoinCheckout extends VerticalLayout {
         if (selectedChain == null) return null;
         String symbol = selectedToken;
         TokenInfo token = Tokens.find(symbol, selectedChain).orElseThrow();
+        // 只接受点击 Pay 之后（减去时钟误差容忍）上链的交易，旧交易不能冒充本次付款
         return new PaymentIntent(symbol, selectedChain, preferredChain,
-                Tokens.toBaseUnits(amount, token.decimals()));
+                Tokens.toBaseUnits(amount, token.decimals()), java.time.Instant.now().minus(transactionTimeTolerance));
     }
 
-    record PaymentIntent(String tokenSymbol, long selectedChain, Long preferredChain, BigInteger amountUnits) { }
+    /** 默认的区块时间与服务器时钟误差容忍：以太坊出块时间与实际时间相差通常在秒级，服务器应同步 NTP。 */
+    static final java.time.Duration NOT_BEFORE_TOLERANCE = java.time.Duration.ofMinutes(2);
+    private java.time.Duration transactionTimeTolerance = NOT_BEFORE_TOLERANCE;
+
+    /**
+     * Sets how much earlier than the Pay click a transaction's block may be and still count (default two minutes),
+     * to absorb differences between block timestamps and the server clock. Larger values widen the window in which an
+     * unrelated concurrent transfer to the recipient could be presented as payment; keep it small.
+     *
+     * @throws IllegalStateException while a payment is in progress or after it is paid; call {@link #reset(String)} first
+     */
+    public StablecoinCheckout setTransactionTimeTolerance(java.time.Duration tolerance) {
+        requireConfigurable();
+        if (tolerance == null || tolerance.isNegative()) throw new IllegalArgumentException("tolerance must not be negative");
+        transactionTimeTolerance = tolerance;
+        return this;
+    }
+
+    record PaymentIntent(String tokenSymbol, long selectedChain, Long preferredChain, BigInteger amountUnits,
+            java.time.Instant notBefore) { }
 
     private java.util.concurrent.CompletableFuture<String> send(TokenInfo token, BigInteger units) {
         return wallet.sendTransaction(Map.of("to", token.address(), "data", Erc20.transferData(recipient, units), "value", "0x0"));
@@ -433,7 +453,7 @@ public class StablecoinCheckout extends VerticalLayout {
             stopPolling();
             fireEvent(new PaymentConfirmedEvent(this, result, submittedToken));
         } else if (Set.of(PaymentStatus.FAILED, PaymentStatus.UNDERPAID, PaymentStatus.NO_MATCHING_TRANSFER,
-                PaymentStatus.ALREADY_CLAIMED).contains(result.status())) {
+                PaymentStatus.ALREADY_CLAIMED, PaymentStatus.PREDATES_ORDER).contains(result.status())) {
             stopPolling();
             fireEvent(new PaymentFailedEvent(this, result, false, submittedToken));
             setPayEnabled(true);
