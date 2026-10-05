@@ -59,6 +59,8 @@ public class StablecoinCheckout extends VerticalLayout {
     private final Button pay = new Button();
     private final Span status = new Span("Waiting for payment.");
     private final Span amountLabel;
+    private OnrampAction onrampAction;
+    private com.vaadin.flow.component.Component onrampComponent;
     private Set<Long> allowedChainIds;
     private List<String> tokens = List.of("USDC");
     private String selectedToken = "USDC";
@@ -106,6 +108,7 @@ public class StablecoinCheckout extends VerticalLayout {
                 refreshNetworks();
             }
         });
+        network.addValueChangeListener(event -> refreshOnrampComponent());
         refreshNetworks();
         pay.setText(label());
         pay.addClickListener(event -> beginPayment());
@@ -113,7 +116,16 @@ public class StablecoinCheckout extends VerticalLayout {
         setSpacing(true);
     }
 
-    public StablecoinCheckout setOrderId(String value) { orderId = Objects.requireNonNull(value); return this; }
+    public StablecoinCheckout setOrderId(String value) { orderId = Objects.requireNonNull(value); refreshOnrampComponent(); return this; }
+    /** Returns the current checkout order identifier. */
+    public String getOrderId() { return orderId; }
+    /** Returns the connected wallet account, or {@code null} before a wallet is connected. */
+    public String getConnectedAccount() { String account = wallet.getAccount(); return account == null || account.isBlank() ? null : account; }
+    /**
+     * Sets the optional card purchase action displayed below the payment button. The action is invoked again whenever
+     * the selected token or network changes; it is hidden while a payment is in progress or paid.
+     */
+    public StablecoinCheckout setOnrampAction(OnrampAction action) { onrampAction = action; refreshOnrampComponent(); return this; }
     /** Returns whether the current order has been paid. */
     public boolean isPaid() { return paid; }
     /** Resets the checkout for a new order. */
@@ -224,6 +236,7 @@ public class StablecoinCheckout extends VerticalLayout {
         pay.setEnabled(enabled);
         tokenSelect.setEnabled(enabled);
         network.setEnabled(enabled);
+        if (onrampComponent != null) onrampComponent.setVisible(enabled);
     }
 
     private String label() { return buttonText == null ? "Pay " + amount.toPlainString() + " " + selectedToken : buttonText; }
@@ -244,11 +257,30 @@ public class StablecoinCheckout extends VerticalLayout {
         network.setItems(accepted.stream().sorted().toList());
         if (current != null && accepted.contains(current)) {
             network.setValue(current);
+            refreshOnrampComponent();
             return;
         }
         if (preferredChain != null && accepted.contains(preferredChain)) network.setValue(preferredChain);
         else if (!accepted.isEmpty()) network.setValue(accepted.stream().min(Long::compareTo).orElseThrow());
         else network.clear();
+        refreshOnrampComponent();
+    }
+
+    private void refreshOnrampComponent() {
+        if (onrampComponent != null) {
+            remove(onrampComponent);
+            onrampComponent = null;
+        }
+        Long chainId = network.getValue();
+        if (onrampAction == null || chainId == null) return;
+        TokenInfo token = Tokens.find(selectedToken, chainId).orElse(null);
+        if (token == null) return;
+        com.vaadin.flow.component.Component component = onrampAction.create(this, token, amount);
+        if (component == null) return;
+        onrampComponent = component;
+        int payIndex = getChildren().toList().indexOf(pay);
+        addComponentAtIndex(payIndex + 1, component);
+        component.setVisible(pay.isEnabled());
     }
 
     private void beginPayment() {

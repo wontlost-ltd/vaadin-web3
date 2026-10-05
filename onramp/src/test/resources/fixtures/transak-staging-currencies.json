@@ -1,0 +1,4172 @@
+{
+ "response": [
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ethereum",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "11155111"
+   },
+   "uniqueId": "ETHethereum",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": 1,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ethereum",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "11155111"
+   },
+   "uniqueId": "USDTethereum",
+   "tokenType": "GENERAL",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 4,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ethereum",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "11155111"
+   },
+   "uniqueId": "USDCethereum",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 5,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "tron",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDTtron",
+   "tokenType": "GENERAL",
+   "address": null,
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 7,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "bsc",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "97"
+   },
+   "uniqueId": "USDTbsc",
+   "tokenType": "GENERAL",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 8,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "polygon",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "80002"
+   },
+   "uniqueId": "USDTpolygon",
+   "tokenType": "GENERAL",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 12,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+   "addressAdditionalData": {
+    "name": "dest_tag",
+    "display_name": "MEMO"
+   },
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 7,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "stellar",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCstellar",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 13,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x0c86a754a29714c4fe9c6f1359fa7099ed174c0b",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "polygon",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "80002"
+   },
+   "uniqueId": "USDCpolygon",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 14,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "bsc",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "97"
+   },
+   "uniqueId": "USDCbsc",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 15,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "solana",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCsolana",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 18,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xD733D48f2a7F57D4559F98ae07f87Dab595E3523",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "base",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "84532"
+   },
+   "uniqueId": "USDCbase",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": 19,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": true,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "base",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "84532"
+   },
+   "uniqueId": "ETHbase",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": 20,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "optimism",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "11155420"
+   },
+   "uniqueId": "ETHoptimism",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "arbitrum",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "421614"
+   },
+   "uniqueId": "ETHarbitrum",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "polygonzkevm",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "2442"
+   },
+   "uniqueId": "ETHpolygonzkevm",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 8,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "linea",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "59141"
+   },
+   "uniqueId": "ETHlinea",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "zksync",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "300"
+   },
+   "uniqueId": "ETHzksync",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0xe9E96d1aad82562b7588F03f49aD34186f996478",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "immutablezkevm",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "13473"
+   },
+   "uniqueId": "ETHimmutablezkevm",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "TOKEN",
+   "transakRank": null,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "starknet",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "ETHstarknet",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "TOKEN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "b3",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "1993"
+   },
+   "uniqueId": "ETHb3",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "zero",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "4457845"
+   },
+   "uniqueId": "ETHzero",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "unichain",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "1301"
+   },
+   "uniqueId": "ETHunichain",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0x0000000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "soneium",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "1946"
+   },
+   "uniqueId": "ETHsoneium",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "NATIVE",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba3884cb195e0f0a6fc",
+   "coinId": "ethereum",
+   "address": "0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.875Z",
+   "decimals": 9,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/ethereum_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "Ethereum",
+   "roundOff": 8,
+   "symbol": "ETH",
+   "isIgnorePriceVerification": true,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/ethereum_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "fuel",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "ETHfuel",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "TOKEN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "solana",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDTsolana",
+   "tokenType": "GENERAL",
+   "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "algorand",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDTalgorand",
+   "tokenType": "GENERAL",
+   "address": "312769",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "mantle",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "5001"
+   },
+   "uniqueId": "USDTmantle",
+   "tokenType": "GENERAL",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": {
+    "name": "dest_tag",
+    "display_name": "MEMO"
+   },
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ton",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDTton",
+   "tokenType": "GENERAL",
+   "address": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "opbnb",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDTopbnb",
+   "tokenType": "GENERAL",
+   "address": "0x9e5aac1ba1a2e6aed6b32689dfcf62a509ca96f3",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "celo",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "44787"
+   },
+   "uniqueId": "USDTcelo",
+   "tokenType": "GENERAL",
+   "address": "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "assethub",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDTassethub",
+   "tokenType": "GENERAL",
+   "address": "1984",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba5884cb195e0f0a722",
+   "coinId": "tether",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:43.279Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/tether_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/tether_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/tether_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "Tether",
+   "roundOff": 2,
+   "symbol": "USDT",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/tether_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "aptos",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDTaptos",
+   "tokenType": "GENERAL",
+   "address": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "avaxcchain",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCavaxcchain",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "31566704",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "algorand",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCalgorand",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "tron",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCtron",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xD733D48f2a7F57D4559F98ae07f87Dab595E3523",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "optimism",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "11155420"
+   },
+   "uniqueId": "USDCoptimism",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "arbitrum",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "421614"
+   },
+   "uniqueId": "USDCarbitrum",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0.0.456858",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "hedera",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDChedera",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x2f543B96A5C8a8CE83EF2f9b16788eA75219c1e8",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "fuse",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "123"
+   },
+   "uniqueId": "USDCfuse",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xD733D48f2a7F57D4559F98ae07f87Dab595E3523",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "linea",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "59141"
+   },
+   "uniqueId": "USDClinea",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x3B2d8A1931736Fc321C24864BceEe981B11c3c57",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "immutablezkevm",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "13473"
+   },
+   "uniqueId": "USDCimmutablezkevm",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x6CE77Fc7970F6984eF3E8748A3826972Ec409Fb9",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "skale",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "1444673419"
+   },
+   "uniqueId": "USDCskale",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x1d17cbcf0d6d143135ae902365d2e5e2a16538d4",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "zksync",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "300"
+   },
+   "uniqueId": "USDCzksync",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xceba9300f2b948710d2653dd7b07f33a8b32118c",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN",
+      "NY",
+      "LA"
+     ]
+    }
+   ],
+   "network": {
+    "name": "celo",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "44787"
+   },
+   "uniqueId": "USDCcelo",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "near",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDCnear",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x067fbff8990c58ab90bae3c97241c5d736053f77",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ronin",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "2021"
+   },
+   "uniqueId": "USDCronin",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "etherlink",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "128123"
+   },
+   "uniqueId": "USDCetherlink",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": true,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x078D782b760474a361dDA0AF3839290b0EF57AD6",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "unichain",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": "1301"
+   },
+   "uniqueId": "USDCunichain",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "aptos",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDCaptos",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "sui",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDCsui",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xF1815bd50389c46847f0Bda824eC8da914045D14",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "apechain",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_venmo"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_zelle"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jwire"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_jach"
+     }
+    ],
+    "chainId": null
+   },
+   "uniqueId": "USDCapechain",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "1337",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "assethub",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCassethub",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0x3600000000000000000000000000000000000000",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [],
+   "regionsNotSupported": [
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "MN"
+     ]
+    }
+   ],
+   "network": {
+    "name": "arc",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDCarc",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "5ebf0ba2884cb195e0f0a62f",
+   "coinId": "usd-coin",
+   "address": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+   "addressAdditionalData": false,
+   "createdAt": "2020-05-15T21:37:40.275Z",
+   "decimals": 6,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_large.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_small.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/usd-coin_thumb.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "USD Coin",
+   "roundOff": 2,
+   "symbol": "USDC",
+   "isIgnorePriceVerification": false,
+   "image_bk": {
+    "large": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_large.png",
+    "thumb": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_thumb.png",
+    "small": "https://transak-bucket-staging.s3.us-east-2.amazonaws.com/images/cryptocurrency/usd-coin_small.png"
+   },
+   "kycCountriesNotSupported": [
+    "CA",
+    "US"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "hyperevm",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "USDChyperevm",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "662a009560ca5d891753b418",
+   "coinId": "paypal-usd",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "addressAdditionalData": false,
+   "createdAt": "2024-04-25T07:04:52.658Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/paypal-usd_large.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/paypal-usd_thumb.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/paypal-usd_small.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": true,
+   "name": "PayPal USD",
+   "roundOff": 2,
+   "symbol": "PYUSD",
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ethereum",
+    "fiatCurrenciesNotSupported": [
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "credit_debit_card"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "apple_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "google_pay"
+     },
+     {
+      "fiatCurrency": "USD",
+      "paymentMethod": "pm_cash_app"
+     }
+    ],
+    "chainId": "11155111"
+   },
+   "uniqueId": "PYUSDethereum",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "655f01b9922c39df1e0fe5d7",
+   "coinId": "euro-coin",
+   "address": "0x0c86A754A29714C4Fe9C6F1359fa7099eD174c0b",
+   "addressAdditionalData": false,
+   "createdAt": "2023-11-23T07:39:37.040Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_large.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_thumb.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_small.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "EURC",
+   "roundOff": 2,
+   "symbol": "EURC",
+   "isIgnorePriceVerification": false,
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "ethereum",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "11155111"
+   },
+   "uniqueId": "EURCethereum",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "655f01b9922c39df1e0fe5d7",
+   "coinId": "euro-coin",
+   "address": "0xD733D48f2a7F57D4559F98ae07f87Dab595E3523",
+   "addressAdditionalData": false,
+   "createdAt": "2023-11-23T07:39:37.040Z",
+   "decimals": 18,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_large.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_thumb.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_small.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "EURC",
+   "roundOff": 2,
+   "symbol": "EURC",
+   "isIgnorePriceVerification": false,
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "base",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": "84532"
+   },
+   "uniqueId": "EURCbase",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  },
+  {
+   "_id": "655f01b9922c39df1e0fe5d7",
+   "coinId": "euro-coin",
+   "address": "GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO",
+   "addressAdditionalData": {
+    "name": "dest_tag",
+    "display_name": "MEMO"
+   },
+   "createdAt": "2023-11-23T07:39:37.040Z",
+   "decimals": 7,
+   "image": {
+    "large": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_large.png",
+    "thumb": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_thumb.png",
+    "small": "https://assets-stg.transak.com/images/cryptoCurrency/euro-coin_small.png"
+   },
+   "isAllowed": true,
+   "isPopular": false,
+   "isStable": false,
+   "name": "EURC",
+   "roundOff": 2,
+   "symbol": "EURC",
+   "isIgnorePriceVerification": false,
+   "kycCountriesNotSupported": [
+    "US",
+    "CA"
+   ],
+   "regionsNotSupported": [
+    {
+     "country": "CA",
+     "availability": "none",
+     "notes": "Regulatory restrictions apply nationwide",
+     "restrictedStates": null
+    },
+    {
+     "country": "US",
+     "availability": "partial",
+     "notes": "Cryptocurrency availability varies by state",
+     "restrictedStates": [
+      "LA",
+      "NY",
+      "MN",
+      "ND",
+      "OH",
+      "TX",
+      "WA",
+      "GA",
+      "ME",
+      "AS",
+      "GU",
+      "MP",
+      "PR",
+      "UM",
+      "VI"
+     ]
+    }
+   ],
+   "network": {
+    "name": "stellar",
+    "fiatCurrenciesNotSupported": [],
+    "chainId": null
+   },
+   "uniqueId": "EURCstellar",
+   "tokenType": "GENERAL",
+   "tokenIdentifier": null,
+   "coinType": "STABLE_COIN",
+   "transakRank": null,
+   "isPayInAllowed": false,
+   "minAmountForPayIn": null,
+   "maxAmountForPayIn": null
+  }
+ ],
+ "success": true
+}

@@ -72,6 +72,42 @@ class StablecoinCheckoutTest {
         assertEquals(new BigInteger("2500000"), intent.amountUnits());
     }
 
+    @Test void onrampActionRebuildsForTokenAndNetworkAndHidesWhenLocked() {
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        registry.register(8453, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        StablecoinCheckout checkout = new StablecoinCheckout(registry, new InMemoryPaymentLedger(), RECIPIENT,
+                new BigDecimal("2.50")).setTokens("USDC", "USDT");
+        java.util.List<String> rebuilt = new java.util.ArrayList<>();
+        checkout.setOnrampAction((source, token, amount) -> {
+            rebuilt.add(token.symbol() + "@" + token.chainId() + ":" + amount.toPlainString());
+            return new com.vaadin.flow.component.html.Span(token.symbol() + " on " + token.chainId());
+        });
+        assertTrue(rebuilt.contains("USDC@1:2.50"));
+        tokenSelect(checkout).setValue("USDT");
+        assertTrue(rebuilt.contains("USDT@1:2.50"));
+        tokenSelect(checkout).setValue("USDC");
+        networkSelect(checkout).setValue(8453L);
+        assertTrue(rebuilt.contains("USDC@8453:2.50"));
+        assertTrue(checkout.getChildren().anyMatch(c -> c instanceof com.vaadin.flow.component.html.Span span
+                && span.getText().equals("USDC on 8453")));
+        checkout.applyVerificationResult(new PaymentResult(PaymentStatus.CONFIRMED, "0xabc", null, BigInteger.ONE, 1));
+        var action = checkout.getChildren().filter(com.vaadin.flow.component.html.Span.class::isInstance)
+                .map(com.vaadin.flow.component.html.Span.class::cast).filter(span -> span.getText().contains(" on ")).findFirst().orElseThrow();
+        assertFalse(action.isVisible());
+    }
+
+    @Test void onrampActionCanReturnNullAndCheckoutExposesCurrentContext() {
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        StablecoinCheckout checkout = new StablecoinCheckout(registry, new InMemoryPaymentLedger(), RECIPIENT, BigDecimal.ONE)
+                .setOrderId("order-42").setOnrampAction((source, token, amount) -> null);
+        assertEquals("order-42", checkout.getOrderId());
+        assertEquals(null, checkout.getConnectedAccount());
+        assertFalse(checkout.getChildren().anyMatch(c -> c instanceof com.vaadin.flow.component.html.Span span
+                && span.getText().contains(" on ")));
+    }
+
     private static com.vaadin.flow.component.button.Button button(StablecoinCheckout checkout) {
         return checkout.getChildren().filter(com.vaadin.flow.component.button.Button.class::isInstance)
                 .map(com.vaadin.flow.component.button.Button.class::cast).findFirst().orElseThrow();

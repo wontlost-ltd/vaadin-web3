@@ -31,6 +31,7 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 | `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
 | `@RequiresToken` | `vaadin-web3-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
 | `StablecoinCheckout` | `vaadin-web3-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders |
+| `FiatOnrampButton` | `vaadin-web3-onramp` | Hosted card purchases through MoonPay, Transak or Coinbase with registered contract matching and popup fallback |
 | `EthRpcClient`, `Erc20`, `Tokens` | `vaadin-web3-server` | Minimal JSON-RPC client, ERC-20 calls, built-in stablecoin contract addresses |
 
 The `vaadin-web3` component module has **no third-party dependencies**. The
@@ -430,6 +431,72 @@ priority over the built-in ones.
 Balances are cached per browser tab for 30 seconds. A holder who moves their
 tokens away therefore keeps access for at most that long.
 
+### Fiat on-ramp (buy with card)
+
+The optional `vaadin-web3-onramp` module opens hosted card-purchase sessions with
+MoonPay, Transak or Coinbase. Add it alongside `vaadin-web3-server`:
+
+```xml
+<dependency>
+    <groupId>com.wontlost</groupId>
+    <artifactId>vaadin-web3-onramp</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+Create a provider on the server from credentials issued by the provider's
+merchant dashboard, then connect it to a checkout:
+
+```java
+checkout.setOnrampAction(FiatOnrampButton.forCheckout(provider));
+```
+
+MoonPay requires a publishable key and secret key. `pk_test_` keys use the
+MoonPay sandbox; `pk_live_` keys use production. Transak requires an API key,
+API secret and referrer domain; its staging environment is available with the
+staging flag. Coinbase uses a CDP API key ID and private key and has no sandbox.
+Keep all credentials on the server, and register the provider once at startup:
+
+```java
+@Bean
+VaadinServiceInitListener onrampRegistration(OnrampProvider provider) {
+    return event -> OnrampProviders.register(event.getSource().getContext(), provider);
+}
+```
+
+Credentials are never written into the Vaadin session. Components keep only the
+provider name and look the provider up in this registry again after a session is
+deserialized, for example after a restart with persistent sessions. Registering
+also starts loading the provider's currency list in the background.
+
+- **Page load:** building the checkout never waits for the provider. Until the
+  currency list has loaded, or while the provider is unreachable, the
+  "Buy with card" button is simply not shown. An expired list is refreshed in
+  the background while the previous one stays in use.
+- **Click:** creating the purchase session happens in the click callback, with a
+  ten-second request timeout. If the browser blocks the new window, a link the
+  user can follow is shown instead.
+- **Client IP:** the user's IP sent to the provider (Transak requires it) comes
+  from the request's remote address. Behind a reverse proxy, configure your
+  container to trust the proxy's forwarding headers (in Spring Boot,
+  `server.forward-headers-strategy=native`).
+
+Production currency support is discovered from the provider's live catalog and
+matched by chain ID and case-insensitive contract address against this library's
+`Tokens` registry. A currency with a different contract is rejected even when
+its display name matches. For example, MoonPay's `usdt_optimism` catalog entry
+uses the legacy bridged USDT contract (`0x94b0…8e58`), while this library
+registers USDT0 (`0x01bF…1071`) on Optimism; the entry is therefore not offered.
+
+Sandbox and staging catalogs match by symbol and chain ID because those
+providers issue their own test tokens. Test purchases may deliver provider test
+USDC rather than Circle USDC. `StablecoinCheckout` does not recognize those
+provider test tokens as payment.
+
+Partner fees are paid into the integrating merchant's own provider account.
+Transak lets merchants configure a partner fee in its dashboard. This library
+does not collect partner fees or pay revenue to its authors.
+
 ### Stablecoin checkout
 
 `StablecoinCheckout` asks the connected wallet to transfer a built-in
@@ -524,6 +591,7 @@ an address you control.
 - `walletconnect/`: optional WalletConnect v2 mobile wallet integration
   (`com.wontlost:vaadin-web3-walletconnect`).
 - `server/`: SIWE, on-chain reads, token gates and checkout
+- `onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:vaadin-web3-onramp`)
   (`com.wontlost:vaadin-web3-server`).
 - `demo/`: a Spring Boot demo application that exercises every feature.
 
