@@ -1,5 +1,6 @@
 package com.wontlost.web3.monitor.service;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.*;
 import java.net.URI;
 import java.net.InetSocketAddress;
@@ -204,6 +205,15 @@ class MonitorApiTest {
         assertFalse(deliveries.retry(deliveryId,tokenA,1,now,"stale",now.plusSeconds(1)));
         assertTrue(deliveries.delivered(deliveryId,tokenB,now));
         assertEquals("DELIVERED",jdbc.queryForObject("SELECT status FROM webhook_deliveries WHERE id=?",String.class,deliveryId));
+    }
+
+    @Test void leasesWorkWithSubMicrosecondInstants() throws Exception {
+        // Linux 上 Instant.now() 有纳秒精度；数据库列是微秒精度。存入时若进位，"立即到期"的比较会落空
+        String id=createIntent("sub-micro","1");
+        Instant now=Instant.parse("2026-10-05T06:45:46.123456789Z");
+        String deliveryId=UUID.randomUUID().toString();
+        assertTrue(deliveries.create(deliveryId,merchant,id,"payment.expired","{}",now));
+        assertNotNull(deliveries.lease(deliveryId,now,now.plusSeconds(60)), "a delivery created at 'now' must be due at 'now'");
     }
 
     @Test void rejectsUnsupportedRpcAndExcessTokenPrecision() throws Exception {

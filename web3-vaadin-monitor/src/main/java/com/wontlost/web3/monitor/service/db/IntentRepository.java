@@ -57,7 +57,13 @@ public class IntentRepository {
                 new BigInteger(rs.getString("paid_amount_units")),rs.getLong("confirmations"),instant(rs,"created_at"),instant(rs,"updated_at"),
                 instant(rs,"lease_until"),rs.getInt("attempts"),instant(rs,"next_check_at"));
     }
-    public static OffsetDateTime time(Instant value) { return value == null ? null : value.atOffset(ZoneOffset.UTC); }
+    /**
+     * 统一截断到微秒：数据库列是微秒精度，而 Linux 上 Instant.now() 带纳秒。不截断时存入值会被进位，
+     * 导致"在 now 创建的记录在 now 尚未到期"之类的比较错误（写入和查询参数必须同一精度）。
+     */
+    public static OffsetDateTime time(Instant value) {
+        return value == null ? null : value.truncatedTo(java.time.temporal.ChronoUnit.MICROS).atOffset(ZoneOffset.UTC);
+    }
     private static Instant instant(ResultSet rs, String column) throws SQLException {
         Object value = rs.getObject(column);
         if (value == null) return null;
