@@ -51,6 +51,12 @@ First public release.
 - `StablecoinCheckout` and `PaymentVerifier`: USDC payments by default, verified
   against the receipt and Transfer logs, with confirmation counting and a
   `PaymentLedger` that stops one transaction from paying for two orders.
+  `PaymentRequest.notBefore` rejects transactions mined before the order was
+  created (`PREDATES_ORDER`); the checkout sets it automatically, which stops
+  replays of earlier transfers to the merchant (tolerance configurable,
+  two minutes by default). `PaymentRequest` gains a record component, which
+  changes its canonical constructor and record pattern; the earlier
+  constructors remain.
 - Built-in USDT, EURC and PYUSD contract registries; token gates accept
   built-in symbols, and checkout supports same-currency token selection.
 

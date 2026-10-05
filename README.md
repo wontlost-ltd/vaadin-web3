@@ -536,12 +536,25 @@ How it works:
 - **After confirmation**: the button shows "Paid" and stays disabled. Call
   `reset(newOrderId)` to start another order. Results that arrive after a
   reset are discarded.
+- **Only new transactions count**: a transaction mined more than two minutes
+  before the user clicked Pay is rejected as `PREDATES_ORDER`. The two minutes
+  absorb clock differences and can be changed with
+  `setTransactionTimeTolerance(...)`. This stops older transfers to your address
+  from being passed off as payment for a new order: someone pretending to be an
+  earlier buyer by reporting that buyer's address and transaction hash, or a
+  buyer reusing their own earlier payment after an in-memory ledger was reset.
+- **What it can't prove**: the transaction hash comes from the browser, so
+  nothing proves which order a transfer was meant for. Without SIWE, an
+  unrelated transfer to your address mined inside the tolerance window could
+  still be claimed. For checkouts where that matters, require users to sign in
+  with SIWE so that the payer is a verified address.
 - **Possible results**: `CONFIRMED`, `PENDING`, `CONFIRMING`, `FAILED`,
-  `UNDERPAID`, `NO_MATCHING_TRANSFER` and `ALREADY_CLAIMED`.
+  `UNDERPAID`, `NO_MATCHING_TRANSFER`, `ALREADY_CLAIMED` and `PREDATES_ORDER`.
 
 If you verify payments yourself with `PaymentVerifier`, always build the
 `PaymentRequest` on the server from your own order data. Never build it from
-values sent by the browser.
+values sent by the browser. Set its `notBefore` to the time the order was
+created.
 
 Payment events expose `getToken()` so applications can identify the token
 contract and symbol used. It can be `null` when a failure occurs before the

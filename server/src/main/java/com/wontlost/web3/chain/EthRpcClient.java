@@ -34,6 +34,12 @@ public final class EthRpcClient {
         call.put("data", dataHex);
         return result("eth_call", List.of(call, blockTag)).asString();
     }
+    /** Returns the timestamp of a mined block. */
+    public java.time.Instant blockTimestamp(long blockNumber) {
+        JsonNode block = result("eth_getBlockByNumber", List.of("0x" + Long.toHexString(blockNumber), false));
+        if (block.isNull()) throw new IllegalStateException("Block " + blockNumber + " is not available");
+        return java.time.Instant.ofEpochSecond(hexLong(block.path("timestamp").asString()));
+    }
     /** Returns the receipt when the transaction has been mined. */
     public Optional<TransactionReceipt> getTransactionReceipt(String hash) {
         JsonNode node = result("eth_getTransactionReceipt", List.of(hash));

@@ -269,4 +269,19 @@ class StablecoinCheckoutTest {
         assertTrue(tokenSelect(checkout).isEnabled());
         assertTrue(networkSelect(checkout).isEnabled());
     }
+
+    @Test void paymentIntentOnlyAcceptsTransactionsMinedAfterPayWasClicked() {
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        StablecoinCheckout checkout = new StablecoinCheckout(chains, new InMemoryPaymentLedger(), RECIPIENT, BigDecimal.ONE);
+        java.time.Instant before = java.time.Instant.now();
+        java.time.Instant notBefore = checkout.capturePaymentIntent().notBefore();
+        // 只放宽时钟误差容忍，不能更早（否则旧交易可冒充本次付款）
+        assertTrue(!notBefore.isBefore(before.minus(StablecoinCheckout.NOT_BEFORE_TOLERANCE).minusSeconds(1)));
+        assertTrue(!notBefore.isAfter(java.time.Instant.now().minus(StablecoinCheckout.NOT_BEFORE_TOLERANCE)));
+        checkout.setTransactionTimeTolerance(java.time.Duration.ZERO);
+        assertTrue(!checkout.capturePaymentIntent().notBefore().isBefore(before));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> checkout.setTransactionTimeTolerance(java.time.Duration.ofSeconds(-1)));
+    }
 }
