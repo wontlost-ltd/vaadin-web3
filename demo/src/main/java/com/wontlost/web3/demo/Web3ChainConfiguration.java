@@ -8,7 +8,18 @@ import org.springframework.context.annotation.Configuration;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinServiceInitListener;
 import com.wontlost.web3.chain.ChainRegistry;
-import com.wontlost.web3.pay.InMemoryPaymentLedger;
+import com.wontlost.web3.pay.PaymentLedger;
+import com.wontlost.web3.pro.jdbc.JdbcNonceStore;
+import com.wontlost.web3.pro.jdbc.JdbcPaymentLedger;
+import com.wontlost.web3.pro.jdbc.ProSchema;
+import com.wontlost.web3.pro.payments.JdbcPaymentRecordStore;
+import com.wontlost.web3.pro.payments.PaymentRecordStore;
+import com.wontlost.web3.pro.screening.AuditedScreening;
+import com.wontlost.web3.pro.screening.ChainalysisSanctionsOracle;
+import com.wontlost.web3.pro.screening.JdbcScreeningAuditLog;
+import com.wontlost.web3.screening.AddressScreening;
+import javax.sql.DataSource;
+import org.springframework.boot.ApplicationRunner;
 import com.wontlost.web3.onramp.CoinbaseOnramp;
 import com.wontlost.web3.onramp.MoonPayOnramp;
 import com.wontlost.web3.onramp.OnrampProvider;
@@ -31,7 +42,10 @@ public class Web3ChainConfiguration {
     }
 
     @Bean
-    InMemoryPaymentLedger paymentLedger() { return new InMemoryPaymentLedger(); }
+    PaymentLedger paymentLedger(DataSource dataSource) { return new JdbcPaymentLedger(dataSource); }
+    @Bean JdbcNonceStore nonceStore(DataSource dataSource) { return new JdbcNonceStore(dataSource); }
+    @Bean PaymentRecordStore paymentRecordStore(DataSource dataSource) { return new JdbcPaymentRecordStore(dataSource); }
+    @Bean ApplicationRunner initializeProSchema(DataSource dataSource) { return args -> ProSchema.create(dataSource); }
 
 
     @Bean
@@ -60,12 +74,22 @@ public class Web3ChainConfiguration {
     }
 
     @Bean
-    VaadinServiceInitListener chainRegistryInitializer(ChainRegistry registry, DemoIntegrations integrations) {
+    VaadinServiceInitListener chainRegistryInitializer(ChainRegistry registry, DemoIntegrations integrations,
+            JdbcNonceStore nonces, PaymentRecordStore records, DataSource dataSource,
+            org.springframework.core.env.Environment environment) {
         return (ServiceInitEvent event) -> {
             event.getSource().getContext().setAttribute(ChainRegistry.class, registry);
+            com.wontlost.web3.siwe.SiweLogin.registerNonceStore(event.getSource().getContext(), nonces);
+            PaymentRecordStore.register(event.getSource().getContext(), records);
             // 凭据不随会话序列化：组件在会话恢复后从应用上下文的注册表找回服务商与监控客户端
             if (integrations.onrampProvider() != null) OnrampProviders.register(event.getSource().getContext(), integrations.onrampProvider());
             if (integrations.monitorClient() != null) PaymentMonitorClient.register(event.getSource().getContext(), integrations.monitorClient());
+            String ethereumRpc = environment.getProperty("web3.rpc.1", "");
+            if (!ethereumRpc.isBlank()) {
+                AddressScreening screening = new AuditedScreening(ChainalysisSanctionsOracle.forChain(1,
+                        new com.wontlost.web3.chain.EthRpcClient(ethereumRpc)), new JdbcScreeningAuditLog(dataSource));
+                AddressScreening.register(event.getSource().getContext(), screening);
+            }
         };
     }
 }

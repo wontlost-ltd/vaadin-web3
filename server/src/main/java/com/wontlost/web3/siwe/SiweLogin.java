@@ -25,6 +25,7 @@ import com.vaadin.flow.shared.Registration;
 import com.wontlost.web3.Chains;
 import com.wontlost.web3.Web3Connect;
 import com.wontlost.web3.chain.ChainRegistry;
+import com.wontlost.web3.screening.AddressScreening;
 
 /**
  * Vaadin sign-in control that requests an EIP-4361 signature and verifies it on the server.
@@ -177,12 +178,36 @@ public class SiweLogin extends Composite<HorizontalLayout> {
                         .withUri(expectedUri).withAllowedChainIds(allowedChainIds);
                 VerifiedSignIn verified = requireVerifier().verify(payload.message().toMessage(),
                         payload.signature(), expectations);
-                Web3Session.store(verified);
-                finishSuccess(verified);
+                completeVerifiedSignIn(verified);
             } catch (SiweException exception) {
                 finishFailure(exception.getReason(), -1, false);
             }
         });
+    }
+
+    private void completeVerifiedSignIn(VerifiedSignIn verified) {
+        try {
+            screenVerifiedAddress(verified, AddressScreening.find(contextLookup == null ? currentContext() : contextLookup.get()));
+            Web3Session.store(verified);
+            finishSuccess(verified);
+        } catch (SiweException exception) {
+            finishFailure(exception.getReason(), -1, false);
+        }
+    }
+
+    static void screenVerifiedAddress(VerifiedSignIn verified, AddressScreening screening) {
+        if (screening == null) return;
+        AddressScreening.ScreeningDecision decision;
+        try {
+            decision = Objects.requireNonNull(screening.screen(verified.address()), "screening decision");
+        } catch (RuntimeException failure) {
+            throw new SiweException(SiweException.Reason.SCREENING_UNAVAILABLE,
+                    "Address screening is unavailable", failure);
+        }
+        if (!decision.allowed()) {
+            throw new SiweException(SiweException.Reason.ADDRESS_BLOCKED,
+                    decision.reason() == null ? "Address is blocked" : decision.reason());
+        }
     }
 
     private NonceStore requireNonces() {

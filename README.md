@@ -603,6 +603,7 @@ mvn spring-boot:run -pl demo    # http://localhost:8080
 | `/login` | Sign-In with Ethereum |
 | `/holders` | A view gated on 1 Sepolia USDC |
 | `/checkout` | A 1.00 Sepolia USDC or PYUSD checkout |
+| `/payments` | Recorded payments, status/date filters and CSV download |
 
 You need a browser wallet extension such as MetaMask on the Sepolia test
 network. You can get test USDC from the
@@ -619,8 +620,24 @@ an address you control.
   (`com.wontlost:vaadin-web3-walletconnect`).
 - `server/`: SIWE, on-chain reads, token gates and checkout (`com.wontlost:vaadin-web3-server`).
 - `onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:vaadin-web3-onramp`).
+- `pro/`: optional commercial persistence, screening and payment operations (`com.wontlost:vaadin-web3-pro`; license DRAFT).
 - `monitor/`: optional hosted payment tracking service (`com.wontlost:vaadin-web3-monitor`).
 - `demo/`: a Spring Boot demo application that exercises every feature.
+
+## Pro (commercial)
+
+The optional `vaadin-web3-pro` module adds JDBC-backed SIWE nonce storage and
+payment claims for clustered applications, Chainalysis sanctions screening
+with an audit log and local deny-list composition, and payment records with a
+filtered Vaadin view and CSV export. The Apache 2.0 modules retain all existing
+features. `AddressScreening` is an open-source extension point that applications
+may implement themselves.
+
+Pro is not included in the Maven Central release list. Its license is marked
+**DRAFT and has not been issued**; no commercial terms are available yet. For
+inquiries, contact [service@wontlost.com](mailto:service@wontlost.com).
+The demo enables audited screening only when `web3.rpc.1` is configured with an
+Ethereum mainnet RPC URL, for example `https://ethereum-rpc.publicnode.com`.
 
 ## Development
 
