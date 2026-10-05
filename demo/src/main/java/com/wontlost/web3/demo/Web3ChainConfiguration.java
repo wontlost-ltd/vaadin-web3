@@ -1,7 +1,6 @@
 package com.wontlost.web3.demo;
 
 import java.util.Map;
-import java.util.Optional;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +14,8 @@ import com.wontlost.web3.onramp.MoonPayOnramp;
 import com.wontlost.web3.onramp.OnrampProvider;
 import com.wontlost.web3.onramp.OnrampProviders;
 import com.wontlost.web3.onramp.TransakOnramp;
+import com.wontlost.web3.monitor.PaymentMonitorClient;
+import java.net.URI;
 
 /** Configures application-scoped chain clients for demo routes and payment verification. */
 @Configuration
@@ -34,28 +35,37 @@ public class Web3ChainConfiguration {
 
 
     @Bean
-    Optional<OnrampProvider> onrampProvider(org.springframework.core.env.Environment environment) {
+    DemoIntegrations demoIntegrations(org.springframework.core.env.Environment environment) {
+        String monitorUrl = environment.getProperty("web3.monitor.url", "");
+        String monitorKey = environment.getProperty("web3.monitor.api-key", "");
+        PaymentMonitorClient monitor = monitorUrl.isBlank() || monitorKey.isBlank() ? null
+                : new PaymentMonitorClient(URI.create(monitorUrl), monitorKey);
+        return new DemoIntegrations(onrampProvider(environment), monitor);
+    }
+
+    private static OnrampProvider onrampProvider(org.springframework.core.env.Environment environment) {
         String moonKey = environment.getProperty("web3.onramp.moonpay.publishable-key", "");
         String moonSecret = environment.getProperty("web3.onramp.moonpay.secret-key", "");
-        if (!moonKey.isBlank() && !moonSecret.isBlank()) return Optional.of(new MoonPayOnramp(moonKey, moonSecret));
+        if (!moonKey.isBlank() && !moonSecret.isBlank()) return new MoonPayOnramp(moonKey, moonSecret);
         String transakKey = environment.getProperty("web3.onramp.transak.api-key", "");
         String transakSecret = environment.getProperty("web3.onramp.transak.api-secret", "");
         if (!transakKey.isBlank() && !transakSecret.isBlank()) {
-            return Optional.of(new TransakOnramp(transakKey, transakSecret, environment.getProperty("web3.onramp.transak.referrer-domain", "localhost"),
-                    environment.getProperty("web3.onramp.transak.staging", Boolean.class, true)));
+            return new TransakOnramp(transakKey, transakSecret, environment.getProperty("web3.onramp.transak.referrer-domain", "localhost"),
+                    environment.getProperty("web3.onramp.transak.staging", Boolean.class, true));
         }
         String coinbaseId = environment.getProperty("web3.onramp.coinbase.key-id", "");
         String coinbaseSecret = environment.getProperty("web3.onramp.coinbase.key-secret", "");
-        if (!coinbaseId.isBlank() && !coinbaseSecret.isBlank()) return Optional.of(new CoinbaseOnramp(coinbaseId, coinbaseSecret));
-        return Optional.empty();
+        if (!coinbaseId.isBlank() && !coinbaseSecret.isBlank()) return new CoinbaseOnramp(coinbaseId, coinbaseSecret);
+        return null;
     }
 
     @Bean
-    VaadinServiceInitListener chainRegistryInitializer(ChainRegistry registry, Optional<OnrampProvider> onrampProvider) {
+    VaadinServiceInitListener chainRegistryInitializer(ChainRegistry registry, DemoIntegrations integrations) {
         return (ServiceInitEvent event) -> {
             event.getSource().getContext().setAttribute(ChainRegistry.class, registry);
-            // 会话反序列化后组件按名称找回服务商（凭据不随会话序列化）
-            onrampProvider.ifPresent(provider -> OnrampProviders.register(event.getSource().getContext(), provider));
+            // 凭据不随会话序列化：组件在会话恢复后从应用上下文的注册表找回服务商与监控客户端
+            if (integrations.onrampProvider() != null) OnrampProviders.register(event.getSource().getContext(), integrations.onrampProvider());
+            if (integrations.monitorClient() != null) PaymentMonitorClient.register(event.getSource().getContext(), integrations.monitorClient());
         };
     }
 }
