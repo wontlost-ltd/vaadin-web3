@@ -32,7 +32,12 @@ import com.wontlost.web3.chain.ChainRegistry;
 import com.wontlost.web3.chain.Erc20;
 import com.wontlost.web3.chain.TokenInfo;
 import com.wontlost.web3.chain.Tokens;
+import com.wontlost.web3.monitor.CreatePaymentRequest;
+import com.wontlost.web3.monitor.MonitoredPayment;
+import com.wontlost.web3.monitor.MonitoredStatus;
+import com.wontlost.web3.monitor.PaymentMonitorClient;
 import com.wontlost.web3.siwe.Web3Session;
+import com.vaadin.flow.server.VaadinService;
 
 /**
  * A wallet-backed ERC-20 checkout that polls the server-side payment verifier.
@@ -69,6 +74,10 @@ public class StablecoinCheckout extends VerticalLayout {
     private int minConfirmations = 1;
     private String buttonText;
     private String transactionHash;
+    private boolean useHostedMonitor;
+    private String hostedPaymentId;
+    private volatile boolean hostedTransactionSubmitted;
+    private HostedPaymentOperations hostedPaymentOperations;
     private PaymentRequest submittedRequest;
     private TokenInfo submittedToken;
     private String submittedOrderId;
@@ -77,6 +86,8 @@ public class StablecoinCheckout extends VerticalLayout {
     /** 每个代次一个标志：旧订单仍在校验时不会阻塞新订单的轮询。 */
     private AtomicBoolean verificationInProgress = new AtomicBoolean();
     private int networkFailures;
+    /** 连续多少次校验网络错误后，提示用户"已发出、勿重复付款"。 */
+    static final int NETWORK_WARNING_THRESHOLD = 20;
     private boolean paid;
     /** 校验代次：reset/停止轮询时递增，使之前发起的异步校验与钱包回调失效。 */
     private long generation;
@@ -136,6 +147,8 @@ public class StablecoinCheckout extends VerticalLayout {
         submittedRequest = null;
         submittedToken = null;
         transactionHash = null;
+        hostedPaymentId = null;
+        hostedTransactionSubmitted = false;
         networkFailures = 0;
         paid = false;
         status.setText("Waiting for payment.");
@@ -200,6 +213,12 @@ public class StablecoinCheckout extends VerticalLayout {
     public StablecoinCheckout setMinConfirmations(int value) {
         if (value < 1) throw new IllegalArgumentException("minConfirmations must be positive");
         minConfirmations = value;
+        return this;
+    }
+    /** Enables or disables hosted payment monitoring for this checkout. */
+    public StablecoinCheckout setPaymentMonitor(boolean useHostedMonitor) {
+        requireConfigurable();
+        this.useHostedMonitor = useHostedMonitor;
         return this;
     }
     public StablecoinCheckout setButtonText(String value) { buttonText = Objects.requireNonNull(value); pay.setText(label()); return this; }
@@ -289,36 +308,114 @@ public class StablecoinCheckout extends VerticalLayout {
         submittedRequest = null;
         PaymentIntent intent = capturePaymentIntent();
         if (intent == null) { status.setText("No supported network is configured."); return; }
+        PaymentMonitorClient monitorClient = useHostedMonitor ? currentMonitorClient() : null;
+        if (useHostedMonitor && monitorClient == null) {
+            paymentError(new IllegalStateException("Register PaymentMonitorClient at application startup before enabling hosted monitoring."));
+            return;
+        }
         setPayEnabled(false);
         long started = generation;
+        String currentOrderId = orderId;
+        UI ui = UI.getCurrent();
         var connected = wallet.isConnected() ? java.util.concurrent.CompletableFuture.completedFuture(wallet.getAccount())
                 : wallet.connect();
-        connected.thenCompose(account -> {
-            long activeChain = Chains.toDecimal(wallet.getChainId()).longValueExact();
-            Set<Long> eligibleChains = allowedChains(intent.tokenSymbol());
-            long targetChain = eligibleChains.contains(activeChain) ? intent.selectedChain()
-                    : intent.preferredChain() != null && eligibleChains.contains(intent.preferredChain())
-                            ? intent.preferredChain() : intent.selectedChain();
-            TokenInfo targetToken = Tokens.find(intent.tokenSymbol(), targetChain).orElseThrow();
-            submittedToken = targetToken;
-            String payer = Web3Session.current().map(user -> user.address()).orElse(account);
-            submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, intent.amountUnits(), payer,
-                    minConfirmations, intent.notBefore());
-            submittedOrderId = orderId;
-            if (activeChain == targetChain) return send(targetToken, intent.amountUnits());
-            return wallet.switchChain(Chains.toHex(targetChain)).thenCompose(ignored -> {
-                network.setValue(targetChain);
-                return send(targetToken, intent.amountUnits());
-            });
-        }).whenComplete((hash, error) -> {
-            // 钱包确认期间订单已被 reset，旧订单的交易不能挂到新订单上
-            if (started != generation) return;
-            if (error != null) { paymentError(error); return; }
-            transactionHash = hash;
-            status.setText("Payment submitted: " + hash);
-            fireEvent(new PaymentSubmittedEvent(this, hash, submittedToken));
-            startPolling();
-        });
+        connected.whenComplete((account, error) -> dispatch(ui,
+                () -> onWalletConnected(intent, currentOrderId, monitorClient, ui, started, account, error)));
+    }
+
+    private void onWalletConnected(PaymentIntent intent, String currentOrderId, PaymentMonitorClient monitorClient,
+            UI ui, long started, String account, Throwable error) {
+        if (started != generation) return;
+        if (error != null) { paymentError(error); return; }
+        long activeChain = Chains.toDecimal(wallet.getChainId()).longValueExact();
+        Set<Long> eligibleChains = allowedChains(intent.tokenSymbol());
+        long targetChain = eligibleChains.contains(activeChain) ? intent.selectedChain()
+                : intent.preferredChain() != null && eligibleChains.contains(intent.preferredChain())
+                        ? intent.preferredChain() : intent.selectedChain();
+        TokenInfo targetToken = Tokens.find(intent.tokenSymbol(), targetChain).orElseThrow();
+        submittedToken = targetToken;
+        String payer = Web3Session.current().map(user -> user.address()).orElse(account);
+        submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, intent.amountUnits(), payer,
+                minConfirmations, intent.notBefore());
+        submittedOrderId = currentOrderId;
+        java.util.concurrent.CompletableFuture<MonitoredPayment> registration = registerIntent(
+                monitorClient, currentOrderId, targetChain, targetToken, intent, payer);
+        registration.whenComplete((payment, registrationError) -> dispatch(ui, () -> onIntentRegistered(intent,
+                monitorClient, ui, started, activeChain, targetChain, targetToken, payment, registrationError)));
+    }
+
+    private java.util.concurrent.CompletableFuture<MonitoredPayment> registerIntent(PaymentMonitorClient monitorClient,
+            String currentOrderId, long targetChain, TokenInfo targetToken, PaymentIntent intent, String payer) {
+        if (monitorClient == null) return java.util.concurrent.CompletableFuture.completedFuture(null);
+        CreatePaymentRequest request = new CreatePaymentRequest(currentOrderId, targetChain, targetToken.symbol(),
+                recipient, new BigDecimal(intent.amountUnits(), targetToken.decimals()).toPlainString(), payer,
+                minConfirmations, null);
+        try {
+            return java.util.concurrent.CompletableFuture.supplyAsync(() -> monitorClient.createPayment(request), verificationExecutor);
+        } catch (java.util.concurrent.RejectedExecutionException saturated) {
+            return java.util.concurrent.CompletableFuture.failedFuture(saturated);
+        }
+    }
+
+    private void onIntentRegistered(PaymentIntent intent, PaymentMonitorClient monitorClient, UI ui, long started,
+            long activeChain, long targetChain, TokenInfo targetToken, MonitoredPayment payment, Throwable error) {
+        if (started != generation) return;
+        if (error != null) { paymentError(error); return; }
+        if (payment != null) hostedPaymentId = payment.id();
+        String monitoredPaymentId = hostedPaymentId;
+        java.util.concurrent.CompletableFuture<String> sent;
+        try {
+            sent = activeChain == targetChain ? send(targetToken, intent.amountUnits())
+                    : wallet.switchChain(Chains.toHex(targetChain)).thenCompose(ignored -> {
+                        network.setValue(targetChain);
+                        return send(targetToken, intent.amountUnits());
+                    });
+        } catch (RuntimeException sendError) {
+            paymentError(sendError);
+            return;
+        }
+        sent.whenComplete((hash, sendError) -> onTransactionSent(monitorClient, monitoredPaymentId,
+                ui, started, hash, sendError));
+    }
+
+    private void onTransactionSent(PaymentMonitorClient monitorClient, String monitoredPaymentId, UI ui,
+            long started, String hash, Throwable error) {
+        if (error != null || monitorClient == null) {
+            dispatch(ui, () -> finishPayment(started, hash, error));
+            return;
+        }
+        try {
+            java.util.concurrent.CompletableFuture.runAsync(
+                    () -> monitorClient.submitTransaction(monitoredPaymentId, hash), verificationExecutor)
+                    .whenComplete((ignored, submitError) -> dispatch(ui,
+                            () -> finishPayment(started, hash, submitError)));
+        } catch (java.util.concurrent.RejectedExecutionException saturated) {
+            dispatch(ui, () -> finishPayment(started, hash, saturated));
+        }
+    }
+
+    private void finishPayment(long started, String hash, Throwable error) {
+        if (started != generation) return;
+        if (hash == null) { paymentError(error); return; }
+        transactionHash = hash;
+        if (error == null) hostedTransactionSubmitted = true;
+        else if (useHostedMonitor) {
+            networkFailures++;
+            status.setText("Transaction sent; reconnecting to payment monitor…");
+        } else { paymentError(error); return; }
+        if (error == null) status.setText("Payment submitted: " + hash);
+        fireEvent(new PaymentSubmittedEvent(this, hash, submittedToken));
+        startPolling();
+    }
+
+    private static void dispatch(UI ui, Runnable action) {
+        if (ui == null) action.run();
+        else ui.access(action::run);
+    }
+
+    private static PaymentMonitorClient currentMonitorClient() {
+        VaadinService service = VaadinService.getCurrent();
+        return service == null ? null : PaymentMonitorClient.find(service.getContext()).orElse(null);
     }
 
     PaymentIntent capturePaymentIntent() {
@@ -407,12 +504,16 @@ public class StablecoinCheckout extends VerticalLayout {
         String order = submittedOrderId;
         String hash = transactionHash;
         PaymentRequest request = submittedRequest;
+        String monitoredId = hostedPaymentId;
+        PaymentMonitorClient monitorClient = useHostedMonitor ? currentMonitorClient() : null;
         UI ui = pollingUi;
         long started = generation;
         java.util.concurrent.CompletableFuture<PaymentResult> verification;
         try {
             verification = java.util.concurrent.CompletableFuture.supplyAsync(
-                    () -> new PaymentVerifier(chains, ledger).verify(order, hash, request), verificationExecutor);
+                    () -> useHostedMonitor
+                            ? hostedPaymentResult(monitorClient, monitoredId, hash)
+                            : new PaymentVerifier(chains, ledger).verify(order, hash, request), verificationExecutor);
         } catch (java.util.concurrent.RejectedExecutionException saturated) {
             // 线程池已满时 supplyAsync 会同步抛出，whenComplete 不会被挂上；
             // 必须在这里复位标志，否则本订单此后再也不会被校验。下一次轮询自动重试。
@@ -428,20 +529,52 @@ public class StablecoinCheckout extends VerticalLayout {
                         if (!isAttached() || pollingUi != ui || started != generation) return;
                         if (error != null) {
                             networkFailures++;
-                            status.setText("Waiting for the network…");
-                            if (networkFailures >= 20) {
-                                PaymentResult failed = new PaymentResult(PaymentStatus.FAILED, hash, null,
-                                        BigInteger.ZERO, 0);
-                                stopPolling();
-                                fireEvent(new PaymentFailedEvent(this, failed, false, submittedToken));
-                                setPayEnabled(true);
-                            }
+                            // 交易已经发出：网络再不稳定也不能重新启用 Pay（否则用户可能重复付款），继续轮询直到能校验为止
+                            status.setText(networkFailures >= NETWORK_WARNING_THRESHOLD
+                                    ? "Your payment was sent but can't be verified right now. Don't pay again; verification will continue."
+                                    : "Waiting for the network…");
                             return;
                         }
                         networkFailures = 0;
                         applyVerificationResult(result);
                     });
                 });
+    }
+
+    private PaymentResult hostedPaymentResult(PaymentMonitorClient monitorClient, String monitoredId, String hash) {
+        if (!hostedTransactionSubmitted) {
+            if (hostedPaymentOperations == null) monitorClient.submitTransaction(monitoredId, hash);
+            else hostedPaymentOperations.submit(monitoredId, hash);
+            hostedTransactionSubmitted = true;
+        }
+        return toPaymentResult(hostedPaymentOperations == null ? monitorClient.getPayment(monitoredId)
+                : hostedPaymentOperations.get(monitoredId));
+    }
+
+    interface HostedPaymentOperations {
+        void submit(String paymentId, String hash);
+        com.wontlost.web3.monitor.MonitoredPayment get(String paymentId);
+    }
+
+    void setHostedPaymentOperationsForTest(HostedPaymentOperations operations, String paymentId) {
+        hostedPaymentOperations = operations;
+        hostedPaymentId = paymentId;
+        useHostedMonitor = true;
+        hostedTransactionSubmitted = false;
+    }
+
+    void recordHostedTransactionForTest(String hash, Throwable submitError) {
+        setPayEnabled(false);
+        transactionHash = hash;
+        submittedOrderId = "test-order";
+        submittedRequest = new PaymentRequest(1, Tokens.usdc(1).orElseThrow().address(), recipient, BigInteger.ONE);
+        submittedToken = Tokens.usdc(1).orElseThrow();
+        Throwable actualError=submitError;
+        if(hostedPaymentOperations!=null){
+            try{hostedPaymentOperations.submit(hostedPaymentId,hash);actualError=null;}
+            catch(RuntimeException failure){actualError=failure;}
+        }
+        finishPayment(generation, hash, actualError);
     }
 
     void applyVerificationResult(PaymentResult result) {
@@ -458,6 +591,16 @@ public class StablecoinCheckout extends VerticalLayout {
             fireEvent(new PaymentFailedEvent(this, result, false, submittedToken));
             setPayEnabled(true);
         }
+    }
+
+    static PaymentResult toPaymentResult(MonitoredPayment payment) {
+        PaymentStatus status = switch (payment.status()) {
+            case AWAITING_TRANSACTION, PENDING -> PaymentStatus.PENDING;
+            case EXPIRED -> PaymentStatus.FAILED;
+            default -> PaymentStatus.valueOf(payment.status().name());
+        };
+        BigInteger paid = new BigDecimal(payment.paidAmount()).movePointRight(payment.token().decimals()).toBigIntegerExact();
+        return new PaymentResult(status, payment.txHash(), payment.payer(), paid, payment.confirmations());
     }
 
     private void stopPolling() {

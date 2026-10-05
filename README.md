@@ -30,7 +30,9 @@ Requires **Vaadin 25.3+** and **Java 21+**.
 | WalletConnect mobile wallets | `vaadin-web3-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
 | `SiweLogin` | `vaadin-web3-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
 | `@RequiresToken` | `vaadin-web3-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
-| `StablecoinCheckout` | `vaadin-web3-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders |
+| `StablecoinCheckout` | `vaadin-web3-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders; optional hosted monitoring |
+| `PaymentMonitorClient`, `WebhookSignatures` | `vaadin-web3-server` | Connect a checkout to the hosted monitor and verify timestamped HMAC webhooks |
+| Hosted payment monitor service | `vaadin-web3-monitor` | Continuously verifies intents using configured RPC endpoints and retries signed merchant webhooks; executable Spring Boot service |
 | `FiatOnrampButton` | `vaadin-web3-onramp` | Hosted card purchases through MoonPay, Transak or Coinbase with registered contract matching and popup fallback |
 | `EthRpcClient`, `Erc20`, `Tokens` | `vaadin-web3-server` | Minimal JSON-RPC client, ERC-20 calls, built-in stablecoin contract addresses |
 
@@ -560,6 +562,18 @@ Payment events expose `getToken()` so applications can identify the token
 contract and symbol used. It can be `null` when a failure occurs before the
 token is determined.
 
+#### Hosted payment monitor
+
+Use hosted monitoring when payment confirmation must continue after the buyer closes the checkout page, or when merchants should not operate their own chain RPC polling. The separate `vaadin-web3-monitor` service watches the chain through RPC, stores payment state in JDBC, and retries signed webhooks. It never holds funds or private keys.
+
+```text
+Vaadin checkout -> PaymentMonitorClient -> monitor API -> JDBC intent/outbox
+                                                    -> configured chain RPC
+merchant webhook <- signed delivery worker <- terminal payment event
+```
+
+Register `PaymentMonitorClient` once in the application's `VaadinContext`, then enable `.setPaymentMonitor(true)` on `StablecoinCheckout`. The component keeps only the payment ID. See the [hosted monitor guide](docs/MONITOR.md) for deployment, API examples, webhook verification and configuration.
+
 ## Security model
 
 - **Connected addresses come from the client.** Use `Web3Session`, which is
@@ -603,9 +617,9 @@ an address you control.
   third-party dependencies.
 - `walletconnect/`: optional WalletConnect v2 mobile wallet integration
   (`com.wontlost:vaadin-web3-walletconnect`).
-- `server/`: SIWE, on-chain reads, token gates and checkout
-- `onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:vaadin-web3-onramp`)
-  (`com.wontlost:vaadin-web3-server`).
+- `server/`: SIWE, on-chain reads, token gates and checkout (`com.wontlost:vaadin-web3-server`).
+- `onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:vaadin-web3-onramp`).
+- `monitor/`: optional hosted payment tracking service (`com.wontlost:vaadin-web3-monitor`).
 - `demo/`: a Spring Boot demo application that exercises every feature.
 
 ## Development

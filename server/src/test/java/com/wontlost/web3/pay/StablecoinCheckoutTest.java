@@ -113,6 +113,13 @@ class StablecoinCheckoutTest {
                 .map(com.vaadin.flow.component.button.Button.class::cast).findFirst().orElseThrow();
     }
 
+    private static com.vaadin.flow.component.html.Span status(StablecoinCheckout checkout) {
+        return checkout.getChildren().filter(com.vaadin.flow.component.html.Span.class::isInstance)
+                .map(com.vaadin.flow.component.html.Span.class::cast)
+                .filter(span -> span.getText().startsWith("Transaction sent") || span.getText().startsWith("CONFIRMING"))
+                .findFirst().orElseThrow();
+    }
+
     @SuppressWarnings("unchecked")
     private static com.vaadin.flow.component.select.Select<Long> networkSelect(StablecoinCheckout checkout) {
         return checkout.getChildren().filter(com.vaadin.flow.component.select.Select.class::isInstance)
@@ -190,6 +197,89 @@ class StablecoinCheckoutTest {
         // 线程池拒绝后标志位必须复位，下一次轮询才会再次提交校验
         org.junit.jupiter.api.Assertions.assertEquals(2, attempts.get());
         assertFalse(checkout.isPaid());
+    }
+
+    @Test void hostedModeWithoutRegisteredClientFailsBeforeWalletInteraction() throws Exception {
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        StablecoinCheckout checkout = new StablecoinCheckout(chains, new InMemoryPaymentLedger(), RECIPIENT, BigDecimal.ONE)
+                .setPaymentMonitor(true);
+        java.util.concurrent.atomic.AtomicReference<StablecoinCheckout.PaymentFailedEvent> event = new java.util.concurrent.atomic.AtomicReference<>();
+        checkout.addPaymentFailedListener(event::set);
+        var begin = StablecoinCheckout.class.getDeclaredMethod("beginPayment");
+        begin.setAccessible(true);
+        begin.invoke(checkout);
+        assertEquals(PaymentStatus.FAILED, event.get().getResult().status());
+        assertTrue(event.get().getResult().txHash() == null);
+        assertTrue(button(checkout).isEnabled());
+    }
+
+    @Test void hostedStatusesMapIntoExistingPaymentResultsAndOnlyIdIsRetained() {
+        java.time.Instant now = java.time.Instant.parse("2026-01-01T00:00:00Z");
+        for (com.wontlost.web3.monitor.MonitoredStatus status : com.wontlost.web3.monitor.MonitoredStatus.values()) {
+            var payment = new com.wontlost.web3.monitor.MonitoredPayment("payment-id", "order", 1,
+                    new com.wontlost.web3.monitor.MonitoredPayment.Token("USDC", RECIPIENT, 6), RECIPIENT,
+                    "1", null, 1, status, null, "0", 0, now, now.plusSeconds(3600), now, now);
+            PaymentStatus expected = switch (status) {
+                case AWAITING_TRANSACTION, PENDING -> PaymentStatus.PENDING;
+                case EXPIRED -> PaymentStatus.FAILED;
+                default -> PaymentStatus.valueOf(status.name());
+            };
+            assertEquals(expected, StablecoinCheckout.toPaymentResult(payment).status());
+        }
+        var idField = java.util.Arrays.stream(StablecoinCheckout.class.getDeclaredFields())
+                .filter(field -> field.getName().equals("hostedPaymentId")).findFirst().orElseThrow();
+        assertEquals(String.class, idField.getType());
+        assertFalse(java.util.Arrays.stream(StablecoinCheckout.class.getDeclaredFields())
+                .anyMatch(field -> com.wontlost.web3.monitor.PaymentMonitorClient.class.isAssignableFrom(field.getType())));
+    }
+
+    @Test void hostedHashSurvivesSubmitFailureAndNextPollRetriesBeforeReadingPayment() {
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));
+        StablecoinCheckout checkout = new StablecoinCheckout(chains, new InMemoryPaymentLedger(), RECIPIENT,
+                BigDecimal.ONE, Runnable::run);
+        var ui = new com.vaadin.flow.component.UI() {
+            @Override public java.util.concurrent.Future<Void> access(com.vaadin.flow.server.Command command) {
+                command.execute();
+                return java.util.concurrent.CompletableFuture.completedFuture(null);
+            }
+        };
+        ui.add(checkout);
+        java.util.concurrent.atomic.AtomicInteger submissions = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicReference<StablecoinCheckout.PaymentFailedEvent> failed = new java.util.concurrent.atomic.AtomicReference<>();
+        checkout.addPaymentFailedListener(failed::set);
+        checkout.setHostedPaymentOperationsForTest(new StablecoinCheckout.HostedPaymentOperations() {
+            @Override public void submit(String paymentId, String hash) {
+                if (submissions.incrementAndGet() == 1) throw new IllegalStateException("temporary monitor outage");
+            }
+            @Override public com.wontlost.web3.monitor.MonitoredPayment get(String paymentId) {
+                reads.incrementAndGet();
+                java.time.Instant now = java.time.Instant.now();
+                return new com.wontlost.web3.monitor.MonitoredPayment(paymentId, "test-order", 1,
+                        new com.wontlost.web3.monitor.MonitoredPayment.Token("USDC", RECIPIENT, 6), RECIPIENT,
+                        "1", null, 1, com.wontlost.web3.monitor.MonitoredStatus.CONFIRMING,
+                        "0xhash", "0", 1, now, now.plusSeconds(3600), now, now);
+            }
+        }, "payment-id");
+        com.vaadin.flow.component.UI.setCurrent(ui);
+        try {
+            checkout.recordHostedTransactionForTest("0xhash", new IllegalStateException("temporary monitor outage"));
+            assertFalse(button(checkout).isEnabled());
+            assertTrue(status(checkout).getText().startsWith("Transaction sent"));
+            assertEquals(null, failed.get());
+            checkout.startPolling();
+            checkout.verifyPayment();
+            assertEquals(2, submissions.get());
+            assertEquals(1, reads.get());
+            assertEquals(null, failed.get());
+            assertFalse(button(checkout).isEnabled());
+            assertTrue(status(checkout).getText().startsWith("CONFIRMING"));
+        } finally {
+            checkout.reset("next-order");
+            com.vaadin.flow.component.UI.setCurrent(null);
+        }
     }
 
     @Test void networksAreShownByName() {
@@ -283,5 +373,40 @@ class StablecoinCheckoutTest {
         assertTrue(!checkout.capturePaymentIntent().notBefore().isBefore(before));
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> checkout.setTransactionTimeTolerance(java.time.Duration.ofSeconds(-1)));
+    }
+
+    @Test void networkOutageAfterTheTransactionWasSentNeverReEnablesPay() throws Exception {
+        // 交易已发出后校验持续网络失败：不能触发失败事件、不能重新启用 Pay（防止重复付款）
+        java.util.List<Runnable> queued = new java.util.ArrayList<>();
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> { throw new java.io.IOException("offline"); }));
+        StablecoinCheckout checkout = new StablecoinCheckout(chains, new InMemoryPaymentLedger(), RECIPIENT, BigDecimal.ONE, queued::add);
+        com.vaadin.flow.component.UI ui = new com.vaadin.flow.component.UI() {
+            @Override public java.util.concurrent.Future<Void> access(com.vaadin.flow.server.Command command) {
+                command.execute();
+                return java.util.concurrent.CompletableFuture.completedFuture(null);
+            }
+        };
+        ui.add(checkout);
+        com.vaadin.flow.component.UI.setCurrent(ui);
+        try {
+            java.util.concurrent.atomic.AtomicInteger failures = new java.util.concurrent.atomic.AtomicInteger();
+            checkout.addPaymentFailedListener(event -> failures.incrementAndGet());
+            checkout.setSubmittedTransactionForTest("0x" + "ab".repeat(32), "order-1", new PaymentRequest(1,
+                    com.wontlost.web3.chain.Tokens.usdc(1).orElseThrow().address(), RECIPIENT, BigInteger.ONE));
+            checkout.startPolling();
+            button(checkout).setEnabled(false);
+            for (int i = 0; i < StablecoinCheckout.NETWORK_WARNING_THRESHOLD + 5; i++) {
+                checkout.verifyPayment();
+                queued.removeFirst().run();
+            }
+            assertEquals(0, failures.get());
+            assertFalse(button(checkout).isEnabled());
+            assertTrue(checkout.getChildren().filter(com.vaadin.flow.component.html.Span.class::isInstance)
+                    .map(component -> ((com.vaadin.flow.component.html.Span) component).getText())
+                    .anyMatch(text -> text.contains("Don't pay again")));
+        } finally {
+            com.vaadin.flow.component.UI.setCurrent(null);
+        }
     }
 }
