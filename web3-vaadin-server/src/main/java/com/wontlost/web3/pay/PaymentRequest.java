@@ -17,21 +17,45 @@ import java.util.Locale;
  * particular order. Require a SIWE-verified payer for checkouts where that matters.
  */
 public record PaymentRequest(long chainId, String token, String recipient, BigInteger minAmount,
-        String payer, int minConfirmations, Instant notBefore) {
+        String payer, int minConfirmations, Instant notBefore, Finality finality) {
+    public PaymentRequest(long chainId, String token, String recipient, BigInteger minAmount,
+            String payer, int minConfirmations, Instant notBefore) {
+        this(chainId, token, recipient, minAmount, payer, minConfirmations, notBefore,
+                Finality.confirmations(minConfirmations));
+    }
     /** Creates a payment request with no payer restriction, one confirmation and no time restriction. */
     public PaymentRequest(long chainId, String token, String recipient, BigInteger minAmount) {
-        this(chainId, token, recipient, minAmount, null, 1, null);
+        this(chainId, token, recipient, minAmount, null, 1, null, Finality.confirmations(1));
     }
     /** Creates a payment request with one confirmation and no time restriction. */
     public PaymentRequest(long chainId, String token, String recipient, BigInteger minAmount, String payer) {
-        this(chainId, token, recipient, minAmount, payer, 1, null);
+        this(chainId, token, recipient, minAmount, payer, 1, null, Finality.confirmations(1));
     }
     /** Creates a payment request with no time restriction. */
     public PaymentRequest(long chainId, String token, String recipient, BigInteger minAmount, String payer,
             int minConfirmations) {
-        this(chainId, token, recipient, minAmount, payer, minConfirmations, null);
+        this(chainId, token, recipient, minAmount, payer, minConfirmations, null, Finality.confirmations(minConfirmations));
     }
+    /** Creates a payment request using the specified finality condition. */
+    public PaymentRequest(long chainId, String token, String recipient, BigInteger minAmount,
+            String payer, Finality finality) {
+        this(chainId, token, recipient, minAmount, payer,
+                finality.kind() == Finality.Kind.CONFIRMATIONS ? finality.confirmations() : 1,
+                null, finality);
+    }
+    /** Returns a copy requiring the supplied finality condition. */
+    public PaymentRequest withFinality(Finality value) {
+        return new PaymentRequest(chainId, token, recipient, minAmount, payer, minConfirmations, notBefore,
+                java.util.Objects.requireNonNull(value));
+    }
+    /**
+     * {@code finality} is the single source of truth: for a confirmation-count finality, {@code minConfirmations} is
+     * always set to {@link Finality#confirmations()}, so the two components can never disagree.
+     */
     public PaymentRequest {
+        java.util.Objects.requireNonNull(finality, "finality");
+        // 两个字段表达同一件事时以 finality 为准，避免 withFinality 之后 minConfirmations 残留旧值
+        if (finality.kind() == Finality.Kind.CONFIRMATIONS) minConfirmations = finality.confirmations();
         token = token.toLowerCase(Locale.ROOT);
         recipient = recipient.toLowerCase(Locale.ROOT);
         payer = payer == null ? null : payer.toLowerCase(Locale.ROOT);

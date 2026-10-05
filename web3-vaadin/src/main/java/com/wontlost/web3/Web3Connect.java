@@ -47,6 +47,7 @@ public class Web3Connect extends Component {
     private static final String ERROR_MARKER = "WEB3_ERROR:";
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private transient List<CompletableFuture<String>> pendingFutures;
+    private Web3ConnectI18n i18n = new Web3ConnectI18n();
 
     /**
      * Creates a wallet connector rendered as a connect/disconnect button.
@@ -128,15 +129,30 @@ public class Web3Connect extends Component {
         return getElement().getProperty("selectedWallet", "");
     }
 
-    /** Sets the label of the connect button. */
+    /** Sets the connect-button label; the most recently called text or i18n setter controls the visible label. */
     public void setConnectText(String text) {
+        i18n.setConnect(Objects.requireNonNull(text));
         getElement().setProperty("connectText", Objects.requireNonNull(text));
     }
 
-    /** Sets the label of the disconnect button. */
+    /** Sets the disconnect-button label; the most recently called text or i18n setter controls the visible label. */
     public void setDisconnectText(String text) {
+        i18n.setDisconnect(Objects.requireNonNull(text));
         getElement().setProperty("disconnectText", Objects.requireNonNull(text));
     }
+
+    /** Sets localized labels for the connector and wallet picker. */
+    public void setI18n(Web3ConnectI18n value) {
+        i18n = Objects.requireNonNull(value);
+        getElement().setProperty("connectText", value.getConnect());
+        getElement().setProperty("disconnectText", value.getDisconnect());
+        getElement().setProperty("pickerTitle", value.getPickerTitle());
+        getElement().setProperty("noWalletText", value.getNoWallets());
+        getElement().setProperty("closeLabel", value.getClose());
+    }
+
+    /** Returns this connector's localized labels. */
+    public Web3ConnectI18n getI18n() { return i18n; }
 
     /** Hides or shows the built-in button. */
     public void setButtonHidden(boolean hidden) {

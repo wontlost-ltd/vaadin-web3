@@ -2,6 +2,7 @@ package com.wontlost.web3.pay;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +66,8 @@ public class StablecoinCheckout extends VerticalLayout {
     private final Select<Long> network = new Select<>();
     private final Select<String> tokenSelect = new Select<>();
     private final Button pay = new Button();
-    private final Span status = new Span("Waiting for payment.");
+    private final Span status = new Span();
+    private StablecoinCheckoutI18n i18n = new StablecoinCheckoutI18n();
     private final Span amountLabel;
     private OnrampAction onrampAction;
     private com.vaadin.flow.component.Component onrampComponent;
@@ -75,6 +77,7 @@ public class StablecoinCheckout extends VerticalLayout {
     private String orderId = UUID.randomUUID().toString();
     private Long preferredChain;
     private int minConfirmations = 1;
+    private Finality finality = Finality.confirmations(1);
     private String buttonText;
     private String transactionHash;
     private boolean useHostedMonitor;
@@ -108,13 +111,14 @@ public class StablecoinCheckout extends VerticalLayout {
         this.amount = Objects.requireNonNull(amount);
         this.verificationExecutor = Objects.requireNonNull(verificationExecutor);
         this.allowedChainIds = Set.copyOf(chains.clients().keySet());
-        network.setLabel("Network");
+        network.setLabel(i18n.getNetwork());
         network.setItemLabelGenerator(StablecoinCheckout::networkName);
-        tokenSelect.setLabel("Token");
+        tokenSelect.setLabel(i18n.getToken());
         tokenSelect.setItems(tokens);
         tokenSelect.setValue(selectedToken);
         tokenSelect.setVisible(false);
         amountLabel = new Span(amount.toPlainString() + " " + selectedToken);
+        status.setText(i18n.getWaiting());
         tokenSelect.addValueChangeListener(event -> {
             if (event.getValue() != null) {
                 selectedToken = event.getValue();
@@ -132,6 +136,18 @@ public class StablecoinCheckout extends VerticalLayout {
     }
 
     public StablecoinCheckout setOrderId(String value) { orderId = Objects.requireNonNull(value); refreshOnrampComponent(); return this; }
+    /** Sets localized checkout labels and status messages. */
+    public StablecoinCheckout setI18n(StablecoinCheckoutI18n value) {
+        i18n = Objects.requireNonNull(value);
+        buttonText = null;
+        network.setLabel(value.getNetwork());
+        tokenSelect.setLabel(value.getToken());
+        status.setText(value.getWaiting());
+        pay.setText(label());
+        return this;
+    }
+    /** Returns localized checkout labels and status messages. */
+    public StablecoinCheckoutI18n getI18n() { return i18n; }
     /** Returns the current checkout order identifier. */
     public String getOrderId() { return orderId; }
     /** Returns the connected wallet account, or {@code null} before a wallet is connected. */
@@ -155,7 +171,7 @@ public class StablecoinCheckout extends VerticalLayout {
         hostedTransactionSubmitted = false;
         networkFailures = 0;
         paid = false;
-        status.setText("Waiting for payment.");
+        status.setText(i18n.getWaiting());
         pay.setText(label());
         setPayEnabled(true);
         return this;
@@ -214,17 +230,34 @@ public class StablecoinCheckout extends VerticalLayout {
         if (allowedChains().contains(chainId)) network.setValue(chainId);
         return this;
     }
+    /** Sets the minimum confirmation count; one remains the default, so assess reorg risk for each supported chain. */
     public StablecoinCheckout setMinConfirmations(int value) {
         if (value < 1) throw new IllegalArgumentException("minConfirmations must be positive");
         minConfirmations = value;
+        finality = Finality.confirmations(value);
         return this;
     }
-    /** Enables or disables hosted payment monitoring for this checkout. */
+    /** Sets the finality condition for locally verified payments; hosted monitoring supports confirmations only.
+     * @throws IllegalStateException if finalized-block finality is selected while hosted monitoring is enabled
+     */
+    public StablecoinCheckout setFinality(Finality value) {
+        Objects.requireNonNull(value);
+        requireConfigurable();
+        if (useHostedMonitor && value.kind() == Finality.Kind.FINALIZED)
+            throw new IllegalStateException("Hosted payment monitoring does not support finalized-block finality");
+        finality = value;
+        if (value.kind() == Finality.Kind.CONFIRMATIONS) minConfirmations = value.confirmations();
+        return this;
+    }
+    /** Enables or disables hosted payment monitoring. Hosted monitoring supports confirmations only. */
     public StablecoinCheckout setPaymentMonitor(boolean useHostedMonitor) {
         requireConfigurable();
+        if (useHostedMonitor && finality.kind() == Finality.Kind.FINALIZED)
+            throw new IllegalStateException("Hosted payment monitoring does not support finalized-block finality");
         this.useHostedMonitor = useHostedMonitor;
         return this;
     }
+    /** Sets a custom pay-button label; the most recently called text or i18n setter controls the visible label. */
     public StablecoinCheckout setButtonText(String value) { buttonText = Objects.requireNonNull(value); pay.setText(label()); return this; }
 
     /** 已知链显示名称，未知链回退为 "Chain <id>"（与 Tokens 中的 USDC 注册表一致）。 */
@@ -262,7 +295,8 @@ public class StablecoinCheckout extends VerticalLayout {
         if (onrampComponent != null) onrampComponent.setVisible(enabled);
     }
 
-    private String label() { return buttonText == null ? "Pay " + amount.toPlainString() + " " + selectedToken : buttonText; }
+    private String label() { return buttonText == null
+            ? MessageFormat.format(i18n.getPay(), amount.toPlainString(), selectedToken) : buttonText; }
 
     private Set<Long> allowedChains() {
         return allowedChains(selectedToken);
@@ -311,7 +345,7 @@ public class StablecoinCheckout extends VerticalLayout {
         submittedToken = null;
         submittedRequest = null;
         PaymentIntent intent = capturePaymentIntent();
-        if (intent == null) { status.setText("No supported network is configured."); return; }
+        if (intent == null) { status.setText(i18n.getUnsupportedNetwork()); return; }
         PaymentMonitorClient monitorClient = useHostedMonitor ? currentMonitorClient() : null;
         if (useHostedMonitor && monitorClient == null) {
             paymentError(new IllegalStateException("Register PaymentMonitorClient at application startup before enabling hosted monitoring."));
@@ -340,7 +374,7 @@ public class StablecoinCheckout extends VerticalLayout {
         submittedToken = targetToken;
         String payer = Web3Session.current().map(user -> user.address()).orElse(account);
         submittedRequest = new PaymentRequest(targetChain, targetToken.address(), recipient, intent.amountUnits(), payer,
-                minConfirmations, intent.notBefore());
+                minConfirmations, intent.notBefore()).withFinality(finality);
         submittedOrderId = currentOrderId;
         // 地址筛查可能是一次 RPC（最长到传输超时）：放到后台执行器，结果回到 UI 线程后再继续，避免阻塞界面
         screenPayer(currentAddressScreening(), payer).whenComplete((decision, screeningError) -> dispatch(ui, () -> {
@@ -426,9 +460,9 @@ public class StablecoinCheckout extends VerticalLayout {
         if (error == null) hostedTransactionSubmitted = true;
         else if (useHostedMonitor) {
             networkFailures++;
-            status.setText("Transaction sent; reconnecting to payment monitor…");
+            status.setText(i18n.getReconnecting());
         } else { paymentError(error); return; }
-        if (error == null) status.setText("Payment submitted: " + hash);
+        if (error == null) status.setText(MessageFormat.format(i18n.getSubmitted(), hash));
         fireEvent(new PaymentSubmittedEvent(this, hash, submittedToken, submittedRequest));
         startPolling();
     }
@@ -499,8 +533,8 @@ public class StablecoinCheckout extends VerticalLayout {
         while ((cause instanceof CompletionException || cause instanceof java.util.concurrent.ExecutionException) && cause.getCause() != null) cause = cause.getCause();
         boolean rejected = cause instanceof Web3Connect.Web3Exception walletError && walletError.isUserRejected();
         PaymentResult result = new PaymentResult(PaymentStatus.FAILED, null, null, BigInteger.ZERO, 0);
-        status.setText(blockedReason != null ? "Payment blocked: " + blockedReason
-                : rejected ? "Payment was rejected in the wallet." : "Payment failed: " + cause.getMessage());
+        status.setText(blockedReason != null ? MessageFormat.format(i18n.getBlocked(), blockedReason)
+                : rejected ? i18n.getRejected() : MessageFormat.format(i18n.getFailed(), cause.getMessage()));
         fireEvent(new PaymentFailedEvent(this, result, rejected, submittedToken, blockedReason, submittedRequest));
         setPayEnabled(true);
     }
@@ -560,7 +594,7 @@ public class StablecoinCheckout extends VerticalLayout {
             // 线程池已满时 supplyAsync 会同步抛出，whenComplete 不会被挂上；
             // 必须在这里复位标志，否则本订单此后再也不会被校验。下一次轮询自动重试。
             inProgress.set(false);
-            status.setText("Waiting for the network…");
+            status.setText(i18n.getWaitingNetwork());
             return;
         }
         verification.whenComplete((result, error) -> {
@@ -573,8 +607,7 @@ public class StablecoinCheckout extends VerticalLayout {
                             networkFailures++;
                             // 交易已经发出：网络再不稳定也不能重新启用 Pay（否则用户可能重复付款），继续轮询直到能校验为止
                             status.setText(networkFailures >= NETWORK_WARNING_THRESHOLD
-                                    ? "Your payment was sent but can't be verified right now. Don't pay again; verification will continue."
-                                    : "Waiting for the network…");
+                                    ? i18n.getNetworkFailure() : i18n.getWaitingNetwork());
                             return;
                         }
                         networkFailures = 0;
@@ -620,10 +653,10 @@ public class StablecoinCheckout extends VerticalLayout {
     }
 
     void applyVerificationResult(PaymentResult result) {
-        status.setText(result.status() + " — " + result.confirmations() + " confirmations");
+        status.setText(MessageFormat.format(i18n.getConfirmed(), result.status(), result.confirmations()));
         if (result.status() == PaymentStatus.CONFIRMED) {
             paid = true;
-            pay.setText("Paid");
+            pay.setText(i18n.getPaid());
             setPayEnabled(false);
             stopPolling();
             fireEvent(new PaymentConfirmedEvent(this, result, submittedToken, submittedRequest));

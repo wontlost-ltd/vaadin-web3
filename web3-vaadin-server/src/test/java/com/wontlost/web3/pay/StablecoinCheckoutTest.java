@@ -86,6 +86,20 @@ class StablecoinCheckoutTest {
         assertEquals("Continue", button(checkout).getText());
     }
 
+    @Test void localizedPayAndAsyncPaymentStatusUseConfiguredMessages() {
+        StablecoinCheckout checkout = new StablecoinCheckout(new ChainRegistry(), new InMemoryPaymentLedger(),
+                RECIPIENT, new BigDecimal("25.00"));
+        checkout.setI18n(new StablecoinCheckoutI18n().setPay("Payer {0} {1}")
+                .setConfirmed("État {0}, confirmations {1}").setPaid("Réglé"));
+        assertEquals("Payer 25.00 USDC", button(checkout).getText());
+        checkout.applyVerificationResult(new PaymentResult(PaymentStatus.CONFIRMED, "0xhash", RECIPIENT,
+                BigInteger.ONE, 4));
+        assertEquals("État CONFIRMED, confirmations 4", checkout.getChildren()
+                .filter(com.vaadin.flow.component.html.Span.class::isInstance)
+                .map(com.vaadin.flow.component.html.Span.class::cast).skip(1).findFirst().orElseThrow().getText());
+        assertEquals("Réglé", button(checkout).getText());
+    }
+
     @Test void tokenSelectionRecomputesNetworksAndSingleTokenHidesSelector() {
         ChainRegistry registry = new ChainRegistry();
         registry.register(1, new com.wontlost.web3.chain.EthRpcClient(request -> "{}"));

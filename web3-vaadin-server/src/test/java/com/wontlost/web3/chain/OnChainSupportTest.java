@@ -147,12 +147,24 @@ public class OnChainSupportTest {
         public int blockRequests;
         public JsonNode receipt;
         public boolean missingReceipt;
+        public boolean reorg;
+        public boolean finalizedError;
+        public long finalizedBlockNumber = Long.MAX_VALUE;
+        public String receiptBlockNumber() { return (receipt == null ? fixture.path("simpleTransfer").path("receipt") : receipt)
+                .path("blockNumber").asString(); }
         public FixtureTransport(JsonNode fixture) { this.fixture = fixture; }
         @Override public String send(String requestJson) throws IOException {
             JsonNode request = MAPPER.readTree(requestJson);
             String method = request.path("method").asString();
             String requestedHash = request.path("params").isArray() && !request.path("params").isEmpty()
                     ? request.path("params").get(0).asString() : "";
+            if ("eth_getBlockByNumber".equals(method) && "finalized".equals(requestedHash) && finalizedError) {
+                ObjectNode error = MAPPER.createObjectNode();
+                error.put("jsonrpc", "2.0");
+                error.set("id", request.path("id"));
+                error.set("error", MAPPER.createObjectNode().put("code", -32602).put("message", "unsupported tag"));
+                return error.toString();
+            }
             String fixtureHash = fixture.path("simpleTransfer").path("transaction").path("hash").asString();
             JsonNode value = switch (method) {
                 case "eth_chainId" -> MAPPER.valueToTree("0x1");
@@ -163,7 +175,11 @@ public class OnChainSupportTest {
                         ? fixture.path("simpleTransfer").path("transaction") : MAPPER.nullNode();
                 case "eth_getBlockByNumber" -> {
                     blockRequests++;
-                    yield MAPPER.createObjectNode().put("number", requestedHash).put("timestamp", blockTimestamp);
+                    String number = "finalized".equals(requestedHash) ? "0x" + Long.toHexString(finalizedBlockNumber) : requestedHash;
+                    String hash = (receipt == null ? fixture.path("simpleTransfer").path("receipt") : receipt)
+                            .path("blockHash").asString();
+                    yield MAPPER.createObjectNode().put("number", number).put("timestamp", blockTimestamp)
+                            .put("hash", reorg && !"finalized".equals(requestedHash) ? "0xdead" : hash);
                 }
                 default -> MAPPER.nullNode();
             };

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.0.0] - Unreleased
 
+### Fixed
+- Rotate servlet session IDs after verified SIWE sign-in when the current Vaadin request supports it; warn when the transport cannot rotate the ID.
+- Reject payment confirmation when the receipt block is no longer canonical, and prevent wallet restoration from racing with a cross-instance disconnect.
+- Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
+
+### Added
+- Optional confirmation-count or finalized-block payment finality, localized wallet-picker/on-ramp labels, and finality/localization guidance.
+
 Modules use the `web3-vaadin-*` naming (for example `com.wontlost:web3-vaadin`),
 matching the other WontLost add-ons.
 
@@ -83,4 +91,3 @@ First public release.
 ### Demo
 - Spring Boot demo with routes for wallet features, SIWE login, a token-gated
   view and a checkout.
-

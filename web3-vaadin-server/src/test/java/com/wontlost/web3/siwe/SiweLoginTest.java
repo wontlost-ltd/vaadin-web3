@@ -14,6 +14,18 @@ import org.junit.jupiter.api.Test;
 
 class SiweLoginTest {
 
+    @Test void siweFailureEventsExposeLocalizedReasonAndWalletMessages() {
+        SiweLogin login = new SiweLogin(new InMemoryNonceStore()).setI18n(new SiweLoginI18n()
+                .setMessage(SiweException.Reason.EXPIRED, "Signature expired")
+                .setUserRejected("Rejected locally").setNetworkError("Wallet offline"));
+        assertEquals("Signature expired", new SiweLogin.SignInFailedEvent(login,
+                SiweException.Reason.EXPIRED, -1, false).getLocalizedMessage());
+        assertEquals("Rejected locally", new SiweLogin.SignInFailedEvent(login,
+                null, 4001, true).getLocalizedMessage());
+        assertEquals("Wallet offline", new SiweLogin.SignInFailedEvent(login,
+                null, -1, false).getLocalizedMessage());
+    }
+
     @Test void screeningRejectsBeforeSessionCanBeWrittenAndFailsClosedOnExceptions() {
         VerifiedSignIn verified = new VerifiedSignIn("0x0000000000000000000000000000000000000001", 1, null,
                 java.time.Instant.now());

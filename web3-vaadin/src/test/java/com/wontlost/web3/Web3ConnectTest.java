@@ -15,6 +15,15 @@ import tools.jackson.databind.ObjectMapper;
 
 class Web3ConnectTest {
 
+    @Test void appliesLocalizedConnectorAndPickerLabels() {
+        Web3Connect component = new Web3Connect();
+        component.setI18n(new Web3ConnectI18n().setConnect("Conectar")
+                .setPickerTitle("Elegir cartera").setNoWallets("Sin carteras"));
+        assertEquals("Conectar", component.getElement().getProperty("connectText"));
+        assertEquals("Elegir cartera", component.getElement().getProperty("pickerTitle"));
+        assertEquals("Sin carteras", component.getElement().getProperty("noWalletText"));
+    }
+
     @Test
     void parsesWalletMetadataAndReturnsImmutableList() {
         Web3Connect component = new Web3Connect();

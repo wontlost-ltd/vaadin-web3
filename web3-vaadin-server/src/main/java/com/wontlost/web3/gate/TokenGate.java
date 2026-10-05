@@ -28,12 +28,19 @@ import com.wontlost.web3.siwe.Web3Session;
 public final class TokenGate implements BeforeEnterListener {
     private final ChainRegistry chains;
     private final long cacheMillis;
+    private final int cacheCapacity;
     private final Map<BalanceKey, CachedBalance> balances = new ConcurrentHashMap<>();
 
-    public TokenGate(ChainRegistry chains) { this(chains, Duration.ofSeconds(30)); }
+    public TokenGate(ChainRegistry chains) { this(chains, Duration.ofSeconds(30), 10_000); }
     public TokenGate(ChainRegistry chains, Duration cacheTtl) {
+        this(chains, cacheTtl, 10_000);
+    }
+    /** Creates a token gate with a bounded balance cache. */
+    public TokenGate(ChainRegistry chains, Duration cacheTtl, int cacheCapacity) {
         this.chains = Objects.requireNonNull(chains);
         this.cacheMillis = Objects.requireNonNull(cacheTtl).toMillis();
+        if (cacheCapacity < 1) throw new IllegalArgumentException("cacheCapacity must be positive");
+        this.cacheCapacity = cacheCapacity;
     }
 
     @Override
@@ -103,9 +110,20 @@ public final class TokenGate implements BeforeEnterListener {
         CachedBalance cached = balances.get(key);
         if (cached != null && now - cached.fetchedAt < cacheMillis) return cached.value;
         BigInteger value = Erc20.balanceOf(client(chainId), token, address);
-        balances.put(key, new CachedBalance(value, now));
+        synchronized (balances) {
+            balances.entrySet().removeIf(entry -> now - entry.getValue().fetchedAt >= cacheMillis);
+            balances.put(key, new CachedBalance(value, now));
+            while (balances.size() > cacheCapacity) {
+                BalanceKey oldest = balances.entrySet().stream()
+                        .min(java.util.Comparator.comparingLong(entry -> entry.getValue().fetchedAt))
+                        .orElseThrow().getKey();
+                balances.remove(oldest);
+            }
+        }
         return value;
     }
+
+    int cachedBalanceCount() { return balances.size(); }
 
     private record BalanceKey(long chainId, String token, String address) { }
     private record CachedBalance(BigInteger value, long fetchedAt) { }

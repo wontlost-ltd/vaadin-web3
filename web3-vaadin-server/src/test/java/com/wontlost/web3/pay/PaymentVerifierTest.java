@@ -38,6 +38,18 @@ class PaymentVerifierTest {
         hash = receipt.path("transactionHash").asString();
     }
 
+    @Test void finalityIsTheSingleSourceOfConfirmationCount() {
+        PaymentRequest base = new PaymentRequest(1, "0x00000000000000000000000000000000000000aa",
+                "0x00000000000000000000000000000000000000bb", BigInteger.ONE, null, 3, null);
+        assertEquals(Finality.confirmations(3), base.finality());
+        PaymentRequest five = base.withFinality(Finality.confirmations(5));
+        assertEquals(5, five.minConfirmations());
+        PaymentRequest conflicting = new PaymentRequest(1, base.token(), base.recipient(), BigInteger.ONE, null, 9, null,
+                Finality.confirmations(2));
+        assertEquals(2, conflicting.minConfirmations());
+        assertEquals(Finality.Kind.FINALIZED, base.withFinality(Finality.finalized()).finality().kind());
+    }
+
     @Test void confirmsOnlyCorrectAndSufficientPaymentAndClaimsIdempotently() {
         PaymentRequest request = new PaymentRequest(1, Tokens.usdc(1).orElseThrow().address(), recipient, amount, payer);
         assertEquals(PaymentStatus.CONFIRMED, verifier.verify("order-a", hash, request).status());
@@ -92,6 +104,25 @@ class PaymentVerifierTest {
                 new PaymentRequest(1, Tokens.usdc(1).orElseThrow().address(), recipient, amount, payer)).status());
     }
 
+    @Test void waitsForCanonicalHashAndFinalizedBlock() {
+        String token = Tokens.usdc(1).orElseThrow().address();
+        var request = new PaymentRequest(1, token, recipient, amount, payer, Finality.finalized());
+        transport.finalizedBlockNumber = 0;
+        assertEquals(PaymentStatus.CONFIRMING, verifier.verify("finality-wait", hash, request).status());
+        transport.finalizedBlockNumber = Long.parseLong(transport.receiptBlockNumber().substring(2), 16);
+        assertEquals(PaymentStatus.CONFIRMED, verifier.verify("finality-done", hash, request).status());
+        transport.reorg = true;
+        assertEquals(PaymentStatus.PENDING, verifier.verify("reorg", hash, request).status());
+    }
+
+    @Test void finalizedRpcErrorsAreNotTreatedAsConfirmation() {
+        String token = Tokens.usdc(1).orElseThrow().address();
+        transport.finalizedError = true;
+        org.junit.jupiter.api.Assertions.assertThrows(com.wontlost.web3.chain.EthRpcException.class,
+                () -> verifier.verify("finalized-error", hash,
+                        new PaymentRequest(1, token, recipient, amount, payer, Finality.finalized())));
+    }
+
     @Test void rejectsTransactionsMinedBeforeTheOrderWasCreated() {
         String token = Tokens.usdc(1).orElseThrow().address();
         java.time.Instant mined = java.time.Instant.parse("2026-10-04T11:35:23Z");
@@ -105,7 +136,7 @@ class PaymentVerifierTest {
         int before = transport.blockRequests;
         new PaymentVerifier(registryFor(transport), new InMemoryPaymentLedger())
                 .verify("legacy", hash, new PaymentRequest(1, token, recipient, amount, payer));
-        assertEquals(before, transport.blockRequests);
+        assertEquals(before + 1, transport.blockRequests);
     }
 
     private static ChainRegistry registryFor(OnChainSupportTest.FixtureTransport transport) {
