@@ -34,7 +34,27 @@ class Web3SiweLoginConfigurerTest {
     }
 
     @Test
-    void legacyConfigurePassesNullRequest() {
+    void singleArgumentConfigureUsesTheCurrentVaadinRequest() {
+        List<jakarta.servlet.http.HttpServletRequest> requests = new ArrayList<>();
+        Web3SiweLoginConfigurer configurer = new Web3SiweLoginConfigurer(new Siwe(), List.of(),
+                List.of((login, request) -> requests.add(request)));
+        MockHttpServletRequest http = new MockHttpServletRequest();
+        com.vaadin.flow.server.VaadinServletRequest vaadinRequest =
+                new com.vaadin.flow.server.VaadinServletRequest(http, null);
+        com.vaadin.flow.internal.CurrentInstance.set(com.vaadin.flow.server.VaadinRequest.class, vaadinRequest);
+        try {
+            configurer.configure(new SiweLogin(new InMemoryNonceStore()));
+        } finally {
+            com.vaadin.flow.internal.CurrentInstance.clearAll();
+        }
+
+        // VaadinServletRequest 本身是 HttpServletRequest 包装器，委托给真实请求
+        assertThat(requests).containsExactly(vaadinRequest);
+        assertThat(((jakarta.servlet.ServletRequestWrapper) requests.getFirst()).getRequest()).isSameAs(http);
+    }
+
+    @Test
+    void configureOutsideARequestPassesNullRequest() {
         List<jakarta.servlet.http.HttpServletRequest> requests = new ArrayList<>();
         Web3SiweLoginConfigurer configurer = new Web3SiweLoginConfigurer(new Siwe(), List.of(),
                 List.of((login, request) -> requests.add(request)));

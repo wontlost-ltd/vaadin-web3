@@ -35,7 +35,9 @@ public final class Web3SiweLoginConfigurer {
      * Call it right after creating the component, before adding your own listeners.
      */
     public SiweLogin configure(SiweLogin login) {
-        return configure(login, null);
+        // 应用通常在路由构造器中调用此方法：取当前 Vaadin 请求，使按请求定制（如多租户）也能生效；无请求时传 null
+        com.vaadin.flow.server.VaadinServletRequest current = com.vaadin.flow.server.VaadinServletRequest.getCurrent();
+        return configure(login, current == null ? null : current.getHttpServletRequest());
     }
 
     /** Applies the configured values and customizers using the current request. */
