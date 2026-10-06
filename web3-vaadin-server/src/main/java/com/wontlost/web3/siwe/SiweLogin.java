@@ -56,6 +56,7 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     private boolean disconnectWalletOnSignOut = true;
     private boolean navigateToContinueTarget = true;
     private boolean sessionIdRotation = true;
+    private java.time.Duration maxAge;
     private SiweLoginI18n i18n = new SiweLoginI18n();
 
     /** Creates a SIWE component using the supplied one-time nonce store. */
@@ -83,6 +84,15 @@ public class SiweLogin extends Composite<HorizontalLayout> {
     public SiweLogin setStatement(String value) { statement = value; return this; }
     /** Restricts accepted chain ids; an empty set allows any positive chain id. */
     public SiweLogin setAllowedChainIds(Set<Long> values) { allowedChainIds = Set.copyOf(values); return this; }
+    /**
+     * Rejects messages whose {@code Issued At} is older than the given age; {@code null} (the default) applies no
+     * limit beyond the message's own expiration time.
+     */
+    public SiweLogin setMaxAge(java.time.Duration value) {
+        if (value != null && (value.isNegative() || value.isZero())) throw new IllegalArgumentException("maxAge must be positive");
+        maxAge = value;
+        return this;
+    }
     /** Replaces the verifier, for example to provide a custom clock or policy. */
     public SiweLogin setVerifier(SiweVerifier value) { customVerifier = Objects.requireNonNull(value); return this; }
 
@@ -201,7 +211,7 @@ public class SiweLogin extends Composite<HorizontalLayout> {
             }
             try {
                 SiweExpectations expectations = SiweExpectations.forDomain(expectedDomain)
-                        .withUri(expectedUri).withAllowedChainIds(allowedChainIds);
+                        .withUri(expectedUri).withAllowedChainIds(allowedChainIds).withMaxAge(maxAge);
                 VerifiedSignIn verified = requireVerifier().verify(payload.message().toMessage(),
                         payload.signature(), expectations);
                 completeVerifiedSignIn(verified);
@@ -265,7 +275,9 @@ public class SiweLogin extends Composite<HorizontalLayout> {
         }
         flowInProgress = false;
         signInButton.setEnabled(true);
-        if (navigateToContinueTarget) {
+        // 先通知监听器（例如把身份写入 Spring Security），再导航：否则受保护的 continue 目标会在认证建立之前被访问控制拦截
+        fireEvent(new SignedInEvent(this, verified));
+        if (navigateToContinueTarget && Web3Session.current().isPresent()) {
             var ui = getUI().orElse(null);
             if (ui != null) {
                 QueryParameters parameters = ui.getInternals().getActiveViewLocation().getQueryParameters();
@@ -273,7 +285,6 @@ public class SiweLogin extends Composite<HorizontalLayout> {
                         .ifPresent(ui::navigate);
             }
         }
-        fireEvent(new SignedInEvent(this, verified));
     }
 
     static boolean isSafeContinueTarget(String target) {
