@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.web3j.crypto.Hash;
+import org.web3j.utils.Numeric;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -17,16 +21,47 @@ public final class EthRpcClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final JsonRpcTransport transport;
     private final AtomicLong ids = new AtomicLong();
+    private final AtomicReference<Long> maxObservedHead;
+    private final Integer lagTolerance;
+    private final FailoverJsonRpcTransport failoverOwner;
+    private final boolean pinnedView;
 
     /** Creates a client using a custom JSON-RPC transport. */
-    public EthRpcClient(JsonRpcTransport transport) { this.transport = Objects.requireNonNull(transport); }
+    public EthRpcClient(JsonRpcTransport transport) {
+        this.transport = Objects.requireNonNull(transport);
+        this.maxObservedHead = new AtomicReference<>(-1L);
+        this.lagTolerance = transport instanceof FailoverJsonRpcTransport failover
+                ? failover.config().lagTolerance() : null;
+        this.failoverOwner = transport instanceof FailoverJsonRpcTransport failover ? failover : null;
+        this.pinnedView = false;
+    }
+    private EthRpcClient(JsonRpcTransport transport, AtomicReference<Long> maxObservedHead, Integer lagTolerance,
+                         FailoverJsonRpcTransport failoverOwner, boolean pinnedView) {
+        this.transport = Objects.requireNonNull(transport);
+        this.maxObservedHead = maxObservedHead;
+        this.lagTolerance = lagTolerance;
+        this.failoverOwner = failoverOwner;
+        this.pinnedView = pinnedView;
+    }
     /** Creates a client backed by the default HTTP transport. */
     public EthRpcClient(String endpoint) { this(new HttpJsonRpcTransport(endpoint)); }
 
     /** Returns this endpoint's EVM chain id. */
     public long chainId() { return hexLong(result("eth_chainId", List.of()).asString()); }
     /** Returns the latest block number. */
-    public long blockNumber() { return hexLong(result("eth_blockNumber", List.of()).asString()); }
+    public long blockNumber() {
+        long observed = hexLong(result("eth_blockNumber", List.of()).asString());
+        if (lagTolerance != null) {
+            long maximum = maxObservedHead.get();
+            if (maximum >= 0 && observed < maximum - lagTolerance) {
+                if (failoverOwner != null && !pinnedView)
+                    failoverOwner.rejectActiveForLag("Endpoint head " + observed + " trails observed head " + maximum);
+                throw new EthRpcException(-32000, "unknown block: endpoint head " + observed + " trails observed head " + maximum);
+            }
+        }
+        maxObservedHead.accumulateAndGet(observed, Math::max);
+        return observed;
+    }
     /** Returns the account transaction count at the supplied block tag. */
     public BigInteger getTransactionCount(String address, String blockTag) {
         return hexBigInteger(result("eth_getTransactionCount", List.of(address, blockTag)).asString());
@@ -49,7 +84,23 @@ public final class EthRpcClient {
     }
     /** Broadcasts a signed raw transaction and returns its hash. */
     public String sendRawTransaction(String hex) {
-        return result("eth_sendRawTransaction", List.of(hex)).asString();
+        String expectedHash = Numeric.toHexString(Hash.sha3(Numeric.hexStringToByteArray(hex)));
+        try { return result("eth_sendRawTransaction", List.of(hex)).asString(); }
+        catch (EthRpcException exception) {
+            if (isKnownTransaction(exception)) {
+                if (getTransactionByHash(expectedHash).isPresent()) return expectedHash;
+            }
+            throw exception;
+        }
+    }
+
+    /**
+     * Returns this client when ordinary requests already have endpoint affinity, otherwise a fixed endpoint view.
+     * Reads made through a failover view stay on one endpoint; a failure is propagated to the caller.
+     */
+    public EthRpcClient pinned() {
+        if (!(transport instanceof FailoverJsonRpcTransport failover)) return this;
+        return new EthRpcClient(failover.pinned(), maxObservedHead, lagTolerance, failover, true);
     }
     /** Executes an {@code eth_call} against the requested block tag; a {@code null} target runs creation code. */
     public String call(String to, String dataHex, String blockTag) {
@@ -114,10 +165,16 @@ public final class EthRpcClient {
         request.put("method", method);
         request.set("params", MAPPER.valueToTree(params));
         try {
-            JsonNode response = MAPPER.readTree(transport.send(request.toString()));
+            String requestJson = request.toString();
+            String responseJson = transport instanceof FailoverJsonRpcTransport failover
+                    && "eth_sendRawTransaction".equals(method)
+                    ? failover.sendRawTransactionRequest(requestJson) : transport.send(requestJson);
+            JsonNode response = MAPPER.readTree(responseJson);
             JsonNode error = response.path("error");
             if (!error.isMissingNode() && !error.isNull()) {
-                throw new EthRpcException(error.path("code").asInt(), error.path("message").asString("JSON-RPC error"));
+                JsonNode data = error.path("data");
+                throw new EthRpcException(error.path("code").asInt(), error.path("message").asString("JSON-RPC error"),
+                        data.isMissingNode() || data.isNull() ? null : data.toString());
             }
             JsonNode result = response.path("result");
             if (result.isMissingNode()) throw new IllegalStateException("JSON-RPC response has no result");
@@ -125,6 +182,10 @@ public final class EthRpcClient {
         } catch (IOException exception) {
             throw new IllegalStateException("JSON-RPC transport failed", exception);
         }
+    }
+    private static boolean isKnownTransaction(EthRpcException exception) {
+        String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase(java.util.Locale.ROOT);
+        return message.contains("already known") || message.contains("known transaction") || message.contains("nonce too low");
     }
     private static String nullableString(JsonNode value) { return value.isNull() ? null : value.asString(); }
     static long hexLong(String value) { return hexBigInteger(value).longValueExact(); }
