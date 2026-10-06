@@ -57,6 +57,7 @@ public class Web3Connect extends Component {
     private static final Set<String> SERVER_WALLET_METHODS = Set.of("personal_sign", "eth_signTypedData_v4",
             "eth_sendTransaction", "wallet_switchEthereumChain", "wallet_addEthereumChain",
             "eth_blockNumber", "eth_call", "eth_estimateGas", "eth_feeHistory", "eth_gasPrice", "eth_getBalance", "eth_getBlockByHash", "eth_getBlockByNumber", "eth_getCode", "eth_getLogs", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionCount", "eth_getTransactionReceipt", "eth_maxPriorityFeePerGas", "net_version");
+    static final int MAX_PENDING_SERVER_WALLET_REQUESTS = 8;
     private transient List<CompletableFuture<String>> pendingFutures;
     private transient Map<String, CompletableFuture<String>> serverWalletRequests;
     private transient ServerWallet serverWallet;
@@ -97,6 +98,11 @@ public class Web3Connect extends Component {
             return;
         }
         Map<String, CompletableFuture<String>> pending = serverWalletRequests();
+        // 每个组件最多 MAX_PENDING_SERVER_WALLET_REQUESTS 个未完成请求，防止浏览器堆积请求占用内存与 RPC
+        if (pending.size() >= MAX_PENDING_SERVER_WALLET_REQUESTS) {
+            rejectServerWalletRequest(requestId, -32005, "Too many pending server wallet requests");
+            return;
+        }
         CompletableFuture<String> result = new CompletableFuture<>();
         if (pending.putIfAbsent(requestId, result) != null) return;
         // 超时与异步钱包会在其他线程完成：回写浏览器必须持有会话锁，否则经 ui.access 排队

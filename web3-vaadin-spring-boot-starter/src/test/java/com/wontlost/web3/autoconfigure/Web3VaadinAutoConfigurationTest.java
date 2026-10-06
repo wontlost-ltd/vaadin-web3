@@ -137,6 +137,23 @@ class Web3VaadinAutoConfigurationTest {
     }
 
     @Test
+    void rejectsApplicationDefinedServerWalletInProductionModeEvenWithoutTheProperty() {
+        contextRunner.withBean(ServerWallet.class, () -> com.wontlost.web3.dev.DevWallet.anvilDefault(31337, null))
+                .run(context -> {
+                    VaadinService service = mock(VaadinService.class);
+                    DeploymentConfiguration deployment = mock(DeploymentConfiguration.class);
+                    when(deployment.isProductionMode()).thenReturn(true);
+                    when(service.getDeploymentConfiguration()).thenReturn(deployment);
+                    when(service.getContext()).thenReturn(mock(com.vaadin.flow.server.VaadinContext.class));
+                    assertThatThrownBy(() -> context.getBean("web3VaadinContextInitializer",
+                            com.vaadin.flow.server.VaadinServiceInitListener.class)
+                            .serviceInit(new ServiceInitEvent(service)))
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessageContaining("must not be registered in Vaadin production mode");
+                });
+    }
+
+    @Test
     void configurerAppliesMaxAgeAndAttachesSecurityBridgeWhenSecurityIsPresent() {
         contextRunner.withPropertyValues("web3.siwe.max-age=PT2M").run(context -> {
             com.wontlost.web3.siwe.SiweLogin login =

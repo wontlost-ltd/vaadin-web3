@@ -68,7 +68,15 @@ public final class SiweSecurityBridge {
         VaadinServletRequest request = VaadinServletRequest.getCurrent();
         VaadinServletResponse response = VaadinServletResponse.getCurrent();
         if (request == null) {
-            LOGGER.error("SIWE sign-out cleared the Vaadin session but no servlet request was available to clear the persisted SecurityContext");
+            // 纯 WebSocket 推送回调没有 servlet 请求：经 Vaadin 包装的 HTTP 会话直接删除持久化的认证，
+            // 不能只记日志，否则 Web3Session 已登出而 Spring 仍视为已登录
+            com.vaadin.flow.server.VaadinSession session = com.vaadin.flow.server.VaadinSession.getCurrent();
+            if (session == null || session.getSession() == null) {
+                // 在真实 UI 请求中 VaadinSession 总带有包装会话；这里抛异常只会让登出本身失败，因此记录错误
+                LOGGER.error("SIWE sign-out could not reach the HTTP session to clear the persisted Spring Security context");
+                return;
+            }
+            session.getSession().removeAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
             return;
         }
         try {

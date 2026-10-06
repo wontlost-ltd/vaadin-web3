@@ -86,6 +86,35 @@ class SiweSecurityBridgeTest {
         assertThat(Web3Session.current()).isEmpty();
     }
 
+    @Test
+    void signOutWithoutServletRequestClearsPersistedContextThroughVaadinSession() {
+        CountingRequest servletRequest = new CountingRequest();
+        VaadinServletService service = mock(VaadinServletService.class);
+        VaadinServletRequest request = new VaadinServletRequest(servletRequest, service);
+        VaadinServletResponse response = new VaadinServletResponse(new MockHttpServletResponse(), service);
+        doCallRealMethod().when(service).setCurrentInstances(request, response);
+        service.setCurrentInstances(request, response);
+        setCurrentSession(service);
+        VaadinSession session = VaadinSession.getCurrent();
+        when(session.getSession()).thenReturn(
+                new com.vaadin.flow.server.WrappedHttpSession(servletRequest.getSession(true)));
+
+        SiweLogin login = new SiweLogin(new InMemoryNonceStore());
+        new SiweSecurityBridge(new HttpSessionSecurityContextRepository(), List.of("ROLE_WEB3_USER")).attach(login);
+        fire(login, new SiweLogin.SignedInEvent(login,
+                new VerifiedSignIn("0x0000000000000000000000000000000000000003", 31337, null, Instant.now())));
+        assertThat(servletRequest.getSession(false).getAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY)).isNotNull();
+
+        // 模拟纯 WebSocket 推送回调：没有当前 servlet 请求/响应
+        com.vaadin.flow.internal.CurrentInstance.clearAll();
+        VaadinSession.setCurrent(session);
+        login.signOut();
+
+        assertThat(servletRequest.getSession(false).getAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY)).isNull();
+    }
+
     private static final class CountingRequest extends MockHttpServletRequest {
         private int rotationCount;
         @Override public String changeSessionId() {

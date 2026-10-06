@@ -141,14 +141,18 @@ public class Web3VaadinAutoConfiguration {
             ObjectProvider<PaymentMonitorClient> monitor, ObjectProvider<Web3Properties> properties) {
         Web3Properties config = properties.getIfAvailable(Web3Properties::new);
         ServerWallet wallet = wallets.getIfAvailable();
-        if (config.getDev().getMockWallet().isEnabled()) {
-            if (event.getSource().getDeploymentConfiguration().isProductionMode()) {
-                throw new IllegalStateException("web3.dev.mock-wallet.enabled must not be enabled in Vaadin production mode");
-            }
-            if (wallet instanceof DevWallet devWallet) {
-                LOGGER.warn("*** DEVELOPMENT WALLET ENABLED: address={}, chainId={}; use only on a valueless local chain ***",
-                        devWallet.accounts().getFirst(), devWallet.chainId());
-            }
+        // 服务端钱包按契约仅用于开发/测试：无论来自属性开关还是应用自定义 bean，生产模式一律拒绝启动
+        boolean production = event.getSource().getDeploymentConfiguration().isProductionMode();
+        if (production && config.getDev().getMockWallet().isEnabled()) {
+            throw new IllegalStateException("web3.dev.mock-wallet.enabled must not be enabled in Vaadin production mode");
+        }
+        if (production && wallet != null) {
+            throw new IllegalStateException("A ServerWallet bean (" + wallet.getClass().getName()
+                    + ") must not be registered in Vaadin production mode; server wallets are for development only");
+        }
+        if (wallet instanceof DevWallet devWallet) {
+            LOGGER.warn("*** DEVELOPMENT WALLET ENABLED: address={}, chainId={}; use only on a valueless local chain ***",
+                    devWallet.accounts().getFirst(), devWallet.chainId());
         }
         var context = event.getSource().getContext();
         ChainRegistry chainRegistry = chains.getIfAvailable();

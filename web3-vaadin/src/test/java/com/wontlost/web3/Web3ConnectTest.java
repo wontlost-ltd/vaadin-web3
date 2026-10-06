@@ -187,4 +187,43 @@ class Web3ConnectTest {
         Web3Connect.deliver(null, () -> ran.add("no-ui"));
         assertEquals(java.util.List.of("inline"), ran);
     }
+
+    @Test void serverWalletRequestsAreCappedPerComponent() {
+        // 钱包永不完成请求，使挂起请求真正累积；没有上限时第 N+1 个请求会被接受
+        java.util.List<java.util.concurrent.CompletableFuture<String>> neverDone = new java.util.ArrayList<>();
+        ServerWallet hanging = new ServerWallet() {
+            @Override public String name() { return "Hanging"; }
+            @Override public String rdns() { return "test.hanging"; }
+            @Override public java.util.List<String> accounts() { return java.util.List.of("0x0000000000000000000000000000000000000001"); }
+            @Override public String chainId() { return "0x1"; }
+            @Override public java.util.concurrent.CompletableFuture<String> request(String method, String paramsJson) {
+                var future = new java.util.concurrent.CompletableFuture<String>();
+                neverDone.add(future);
+                return future;
+            }
+        };
+        java.util.Map<Class<?>, Object> attributes = new java.util.concurrent.ConcurrentHashMap<>();
+        com.vaadin.flow.server.VaadinContext context = new com.vaadin.flow.server.VaadinContext() {
+            @Override public <T> T getAttribute(Class<T> type, java.util.function.Supplier<T> supplier) { return type.cast(attributes.get(type)); }
+            @Override public <T> void setAttribute(Class<T> type, T value) { attributes.put(type, value); }
+            @Override public void removeAttribute(Class<?> type) { attributes.remove(type); }
+            @Override public java.util.Enumeration<String> getContextParameterNames() { return java.util.Collections.emptyEnumeration(); }
+            @Override public String getContextParameter(String name) { return null; }
+        };
+        ServerWallet.register(context, hanging);
+        com.vaadin.flow.server.VaadinService service = new com.vaadin.flow.server.VaadinServletService() {
+            @Override public com.vaadin.flow.server.VaadinContext getContext() { return context; }
+        };
+        com.vaadin.flow.server.VaadinService.setCurrent(service);
+        try {
+            Web3Connect component = new Web3Connect();
+            for (int i = 0; i < Web3Connect.MAX_PENDING_SERVER_WALLET_REQUESTS + 3; i++) {
+                component.serverWalletRequest("request-" + i, "eth_getBalance", "[]");
+            }
+            assertEquals(Web3Connect.MAX_PENDING_SERVER_WALLET_REQUESTS, neverDone.size(),
+                    "only the first MAX requests may reach the wallet; the rest must be rejected");
+        } finally {
+            com.vaadin.flow.server.VaadinService.setCurrent(null);
+        }
+    }
 }
