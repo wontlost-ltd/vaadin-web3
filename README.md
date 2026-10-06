@@ -36,6 +36,35 @@ Add `spring-boot-starter-security`, configure a `SecurityFilterChain` with `Vaad
 
 The bridge needs a servlet request and response. A pure WebSocket push callback cannot persist the authentication cookie and fails closed; use Vaadin's `WEBSOCKET_XHR` or long-polling transport for SIWE authentication.
 
+Declare ordered `SiweAuthoritiesResolver` beans to add authorities after verification. Each resolver receives the verified `Web3Principal`, `VerifiedSignIn` and servlet request; duplicate authorities are removed while preserving configured and resolver order:
+
+```java
+@Bean
+@Order(10)
+SiweAuthoritiesResolver tenantAuthorities(TenantDirectory tenants) {
+    return context -> tenants.rolesFor(context.request().getHeader("X-Tenant"), context.principal())
+            .stream().map(SimpleGrantedAuthority::new).toList();
+}
+```
+
+For tenant-specific SIWE expectations, declare ordered `SiweLoginCustomizer` beans and call `configure(login, request)`. These run after the starter's configured domain, URI and allowed chains, and after existing `Web3SiweLoginCustomizer` beans. The existing `configure(login)` method remains available and passes `null` to request-aware customizers.
+
+```java
+@Bean
+@Order(10)
+SiweLoginCustomizer tenantSiweSettings(TenantDirectory tenants) {
+    return (login, request) -> {
+        if (request != null) {
+            Tenant tenant = tenants.fromHost(request.getServerName());
+            login.setDomain(tenant.siweDomain()).setUri(tenant.siweUri())
+                    .setAllowedChainIds(tenant.allowedChainIds());
+        }
+    };
+}
+```
+
+When Spring Security is present, the bridge publishes authentication success, bad-credentials failure and logout success events. `SiweLogin` already exposes a verification-failure event; resolver failures roll back the Vaadin session and publish a bad-credentials event with a fixed, non-sensitive reason.
+
 ## Quick start
 
 Add the starter (currently install this repository locally with `mvn -B -ntp install`; use `1.0.0` after release):
