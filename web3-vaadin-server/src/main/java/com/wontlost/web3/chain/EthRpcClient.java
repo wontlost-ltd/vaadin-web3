@@ -27,6 +27,30 @@ public final class EthRpcClient {
     public long chainId() { return hexLong(result("eth_chainId", List.of()).asString()); }
     /** Returns the latest block number. */
     public long blockNumber() { return hexLong(result("eth_blockNumber", List.of()).asString()); }
+    /** Returns the account transaction count at the supplied block tag. */
+    public BigInteger getTransactionCount(String address, String blockTag) {
+        return hexBigInteger(result("eth_getTransactionCount", List.of(address, blockTag)).asString());
+    }
+    /** Estimates gas for a JSON transaction object. */
+    public BigInteger estimateGas(String txJson) {
+        return hexBigInteger(result("eth_estimateGas", List.of(MAPPER.readTree(txJson))).asString());
+    }
+    /** Returns the legacy gas price. */
+    public BigInteger gasPrice() { return hexBigInteger(result("eth_gasPrice", List.of()).asString()); }
+    /** Returns the suggested EIP-1559 priority fee. */
+    public BigInteger maxPriorityFeePerGas() {
+        return hexBigInteger(result("eth_maxPriorityFeePerGas", List.of()).asString());
+    }
+    /** Returns the latest block base fee, or {@code null} when the node omits it. */
+    public BigInteger latestBaseFee() {
+        JsonNode block = getBlockByNumber("latest");
+        JsonNode fee = block.path("baseFeePerGas");
+        return fee.isMissingNode() || fee.isNull() ? null : hexBigInteger(fee.asString());
+    }
+    /** Broadcasts a signed raw transaction and returns its hash. */
+    public String sendRawTransaction(String hex) {
+        return result("eth_sendRawTransaction", List.of(hex)).asString();
+    }
     /** Executes an {@code eth_call} against the requested block tag; a {@code null} target runs creation code. */
     public String call(String to, String dataHex, String blockTag) {
         ObjectNode call = MAPPER.createObjectNode();
@@ -78,6 +102,10 @@ public final class EthRpcClient {
                 block.isNull() ? null : hexLong(block.asString())));
     }
 
+    /** Sends an arbitrary JSON-RPC request and returns its {@code result}; RPC errors throw {@link EthRpcException}. */
+    public JsonNode request(String method, List<?> params) {
+        return result(method, params);
+    }
     private JsonNode result(String method, List<?> params) {
         long id = ids.incrementAndGet();
         ObjectNode request = MAPPER.createObjectNode();

@@ -18,3 +18,13 @@ web3-vaadin-demo/src/main/bundles/
 .settings/
 # flatten-maven-plugin 生成的发布用 POM
 .flattened-pom.xml
+
+# Vaadin 在 starter 冒烟测试中生成的前端构建文件
+web3-vaadin-spring-boot-starter/package.json
+web3-vaadin-spring-boot-starter/package-lock.json
+web3-vaadin-spring-boot-starter/tsconfig.json
+web3-vaadin-spring-boot-starter/types.d.ts
+web3-vaadin-spring-boot-starter/vite.*.ts
+web3-vaadin-spring-boot-starter/node_modules/
+web3-vaadin-spring-boot-starter/src/main/frontend/
+web3-vaadin-spring-boot-starter/src/main/bundles/

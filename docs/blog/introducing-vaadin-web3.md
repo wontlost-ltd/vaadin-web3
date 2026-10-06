@@ -1,49 +1,33 @@
-# Wallet login, token gates and USDC checkout for Vaadin, in plain Java
+# Wallet login, token gates and stablecoin checkout for Vaadin
 
 *Draft. Not yet published.*
 
-Most web3 tutorials assume a React frontend, a JavaScript wallet library and a
-separate backend to check what the frontend claims. Vaadin developers have a
-simpler model: the server owns the UI. The Web3 Add-on for Vaadin brings
-wallets into that model. This post shows the add-on through four small
-examples. Each one is a few lines of Java.
+Most Web3 tutorials assume a React frontend, a JavaScript wallet library and a separate backend. Vaadin developers can keep the application in server-side Java. The Web3 add-on connects browser wallets to Vaadin Flow components, verifies SIWE signatures on the server and checks stablecoin payments against chain receipts.
 
-## 1. Connect a wallet
+For a new Spring Boot application, start with the `web3-vaadin-spring-boot-starter` and the [step-by-step tutorial](../tutorial.md). The component and server artifacts can also be used directly by applications that do not use Spring Boot.
 
-```java
-Web3Connect wallet = new Web3Connect();
-wallet.addConnectedListener(e -> Notification.show("Connected " + e.getAccount()));
-add(wallet);
-```
+## Add a wallet login
 
-The add-on talks to whatever wallet the browser injects. It has no bundled
-web3 library, so the component module adds no dependencies to your
-application. When a user has several wallets installed, for example MetaMask
-and Rabby, the component finds them through EIP-6963 and shows a picker. It
-remembers the choice for the next visit.
-
-## 2. Sign users in with Ethereum
-
-A connected address on its own proves nothing, because the browser reports
-it. `SiweLogin` implements Sign-In with Ethereum (EIP-4361):
+The starter supplies a nonce store and applies configured SIWE expectations through `Web3SiweLoginConfigurer`:
 
 ```java
-SiweLogin login = new SiweLogin(NONCES).setDomain("example.com").setUri("https://example.com");
-login.addSignedInListener(e -> Notification.show("Welcome " + e.getSignIn().address()));
+@Route("login")
+@AnonymousAllowed
+public class LoginView extends VerticalLayout {
+    public LoginView(NonceStore nonces, Web3SiweLoginConfigurer configurer) {
+        SiweLogin login = configurer.configure(new SiweLogin(nonces));
+        login.addSignedInListener(event ->
+                Notification.show("Welcome " + event.getSignIn().address()));
+        add(login);
+    }
+}
 ```
 
-The server does all the work:
+The server checks the one-time nonce, domain, URI, chain and time window, then stores the verified identity in `Web3Session`. When an application adds Spring Security, the starter's bridge can also persist a `Web3Principal` in the HTTP session's `SecurityContext`. Applications opt into Spring Security with their own `SecurityFilterChain`; the starter does not create one automatically. See the tutorial for a protected route and logout configuration.
 
-- It issues a single-use nonce.
-- It checks the domain, URI, chain and time window of the signed message.
-- It recovers the signer and stores the verified identity in `Web3Session`.
+Smart-contract wallets are verified on chain through ERC-1271, including counterfactual wallets through ERC-6492, when the corresponding chain RPC is configured.
 
-Smart-contract wallets work too. Safe and Coinbase Smart Wallet are checked
-on chain through ERC-1271. Wallets that haven't been deployed yet are checked
-through ERC-6492. Our test suite checks the message parser against messages
-produced by the reference `siwe` and `ethers` libraries.
-
-## 3. Gate a view on token ownership
+## Gate a view on token ownership
 
 ```java
 @Route("members")
@@ -51,55 +35,35 @@ produced by the reference `siwe` and `ethers` libraries.
 public class MembersView extends VerticalLayout { }
 ```
 
-That's the whole integration:
+The route guard uses the SIWE-verified address in `Web3Session`. A visitor without a session is sent to the configured login route with a `continue` parameter. An insufficient balance gives a 403 page; an unavailable RPC gives a 503 page.
 
-- Visitors who aren't signed in are sent to your login view and come back
-  automatically afterwards.
-- Visitors without enough balance get a 403 page.
-- If the RPC node is down, visitors get a 503 page rather than a stack trace.
-
-The check always uses the server-verified SIWE address. For NFTs, use the
-contract address with `decimals = 0`.
-
-## 4. Take a USDC payment
+## Accept a stablecoin payment
 
 ```java
-StablecoinCheckout checkout = new StablecoinCheckout(chains, ledger, treasury, new BigDecimal("25.00"))
+StablecoinCheckout checkout = new StablecoinCheckout(
+        chains, ledger, treasury, new BigDecimal("25.00"))
         .setOrderId(order.id());
-checkout.addPaymentConfirmedListener(e -> orders.markPaid(order.id(), e.getResult().txHash()));
+checkout.addPaymentConfirmedListener(event ->
+        orders.markPaid(order.id(), event.getResult().txHash()));
 ```
 
-The component asks the wallet to sign a USDC `transfer`. It doesn't trust the
-transaction hash the wallet returns. Instead it reads the receipt from the
-chain, adds up the Transfer logs sent to your address, waits for the
-confirmations you set, and claims the transaction in a ledger, so the same
-transfer can't pay for two orders. USDC addresses for 11 networks, including
-Ethereum, Base, Arbitrum, OP, Polygon and Avalanche, plus their testnets, are
-built in.
+The component asks the selected wallet to submit a token transfer, then checks the on-chain receipt and Transfer logs, waits for configured confirmations and claims the transaction in a payment ledger. A transaction hash reported by the browser alone is not treated as payment confirmation.
 
-## How it was tested
+## Test without a browser wallet
 
-- **Real mainnet transactions**: the payment verifier was tested against real
-  mainnet USDC transactions. One was a simple transfer. The other was an
-  85-log DEX swap.
-- **End-to-end in a browser**: the whole flow was run in a browser against a
-  local chain:
-  1. Wallet picker.
-  2. SIWE sign-in.
-  3. Gate redirect and return.
-  4. The 403 page.
-  5. A checkout through to "Paid".
+The `web3-vaadin-test` artifact provides `TestWallet`, `TestNonceStore`, and `SiweTestSupport`. These helpers create signed inputs for the real SIWE verifier; they do not bypass verification. `PaymentTestSupport` provides a local JSON-RPC fixture for exercising payment verification.
 
-## Try it
+## Run the demo
 
-```xml
-<dependency>
-    <groupId>com.wontlost</groupId>
-    <artifactId>web3-vaadin-server</artifactId>
-    <version>1.0.0</version>
-</dependency>
+Install Foundry, start Anvil and run the local demo profile:
+
+```bash
+anvil
+mvn spring-boot:run -pl web3-vaadin-demo -Dspring-boot.run.profiles=demo
 ```
 
-The repository includes a Spring Boot demo with every feature wired up on the
-Sepolia testnet. Next on the roadmap is WalletConnect for mobile wallets. Feedback and issues are
-welcome.
+The Development wallet is only for a local chain. Anvil's default accounts and private keys are public and must never hold valuable assets. A plain Anvil chain with ID 31337 cannot resolve the built-in Sepolia token entries. For local checkout, run `anvil --fork-url "$SEPOLIA_RPC_URL" --chain-id 11155111`, disable the Development wallet and point `web3.chains.11155111.rpc-url` to `http://127.0.0.1:8545`. Use a wallet account holding Sepolia test tokens and configure that wallet to the local RPC. Transactions stay on the local fork, and the demo reports payment only after receipt verification.
+
+For real-wallet testing, disable the demo profile, use a Sepolia wallet, configure `web3.demo.recipient`, and obtain test tokens from the [Circle faucet](https://faucet.circle.com/) or [Paxos faucet](https://faucet.paxos.com/).
+
+The optional `web3-vaadin-walletconnect` module is already available for mobile wallets. It adds desktop QR and mobile deep-link flows to the same EIP-6963 wallet picker when configured with a Reown project ID.

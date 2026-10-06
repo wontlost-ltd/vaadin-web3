@@ -9,11 +9,11 @@ import com.vaadin.flow.component.dependency.StyleSheet;
 import com.vaadin.flow.theme.lumo.Lumo;
 
 /**
- * Demo application for the Vaadin web3 add-on.
+ * Vaadin Web3 插件示例应用。
  * <p>
  * Run with {@code mvn spring-boot:run -pl web3-vaadin-demo} and open
- * {@code http://localhost:8080} in a browser with a wallet extension
- * (e.g. MetaMask) installed.
+ * {@code http://localhost:8080}; the demo profile also provides a local
+ * Development wallet when Anvil is running.
  */
 @Push
 @StyleSheet(Lumo.STYLESHEET)

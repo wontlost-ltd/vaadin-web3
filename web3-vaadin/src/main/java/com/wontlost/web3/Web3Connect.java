@@ -5,8 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.ClientCallable;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
@@ -15,8 +20,10 @@ import com.vaadin.flow.component.DomEvent;
 import com.vaadin.flow.component.EventData;
 import com.vaadin.flow.component.Synchronize;
 import com.vaadin.flow.component.Tag;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
+import com.vaadin.flow.server.VaadinService;
 import com.vaadin.flow.shared.Registration;
 
 import tools.jackson.databind.ObjectMapper;
@@ -46,13 +53,133 @@ public class Web3Connect extends Component {
 
     private static final String ERROR_MARKER = "WEB3_ERROR:";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    // 签名类方法 + 只读节点方法（与 DevWallet 的只读透传一致）；其余一律拒绝
+    private static final Set<String> SERVER_WALLET_METHODS = Set.of("personal_sign", "eth_signTypedData_v4",
+            "eth_sendTransaction", "wallet_switchEthereumChain", "wallet_addEthereumChain",
+            "eth_blockNumber", "eth_call", "eth_estimateGas", "eth_feeHistory", "eth_gasPrice", "eth_getBalance", "eth_getBlockByHash", "eth_getBlockByNumber", "eth_getCode", "eth_getLogs", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionCount", "eth_getTransactionReceipt", "eth_maxPriorityFeePerGas", "net_version");
+    static final int MAX_PENDING_SERVER_WALLET_REQUESTS = 8;
     private transient List<CompletableFuture<String>> pendingFutures;
+    private transient Map<String, CompletableFuture<String>> serverWalletRequests;
+    private transient ServerWallet serverWallet;
     private Web3ConnectI18n i18n = new Web3ConnectI18n();
 
     /**
      * Creates a wallet connector rendered as a connect/disconnect button.
      */
     public Web3Connect() {
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+        VaadinService service = VaadinService.getCurrent();
+        serverWallet = ServerWallet.find(service == null ? null : service.getContext());
+        if (serverWallet == null) {
+            getElement().setProperty("serverWallet", "");
+            return;
+        }
+        ObjectNode info = MAPPER.createObjectNode();
+        info.put("uuid", java.util.UUID.randomUUID().toString());
+        info.put("name", serverWallet.name());
+        info.put("rdns", serverWallet.rdns());
+        info.put("chainId", serverWallet.chainId());
+        info.set("accounts", MAPPER.valueToTree(serverWallet.accounts()));
+        getElement().setProperty("serverWallet", info.toString());
+        getElement().setProperty("developmentWalletWarning", i18n.getDevelopmentWalletWarning());
+    }
+
+    /** Forwards a browser wallet request to the registered server wallet. */
+    @ClientCallable
+    public void serverWalletRequest(String requestId, String method, String paramsJson) {
+        VaadinService service = VaadinService.getCurrent();
+        ServerWallet wallet = ServerWallet.find(service == null ? null : service.getContext());
+        if (requestId == null || requestId.isBlank() || requestId.length() > 128) {
+            rejectServerWalletRequest(requestId, 4100, "Server wallet is unavailable");
+            return;
+        }
+        Map<String, CompletableFuture<String>> pending = serverWalletRequests();
+        // 每个组件最多 MAX_PENDING_SERVER_WALLET_REQUESTS 个未完成请求，防止浏览器堆积请求占用内存与 RPC。
+        // @ClientCallable 在 UI 会话锁内串行执行，因此"检查容量再插入"不会与同一组件的其他调用交错
+        if (pending.size() >= MAX_PENDING_SERVER_WALLET_REQUESTS) {
+            rejectServerWalletRequest(requestId, -32005, "Too many pending server wallet requests");
+            return;
+        }
+        CompletableFuture<String> result = new CompletableFuture<>();
+        if (pending.putIfAbsent(requestId, result) != null) return;
+        // 超时与异步钱包会在其他线程完成：回写浏览器必须持有会话锁，否则经 ui.access 排队
+        UI ui = UI.getCurrent();
+        result.orTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .whenComplete((json, error) -> {
+                    if (!pending.remove(requestId, result)) return;
+                    if (error == null) {
+                        deliver(ui, () -> getElement().executeJs("this._resolveServerWalletRequest($0, $1)", requestId,
+                                json == null ? "null" : json));
+                    } else {
+                        Throwable cause = error instanceof CompletionException && error.getCause() != null
+                                ? error.getCause() : error;
+                        int code = serverWalletErrorCode(cause);
+                        String message = cause.getMessage() == null ? "Server wallet request failed" : cause.getMessage();
+                        deliver(ui, () -> getElement().executeJs("this._rejectServerWalletRequest($0, $1, $2)",
+                                requestId, code, message));
+                    }
+                });
+        CompletableFuture<String> walletResult = requestServerWallet(wallet, method, paramsJson);
+        walletResult.whenComplete((json, error) -> {
+                if (error == null) result.complete(json);
+                else result.completeExceptionally(error);
+            });
+    }
+
+    /**
+     * 在请求线程（已持有会话锁）中直接执行；在其他线程中经 {@code ui.access} 排队。
+     * 异步完成的服务端钱包需要 {@code @Push} 或轮询，结果才能在下一次往返之前送达浏览器。
+     */
+    static void deliver(UI ui, Runnable command) {
+        if (ui == null) return;
+        if (ui.getSession() != null && ui.getSession().hasLock()) command.run();
+        else ui.access(command::run);
+    }
+
+    static CompletableFuture<String> requestServerWallet(ServerWallet wallet, String method, String paramsJson) {
+        ServerWallet.ServerWalletException invalid = validateServerWalletRequest(wallet, method, paramsJson);
+        if (invalid != null) return CompletableFuture.failedFuture(invalid);
+        try {
+            return wallet.request(method, paramsJson);
+        } catch (RuntimeException exception) {
+            return CompletableFuture.failedFuture(exception);
+        }
+    }
+
+    static ServerWallet.ServerWalletException validateServerWalletRequest(
+            ServerWallet wallet, String method, String paramsJson) {
+        if (wallet == null) return new ServerWallet.ServerWalletException(4100, "Server wallet is unavailable");
+        if (method == null || !SERVER_WALLET_METHODS.contains(method)) {
+            return new ServerWallet.ServerWalletException(4200, "Server wallet method is not allowed");
+        }
+        if (paramsJson == null || paramsJson.length() > 65536) {
+            return new ServerWallet.ServerWalletException(-32600, "Invalid server wallet parameters");
+        }
+        try {
+            if (!MAPPER.readTree(paramsJson).isArray()) {
+                return new ServerWallet.ServerWalletException(-32600, "Server wallet parameters must be an array");
+            }
+        } catch (RuntimeException exception) {
+            return new ServerWallet.ServerWalletException(-32600, "Invalid server wallet parameters");
+        }
+        return null;
+    }
+
+    static int serverWalletErrorCode(Throwable error) {
+        return error instanceof ServerWallet.ServerWalletException walletError ? walletError.getCode() : -32603;
+    }
+
+    private Map<String, CompletableFuture<String>> serverWalletRequests() {
+        if (serverWalletRequests == null) serverWalletRequests = new ConcurrentHashMap<>();
+        return serverWalletRequests;
+    }
+
+    private void rejectServerWalletRequest(String requestId, int code, String message) {
+        if (requestId != null) getElement().executeJs("this._rejectServerWalletRequest($0, $1, $2)", requestId, code, message);
     }
 
     /**
@@ -91,6 +218,18 @@ public class Web3Connect extends Component {
     @Synchronize(property = "providerAvailable", value = "web3-provider-detected")
     public boolean isProviderAvailable() {
         return getElement().getProperty("providerAvailable", false);
+    }
+
+    /**
+     * Returns whether the given wallet is the application's registered {@link ServerWallet}, for example the development
+     * wallet. Applications that render their own wallet list should show
+     * {@link Web3ConnectI18n#getDevelopmentWalletWarning()} next to such a wallet.
+     */
+    public boolean isServerWallet(WalletInfo info) {
+        if (info == null) return false;
+        VaadinService service = VaadinService.getCurrent();
+        ServerWallet wallet = ServerWallet.find(service == null ? null : service.getContext());
+        return wallet != null && wallet.rdns().equals(info.rdns());
     }
 
     /** Returns the EIP-6963 wallets currently discovered by the browser. */
@@ -149,6 +288,7 @@ public class Web3Connect extends Component {
         getElement().setProperty("pickerTitle", value.getPickerTitle());
         getElement().setProperty("noWalletText", value.getNoWallets());
         getElement().setProperty("closeLabel", value.getClose());
+        getElement().setProperty("developmentWalletWarning", value.getDevelopmentWalletWarning());
     }
 
     /** Returns this connector's localized labels. */
@@ -363,6 +503,12 @@ public class Web3Connect extends Component {
 
     @Override
     protected void onDetach(DetachEvent detachEvent) {
+        if (serverWalletRequests != null) {
+            serverWalletRequests.values().forEach(future -> future.completeExceptionally(
+                    new ServerWallet.ServerWalletException(4900, "Server wallet disconnected")));
+            serverWalletRequests.clear();
+        }
+        serverWallet = null;
         completePendingFuturesOnDetach();
         super.onDetach(detachEvent);
     }

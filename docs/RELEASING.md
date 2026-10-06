@@ -1,9 +1,9 @@
 # Releasing
 
-Four artifacts are published to Maven Central: `com.wontlost:web3-vaadin`,
-`com.wontlost:web3-vaadin-walletconnect`, `com.wontlost:web3-vaadin-server`, and
-`com.wontlost:web3-vaadin-onramp`. The parent POM and the demo are never
-deployed.
+Six artifacts are published to Maven Central: `com.wontlost:web3-vaadin`,
+`com.wontlost:web3-vaadin-walletconnect`, `com.wontlost:web3-vaadin-server`,
+`com.wontlost:web3-vaadin-onramp`, `com.wontlost:web3-vaadin-spring-boot-starter`,
+and `com.wontlost:web3-vaadin-test`. The parent POM and the demo are never deployed.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ deployed.
    anything:
 
    ```bash
-   mvn -B -Prelease -Dgpg.skip verify -pl web3-vaadin,web3-vaadin-walletconnect,web3-vaadin-server,web3-vaadin-onramp -am
+   mvn -B -Prelease -Dgpg.skip verify -pl web3-vaadin,web3-vaadin-walletconnect,web3-vaadin-server,web3-vaadin-onramp,web3-vaadin-spring-boot-starter,web3-vaadin-test -am
    ```
 
 3. Set the version, move the `Unreleased` heading in `CHANGELOG.md` to today's
@@ -27,10 +27,10 @@ deployed.
    mvn versions:set -DnewVersion=1.0.0 -DgenerateBackupPoms=false
    ```
 
-4. Deploy the four published modules:
+4. Deploy the six published modules:
 
    ```bash
-   mvn -B -Prelease deploy -pl web3-vaadin,web3-vaadin-walletconnect,web3-vaadin-server,web3-vaadin-onramp -am
+   mvn -B -Prelease deploy -pl web3-vaadin,web3-vaadin-walletconnect,web3-vaadin-server,web3-vaadin-onramp,web3-vaadin-spring-boot-starter,web3-vaadin-test -am
    ```
 
 5. Tag the release and push the tag (`git tag v1.0.0 && git push origin v1.0.0`),

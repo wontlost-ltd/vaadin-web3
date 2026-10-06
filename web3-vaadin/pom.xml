@@ -64,6 +64,13 @@
             <artifactId>vaadin-core</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- VaadinSession 实现了 servlet 接口；provided 不会传递给使用者（任何 Vaadin 应用都自带 servlet 容器） -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.1.0</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

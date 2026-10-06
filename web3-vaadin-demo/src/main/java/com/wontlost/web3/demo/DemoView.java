@@ -8,6 +8,7 @@ import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -17,6 +18,7 @@ import com.vaadin.flow.component.textfield.BigDecimalField;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.auth.AnonymousAllowed;
 
 import com.wontlost.web3.Chains;
 import com.wontlost.web3.Web3Address;
@@ -29,6 +31,7 @@ import com.wontlost.web3.Web3Utils;
  * switching.
  */
 @Route(value = "", layout = MainLayout.class)
+@AnonymousAllowed
 public class DemoView extends VerticalLayout {
 
     private final Web3Connect wallet = new Web3Connect();
@@ -43,8 +46,8 @@ public class DemoView extends VerticalLayout {
         getStyle().set("margin", "0 auto");
 
         add(new H1("Vaadin Web3 Add-on Demo"),
-                new Paragraph("Requires a browser wallet extension such as MetaMask. "
-                        + "Use a test network (e.g. Sepolia) when trying transactions."));
+                new Paragraph("Use a browser wallet extension such as MetaMask on a test network (e.g. Sepolia), "
+                        + "or run the 'demo' profile with Anvil to use the built-in development wallet."));
 
         // 默认隐藏，只有浏览器明确报告没有钱包时才显示，避免已装钱包的用户每次加载都闪现提示
         providerPrompt.setVisible(false);
@@ -102,6 +105,12 @@ public class DemoView extends VerticalLayout {
             }
             row.add(new Paragraph(info.name()), new Button("Connect with " + info.name(),
                     event -> wallet.connect(info.rdns())));
+            if (wallet.isServerWallet(info)) {
+                // 开发钱包：醒目提示，文案与组件 i18n 一致
+                Span warning = new Span(wallet.getI18n().getDevelopmentWalletWarning());
+                warning.getStyle().set("color", "var(--lumo-error-text-color)").set("font-weight", "700");
+                row.add(warning);
+            }
             walletList.add(row);
         }
     }

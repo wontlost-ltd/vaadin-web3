@@ -1,5 +1,6 @@
 package com.wontlost.web3.siwe;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -188,5 +189,13 @@ class SiweLoginTest {
         var method = SiweLogin.class.getDeclaredMethod(name);
         method.setAccessible(true);
         return method.invoke(target);
+    }
+
+    @Test void maxAgeMustBePositive() {
+        SiweLogin login = new SiweLogin(new InMemoryNonceStore());
+        assertThrows(IllegalArgumentException.class, () -> login.setMaxAge(java.time.Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () -> login.setMaxAge(java.time.Duration.ofSeconds(-1)));
+        assertDoesNotThrow(() -> login.setMaxAge(null));
+        assertDoesNotThrow(() -> login.setMaxAge(java.time.Duration.ofMinutes(5)));
     }
 }

@@ -1,0 +1,13 @@
+{
+  "properties": [
+    {
+      "name": "web3.rpc",
+      "type": "java.util.Map<java.lang.Long,java.lang.String>",
+      "description": "Legacy RPC URLs keyed by chain ID. Use web3.chains.<id>.rpc-url instead.",
+      "deprecation": {
+        "level": "warning",
+        "replacement": "web3.chains"
+      }
+    }
+  ]
+}
