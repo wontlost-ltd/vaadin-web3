@@ -3,8 +3,12 @@ package com.wontlost.web3.dev;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.security.SecureRandom;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 
 import org.web3j.crypto.ECKeyPair;
@@ -26,6 +30,8 @@ import tools.jackson.databind.node.ObjectNode;
 /** A server-signed development wallet for local, valueless chains. */
 public final class DevWallet implements ServerWallet {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final int MAX_BATCHES = 256;
+    private static final SecureRandom RANDOM = new SecureRandom();
     /** 只读方法透传到配置的节点，与浏览器钱包行为一致；任何签名类方法都不在此列。 */
     private static final java.util.Set<String> READ_ONLY_METHODS = java.util.Set.of(
             "eth_blockNumber",
@@ -49,6 +55,7 @@ public final class DevWallet implements ServerWallet {
     private final long chain;
     private final String address;
     private final EthRpcClient rpc;
+    private final Map<String, CallsBatch> batches = new LinkedHashMap<>();
 
     /** Creates a wallet. The private key is retained only on this server. */
     public DevWallet(String privateKeyHex, long chainId, EthRpcClient rpcOrNull) {
@@ -86,6 +93,10 @@ public final class DevWallet implements ServerWallet {
                 case "personal_sign" -> personalSign(paramsJson);
                 case "eth_signTypedData_v4" -> typedDataSign(paramsJson);
                 case "eth_sendTransaction" -> sendTransaction(paramsJson);
+                case "wallet_getCapabilities" -> getCapabilities(paramsJson);
+                case "wallet_sendCalls" -> sendCalls(paramsJson);
+                case "wallet_getCallsStatus" -> getCallsStatus(paramsJson);
+                case "wallet_showCallsStatus" -> showCallsStatus(paramsJson);
                 case "wallet_switchEthereumChain" -> switchChain(paramsJson);
                 default -> readOnly(method, paramsJson);
             };
@@ -141,6 +152,167 @@ public final class DevWallet implements ServerWallet {
 
         byte[] raw = signTransaction(tx, nonce, gas, to, value, data);
         return rpc.sendRawTransaction(Numeric.toHexString(raw));
+    }
+
+    private Object getCapabilities(String paramsJson) throws Exception {
+        JsonNode params = MAPPER.readTree(paramsJson);
+        if (!params.isArray() || params.size() < 1 || params.size() > 2) throw new IllegalArgumentException("invalid params");
+        requireAddress(params.get(0).asString());
+        JsonNode chainIds = params.get(1);
+        if (chainIds != null && !chainIds.isNull() && !chainIds.isArray()) throw new IllegalArgumentException("invalid chainIds");
+        if (chainIds != null && chainIds.isArray()) {
+            boolean requested = false;
+            for (JsonNode id : chainIds) {
+                if (!id.isString()) throw new IllegalArgumentException("invalid chainId");
+                if (chainId().equalsIgnoreCase(id.asString())) requested = true;
+            }
+            if (!requested) return MAPPER.createObjectNode();
+        }
+        ObjectNode atomic = MAPPER.createObjectNode().put("status", "unsupported");
+        ObjectNode capabilities = MAPPER.createObjectNode();
+        capabilities.set("atomic", atomic);
+        ObjectNode result = MAPPER.createObjectNode();
+        result.set(chainId(), capabilities);
+        return result;
+    }
+
+    /** 批次只保存在内存中，服务重启后状态会丢失；此能力仅用于本地开发和测试。 */
+    private synchronized Object sendCalls(String paramsJson) throws Exception {
+        JsonNode params = params(paramsJson, 1);
+        JsonNode request = params.get(0);
+        if (!"2.0.0".equals(text(request, "version"))) throw new ServerWalletException(-32602, "unsupported calls version");
+        String requestedChain = text(request, "chainId");
+        if (requestedChain == null || !requestedChain.matches("0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)")
+                || !chainId().equalsIgnoreCase(requestedChain))
+            throw new ServerWalletException(5710, "unsupported chain id");
+        if (request.has("from")) requireAddress(text(request, "from"));
+        JsonNode calls = request.path("calls");
+        if (!calls.isArray() || calls.isEmpty()) throw new IllegalArgumentException("calls must not be empty");
+        for (JsonNode call : calls) validateCall(call);
+        rejectRequiredCapabilities(request.path("capabilities"));
+        for (JsonNode call : calls) rejectRequiredCapabilities(call.path("capabilities"));
+        if (!request.path("atomicRequired").isBoolean()) throw new IllegalArgumentException("atomicRequired must be boolean");
+        if (request.path("atomicRequired").asBoolean()) throw new ServerWalletException(5760, "atomic calls are not supported");
+        if (rpc == null) throw new ServerWalletException(4200, "no RPC configured");
+
+        String id = request.has("id") ? text(request, "id") : newBatchId();
+        if (id == null || id.isEmpty()) throw new IllegalArgumentException("invalid calls id");
+        if (request.has("id") && batches.containsKey(id)) throw new ServerWalletException(5720, "duplicate calls id");
+        while (!request.has("id") && batches.containsKey(id)) id = newBatchId();
+        CallsBatch batch = new CallsBatch(id, chainId());
+        batches.put(id, batch);
+        while (batches.size() > MAX_BATCHES) batches.remove(batches.keySet().iterator().next());
+
+        for (JsonNode call : calls) {
+            try {
+                ObjectNode transaction = MAPPER.createObjectNode().put("from", address);
+                if (call.has("to")) transaction.put("to", call.path("to").asString());
+                if (call.has("data")) transaction.put("data", call.path("data").asString());
+                if (call.has("value")) transaction.put("value", call.path("value").asString());
+                batch.hashes.add(sendTransaction(MAPPER.writeValueAsString(List.of(transaction))));
+            } catch (Exception exception) {
+                batch.failure = exception.getMessage() == null ? "transaction send failed" : exception.getMessage();
+                break;
+            }
+        }
+        ObjectNode response = MAPPER.createObjectNode().put("id", id);
+        return response;
+    }
+
+    private synchronized Object getCallsStatus(String paramsJson) throws Exception {
+        JsonNode params = params(paramsJson, 1);
+        CallsBatch batch = findBatch(params.get(0).asString());
+        ArrayList<JsonNode> receipts = new ArrayList<>();
+        int reverted = 0;
+        for (String hash : batch.hashes) {
+            JsonNode receipt = rpc.request("eth_getTransactionReceipt", List.of(hash));
+            if (receipt.isNull()) continue;
+            receipts.add(receipt);
+            if (!"0x1".equalsIgnoreCase(receipt.path("status").asString())) reverted++;
+        }
+        boolean complete = receipts.size() == batch.hashes.size();
+        int status;
+        // 400 仅当一笔都未发出：已发出但尚未上链的交易仍可能上链，此时应为 100（pending），上链后为 600
+        if (batch.hashes.isEmpty() && batch.failure != null) status = 400;
+        else if (!complete) status = 100;
+        else if (batch.failure != null) status = 600;
+        else if (reverted == receipts.size()) status = 500;
+        else if (reverted > 0) status = 600;
+        else status = 200;
+
+        ObjectNode result = MAPPER.createObjectNode().put("version", "2.0.0").put("id", batch.id)
+                .put("chainId", batch.chainId).put("status", status).put("atomic", false);
+        var receiptArray = result.putArray("receipts");
+        for (JsonNode receipt : receipts) {
+            ObjectNode output = MAPPER.createObjectNode();
+            var logs = output.putArray("logs");
+            for (JsonNode log : receipt.path("logs")) {
+                ObjectNode entry = MAPPER.createObjectNode();
+                entry.set("address", log.path("address"));
+                entry.set("data", log.path("data"));
+                entry.set("topics", log.path("topics"));
+                logs.add(entry);
+            }
+            output.set("status", receipt.path("status"));
+            output.set("blockHash", receipt.path("blockHash"));
+            output.set("blockNumber", receipt.path("blockNumber"));
+            output.set("gasUsed", receipt.path("gasUsed"));
+            output.set("transactionHash", receipt.path("transactionHash"));
+            receiptArray.add(output);
+        }
+        return result;
+    }
+
+    private synchronized Object showCallsStatus(String paramsJson) throws Exception {
+        JsonNode params = params(paramsJson, 1);
+        findBatch(params.get(0).asString());
+        return null;
+    }
+
+    private CallsBatch findBatch(String id) {
+        CallsBatch batch = batches.get(id);
+        if (batch == null) throw new ServerWalletException(5730, "unknown calls id");
+        return batch;
+    }
+
+    private static void validateCall(JsonNode call) {
+        if (!call.isObject()) throw new IllegalArgumentException("invalid call");
+        if (call.has("to") && (!call.path("to").isString() || !call.path("to").asString().matches("0x[0-9a-fA-F]{40}")))
+            throw new IllegalArgumentException("invalid call recipient");
+        if (call.has("data") && (!call.path("data").isString() || !call.path("data").asString().matches("0x(?:[0-9a-fA-F]{2})*")))
+            throw new IllegalArgumentException("invalid call data");
+        if (call.has("value") && (!call.path("value").isString() || !call.path("value").asString().matches("0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)")))
+            throw new IllegalArgumentException("invalid call value");
+    }
+
+    private static void rejectRequiredCapabilities(JsonNode capabilities) {
+        if (!capabilities.isObject()) return;
+        capabilities.properties().forEach(entry -> {
+            if (!entry.getValue().path("optional").asBoolean(false))
+                throw new ServerWalletException(5700, "unsupported capability: " + entry.getKey());
+        });
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isString() ? value.asString() : null;
+    }
+
+    private static String newBatchId() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return "0x" + HexFormat.of().formatHex(bytes);
+    }
+
+    private static final class CallsBatch {
+        private final String id;
+        private final String chainId;
+        private final List<String> hashes = new ArrayList<>();
+        private String failure;
+        private CallsBatch(String id, String chainId) {
+            this.id = id;
+            this.chainId = chainId;
+        }
     }
 
     private byte[] signTransaction(JsonNode tx, BigInteger nonce, BigInteger gas, String to, BigInteger value, String data) {
