@@ -98,7 +98,8 @@ public class Web3Connect extends Component {
             return;
         }
         Map<String, CompletableFuture<String>> pending = serverWalletRequests();
-        // 每个组件最多 MAX_PENDING_SERVER_WALLET_REQUESTS 个未完成请求，防止浏览器堆积请求占用内存与 RPC
+        // 每个组件最多 MAX_PENDING_SERVER_WALLET_REQUESTS 个未完成请求，防止浏览器堆积请求占用内存与 RPC。
+        // @ClientCallable 在 UI 会话锁内串行执行，因此"检查容量再插入"不会与同一组件的其他调用交错
         if (pending.size() >= MAX_PENDING_SERVER_WALLET_REQUESTS) {
             rejectServerWalletRequest(requestId, -32005, "Too many pending server wallet requests");
             return;

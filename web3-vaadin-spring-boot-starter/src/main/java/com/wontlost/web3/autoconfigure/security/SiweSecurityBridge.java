@@ -18,7 +18,16 @@ import com.vaadin.flow.shared.Registration;
 import com.wontlost.web3.siwe.SiweLogin;
 import com.wontlost.web3.siwe.Web3Session;
 
-/** Bridges verified SIWE events into a persisted Spring Security context. */
+/**
+ * Bridges verified SIWE events into a persisted Spring Security context.
+ * <p>
+ * Sign-in requires a servlet request and response (Vaadin's default {@code WEBSOCKET_XHR} or long-polling transport);
+ * without them the Web3 session is rolled back. Sign-out without a servlet request (a pure WebSocket push callback)
+ * clears the context through the Vaadin-wrapped HTTP session under the default
+ * {@link HttpSessionSecurityContextRepository#SPRING_SECURITY_CONTEXT_KEY}; applications using a custom
+ * {@link SecurityContextRepository} that stores the context elsewhere must sign out through an HTTP request, for
+ * example Spring Security's {@code /logout} with {@link Web3LogoutHandler}.
+ */
 public final class SiweSecurityBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(SiweSecurityBridge.class);
     private final SecurityContextRepository repository;
