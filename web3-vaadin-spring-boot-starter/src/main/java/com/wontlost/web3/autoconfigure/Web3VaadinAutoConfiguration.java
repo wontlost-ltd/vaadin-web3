@@ -1,7 +1,9 @@
 package com.wontlost.web3.autoconfigure;
 
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -14,11 +16,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
 
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinServiceInitListener;
 import com.wontlost.web3.ServerWallet;
 import com.wontlost.web3.chain.ChainRegistry;
+import com.wontlost.web3.chain.EthRpcClient;
+import com.wontlost.web3.chain.FailoverJsonRpcTransport;
+import com.wontlost.web3.chain.HttpJsonRpcTransport;
 import com.wontlost.web3.dev.DevWallet;
 import com.wontlost.web3.monitor.PaymentMonitorClient;
 import com.wontlost.web3.pay.InMemoryPaymentLedger;
@@ -35,35 +42,92 @@ import com.wontlost.web3.siwe.SiweLogin;
         "com.wontlost.web3.pro.cluster.Web3ClusterAutoConfiguration",
         "com.wontlost.web3.pro.payments.Web3PaymentsAutoConfiguration"
 })
-@EnableConfigurationProperties(Web3Properties.class)
+@EnableConfigurationProperties({Web3Properties.class, Web3RpcProperties.class})
 public class Web3VaadinAutoConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(Web3VaadinAutoConfiguration.class);
     private static final AtomicBoolean LEGACY_RPC_WARNED = new AtomicBoolean();
 
     @Bean
     @ConditionalOnMissingBean
-    ChainRegistry web3ChainRegistry(Web3Properties properties) {
+    ChainRegistry web3ChainRegistry(Web3Properties properties, Web3RpcProperties rpcProperties,
+            RpcTransportLifecycle lifecycle, Environment environment) {
         ChainRegistry registry = new ChainRegistry();
         Map<Long, Web3Properties.Chain> modern = properties.getChains();
-        properties.getRpc().forEach((id, url) -> {
+        modern.forEach((id, chain) -> {
+            if (chain != null && chain.getRpcUrls() != null && !chain.getRpcUrls().isEmpty()
+                    && chain.getRpcUrl() != null && !chain.getRpcUrl().isBlank()
+                    && LEGACY_RPC_WARNED.compareAndSet(false, true)) {
+                LOGGER.warn("Both web3.chains.{}.rpc-urls and web3.chains.{}.rpc-url are set; rpc-urls takes precedence", id, id);
+            }
+        });
+        Map<Long, String> legacy = legacyRpc(environment);
+        legacy.forEach((id, url) -> {
             if (LEGACY_RPC_WARNED.compareAndSet(false, true)) {
                 if (modern.containsKey(id)) {
-                    LOGGER.warn("Both web3.chains.{}.rpc-url and deprecated web3.rpc.{} are set; the new property takes precedence",
+                    LOGGER.warn("Both web3.chains.{} RPC properties and deprecated web3.rpc.{} are set; the new property takes precedence",
                             id, id);
                 } else {
                     LOGGER.warn("web3.rpc.<id> is deprecated; use web3.chains.<id>.rpc-url");
                 }
             }
         });
-        modern.forEach((id, chain) -> addChain(registry, id, chain == null ? null : chain.getRpcUrl()));
-        properties.getRpc().forEach((id, url) -> {
-            if (!modern.containsKey(id)) addChain(registry, id, url);
+        modern.forEach((id, chain) -> {
+            if (chain == null) return;
+            List<String> urls = chain.getRpcUrls() == null ? List.of() : chain.getRpcUrls().stream()
+                    .filter(url -> url != null && !url.isBlank()).toList();
+            if (!urls.isEmpty()) addChain(registry, id, urls, rpcProperties, lifecycle);
+            else addChain(registry, id, chain.getRpcUrl() == null ? List.of() : List.of(chain.getRpcUrl()), rpcProperties, lifecycle);
+        });
+        legacy.forEach((id, url) -> {
+            if (!modern.containsKey(id)) addChain(registry, id, url == null ? List.of() : List.of(url), rpcProperties, lifecycle);
         });
         return registry;
     }
 
-    private static void addChain(ChainRegistry registry, long chainId, String url) {
-        if (url != null && !url.isBlank()) registry.register(chainId, url);
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    RpcTransportLifecycle web3RpcTransportLifecycle(Web3RpcProperties properties) {
+        Duration timeout = positive(properties.getRequestTimeout(), Duration.ofSeconds(10));
+        return new RpcTransportLifecycle(HttpClient.newBuilder().connectTimeout(timeout).build());
+    }
+
+    private static void addChain(ChainRegistry registry, long chainId, List<String> urls,
+            Web3RpcProperties config, RpcTransportLifecycle lifecycle) {
+        if (urls.isEmpty()) return;
+        lifecycle.endpoints(chainId, urls);
+        Duration timeout = positive(config.getRequestTimeout(), Duration.ofSeconds(10));
+        List<FailoverJsonRpcTransport.Endpoint> endpoints = urls.stream().map(url ->
+                new FailoverJsonRpcTransport.Endpoint(url, new HttpJsonRpcTransport(url, timeout, lifecycleClient(lifecycle))))
+                .toList();
+        if (endpoints.size() == 1) {
+            // 单端点保持直接 HTTP 传输，避免引入故障切换状态机的额外开销。
+            registry.register(chainId, new EthRpcClient(lifecycle.track(chainId, endpoints.getFirst().transport())));
+            return;
+        }
+        var failover = new FailoverJsonRpcTransport(endpoints,
+                new FailoverJsonRpcTransport.Config(config.getFailureThreshold(),
+                        positive(config.getOpenDuration(), Duration.ofSeconds(15)), config.getLagTolerance()));
+        lifecycle.track(chainId, failover);
+        registry.register(chainId, new EthRpcClient(failover));
+    }
+
+    private static HttpClient lifecycleClient(RpcTransportLifecycle lifecycle) { return lifecycle.client(); }
+
+    private static Map<Long, String> legacyRpc(Environment environment) {
+        Map<Long, String> result = new java.util.LinkedHashMap<>();
+        if (environment instanceof ConfigurableEnvironment configurable) {
+            for (var source : configurable.getPropertySources()) {
+                if (!(source instanceof EnumerablePropertySource<?> enumerable)) continue;
+                for (String name : enumerable.getPropertyNames()) {
+                    if (!name.startsWith("web3.rpc.")) continue;
+                    String suffix = name.substring("web3.rpc.".length());
+                    if (!suffix.matches("\\d+")) continue;
+                    try { result.putIfAbsent(Long.parseLong(suffix), environment.getProperty(name)); }
+                    catch (NumberFormatException ignored) { }
+                }
+            }
+        }
+        return result;
     }
 
     @Bean
