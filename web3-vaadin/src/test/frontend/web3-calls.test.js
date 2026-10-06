@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCapabilities, getCallsStatus, sendCalls, showCallsStatus } from '../../main/resources/META-INF/frontend/web3-calls.js';
+import { getCapabilities, getCallsStatus, installCallsMethods, sendCalls, showCallsStatus } from '../../main/resources/META-INF/frontend/web3-calls.js';
 
 const componentFor = (request) => ({ account: '0xabc', provider: { request: vi.fn(request) } });
 
@@ -37,5 +37,15 @@ describe('EIP-5792 provider calls', () => {
   it('reports a missing provider as 4900 (disconnected), not -32601 which would look like an unsupported method', async () => {
     await expect(sendCalls({ provider: null, account: '0xabc' }, { chainId: 1, atomicRequired: false, calls: [{ to: '0x1' }] }))
       .rejects.toMatchObject({ code: 4900 });
+  });
+
+  it('bridged component methods resolve to JSON strings because Web3Connect.call() reads results as String', async () => {
+    const component = { account: '0xabc', _error() {}, provider: { request: async ({ method }) =>
+      method === 'wallet_sendCalls' ? { id: '0x01' } : { '0x7a69': { atomic: { status: 'unsupported' } } } } };
+    installCallsMethods(component);
+    const submitted = await component.sendCalls({ chainId: 31337, atomicRequired: false, calls: [{ to: '0x1' }] });
+    expect(typeof submitted).toBe('string');
+    expect(JSON.parse(submitted)).toEqual({ id: '0x01' });
+    expect(typeof await component.getCapabilities()).toBe('string');
   });
 });

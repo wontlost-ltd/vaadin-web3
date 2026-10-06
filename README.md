@@ -75,6 +75,7 @@ For a guided flow, see [the tutorial](docs/tutorial.md).
 | Feature | Module | Highlights |
 |---|---|---|
 | `Web3Connect` wallet button and API | `web3-vaadin` | Connect, restore, disconnect, sign, EIP-712, send transactions, switch or add chains |
+| EIP-5792 calls API | `web3-vaadin` | Capability lookup, batch submission and status; sequential fallback only when explicitly allowed |
 | Spring Boot auto-configuration | `web3-vaadin-spring-boot-starter` | Chain registry, nonce store, payment ledger and verifier defaults; optional SIWE Spring Security bridge |
 | Test wallets and fixtures | `web3-vaadin-test` | Signed SIWE messages, test nonce store and JSON-RPC payment fixture |
 | Multi-wallet discovery | `web3-vaadin` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
@@ -87,6 +88,9 @@ For a guided flow, see [the tutorial](docs/tutorial.md).
 | Hosted payment monitor service | `web3-vaadin-monitor` | Continuously verifies intents using configured RPC endpoints and retries signed merchant webhooks; executable Spring Boot service |
 | `FiatOnrampButton` | `web3-vaadin-onramp` | Hosted card purchases through MoonPay, Transak or Coinbase with registered contract matching and popup fallback |
 | `EthRpcClient`, `Erc20`, `Tokens` | `web3-vaadin-server` | Minimal JSON-RPC client, ERC-20 calls, built-in stablecoin contract addresses |
+| `NetworkIndicator` | `web3-vaadin` | Wallet chain status and optional switch/add-chain action |
+| `Balance`, `TransactionStatus`, `UiPolling` | `web3-vaadin-server` | Server RPC balances and transaction finality with coordinated UI polling |
+| Multi-endpoint RPC and health | `web3-vaadin-spring-boot-starter` | Ordered failover, circuit breakers and optional Actuator health indicator |
 
 The `web3-vaadin` component module has **no third-party dependencies**. The
 `web3-vaadin-server` module adds `org.web3j:crypto` for signature
@@ -401,6 +405,121 @@ Built-in USDC addresses come from Circle's documentation:
 | Polygon | 137 |
 | Polygon Amoy | 80002 |
 | Avalanche C-Chain | 43114 |
+
+### Reliable RPC (multiple endpoints)
+
+Configure endpoints in priority order with `web3.chains.<chainId>.rpc-urls`. The
+list takes precedence over `rpc-url`; `rpc-url` remains supported for one
+endpoint, as does the legacy `rpc.<chainId>` property. If multiple forms are
+configured, the starter logs a conflict warning.
+
+```properties
+web3.chains.11155111.rpc-urls[0]=https://primary.example/rpc
+web3.chains.11155111.rpc-urls[1]=https://backup.example/rpc
+web3.rpc.failure-threshold=3
+web3.rpc.open-duration=15s
+web3.rpc.request-timeout=10s
+web3.rpc.lag-tolerance=3
+```
+
+Defaults are three consecutive failures before a circuit opens, a 15 second
+open period, a 10 second HTTP request timeout and three blocks of tolerated
+head lag. Requests stay on the successful endpoint. I/O failures, timeouts,
+HTTP 408/429/5xx and recognized transient-node/rate-limit JSON-RPC errors can
+move a request to another endpoint. Deterministic errors such as reverts,
+insufficient funds, invalid requests and ordinary HTTP 4xx responses do not
+trigger endpoint switching. The primary endpoint is probed for recovery and
+becomes active at a subsequent request boundary.
+
+`EthRpcClient.pinned()` returns a view bound to one endpoint for an operation;
+it propagates endpoint failures without silently moving that operation to a
+different node. For block-height consistency, the client tracks the highest
+observed head and rejects an endpoint that trails it by more than
+`lag-tolerance`. A failed `eth_sendRawTransaction` can be retried against up to
+three configured endpoints using the same signed transaction bytes; it is
+never re-signed. An `already known`, `known transaction` or `nonce too low`
+response is treated as success only if the locally calculated transaction
+hash can be found on chain.
+
+When Spring Boot Actuator is present, the starter contributes a health
+indicator. Overall health is `DOWN` if any configured chain has all monitored
+endpoints open; it is `UP` when no chain meets that condition. No configured
+chain produces `UNKNOWN`.
+Health details redact credentials, query strings and long path keys. A
+single-endpoint chain has no circuit-breaker snapshot and is reported as
+`UNMONITORED`; this does not assert that the endpoint is healthy. The optional
+health configuration is linked to the `HealthIndicator` class and does not
+require Actuator in applications that omit it. The hosted payment monitor has
+its own RPC configuration; see the [monitor guide](docs/MONITOR.md).
+
+### Transaction status, balance and network components
+
+`NetworkIndicator` in `web3-vaadin` observes `Web3Connect` and can offer a
+switch to an expected chain. `Balance` and `TransactionStatus` are in
+`web3-vaadin-server`: they read through the Vaadin-context `ChainRegistry`,
+display a native or registered ERC-20 balance, and track receipts through the
+selected `Finality`. `TransactionStatus.track(hash)` starts at submission and
+reports pending, confirmation count, confirmed, failed receipt, or unknown
+after its timeout. Explorer links are shown only for registered chains.
+
+```java
+Web3Connect wallet = new Web3Connect();
+NetworkIndicator network = new NetworkIndicator(wallet);
+network.setExpectedChainId(11155111);
+Balance balance = new Balance().setChainId(11155111).setAddress(account)
+        .setRefreshInterval(Duration.ofSeconds(15)); // Native currency
+Balance usdc = new Balance().setChainId(11155111).setAddress(account).setToken("USDC");
+TransactionStatus transaction = new TransactionStatus().setChainId(11155111)
+        .setFinality(Finality.confirmations(1));
+transaction.track(transactionHash);
+```
+
+Both server components use `UiPolling` to coordinate one poll interval per
+Vaadin `UI`; the shortest active subscription controls that interval. They do
+not require `@Push`. Detaching a component releases its subscription, and
+`TransactionStatus` retries temporary RPC read failures while it remains
+attached.
+
+### Batch calls (EIP-5792)
+
+`Web3Connect.getCapabilities()` (or `getCapabilities(List<Long>)`),
+`sendCalls(CallsRequest, FallbackPolicy)`, `getCallsStatus(id)` and
+`showCallsStatus(id)` expose the wallet batch methods. Calls use `Call`,
+`CallsRequest`, `CallsSubmission`, `CallsStatus` and `WalletCapabilities` from
+`com.wontlost.web3.calls`.
+
+`CallsRequest` serializes the EIP-5792 version `2.0.0` and hexadecimal chain
+ID. `WalletCapabilities.atomicByChain()` maps each requested chain key to
+`SUPPORTED`, `READY`, `UNSUPPORTED` or `ABSENT`; an absent entry means no atomic
+capability was advertised.
+
+```java
+CallsRequest request = new CallsRequest(null, wallet.getAccount(), 11155111, false,
+        List.of(new Call(recipientA, null, valueA), new Call(recipientB, null, valueB)), null);
+wallet.getCapabilities(List.of(11155111L));
+wallet.sendCalls(request, FallbackPolicy.NEVER).thenAccept(submission ->
+        wallet.getCallsStatus(submission.id()));
+```
+
+`FallbackPolicy.NEVER` is the default safe choice. Only the explicit
+`ALLOW_NON_ATOMIC` option can fall back to sequential `eth_sendTransaction`
+calls, and only when the wallet reports method unsupported (`4200` or
+`-32601`) and `atomicRequired` is false. It is refused for atomic requests,
+user rejection (`4001`), authorization errors (`4100`), invalid parameters
+(`-32602`), EIP-5792 errors and a changed chain or account. `CallsSubmission`
+marks whether fallback occurred and carries transaction hashes and per-call
+errors.
+
+The Development wallet reports atomic batching as unsupported. It rejects an
+`atomicRequired` request with `5760`; non-atomic calls execute in order and
+`wallet_getCallsStatus` reports `100` pending, `200` confirmed, `500` fully
+reverted, or `600` partially reverted, with receipts and `atomic=false`.
+It uses `400` only when an off-chain failure occurs before any transaction is
+sent; status `400` is terminal and must not be retried. If a transaction was
+already sent before a later failure, the wallet keeps the batch pending until
+receipts arrive, then reports `600`. Unknown batch IDs return `5730`; duplicate
+application IDs return `5720`.
+Development-wallet batch records live only in memory and are lost on restart.
 
 ### Supported stablecoins
 

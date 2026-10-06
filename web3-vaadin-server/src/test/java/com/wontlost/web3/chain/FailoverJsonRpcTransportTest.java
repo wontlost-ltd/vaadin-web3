@@ -160,4 +160,31 @@ class FailoverJsonRpcTransportTest {
     }
     private static String result() { return "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"ok\"}"; }
     private static String error(int code, String message) { return "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":" + code + ",\"message\":" + JSON.writeValueAsString(message) + "}}"; }
+
+    @Test void pinnedViewsFailOverAcrossOperationsWhenThePrimaryDies() throws Exception {
+        AtomicInteger primaryCalls = new AtomicInteger();
+        JsonRpcTransport deadPrimary = request -> { primaryCalls.incrementAndGet(); throw new IOException("connection refused"); };
+        JsonRpcTransport backup = request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x2\"}";
+        FailoverJsonRpcTransport transport = new FailoverJsonRpcTransport(List.of(
+                new FailoverJsonRpcTransport.Endpoint("primary", deadPrimary),
+                new FailoverJsonRpcTransport.Endpoint("backup", backup)),
+                new FailoverJsonRpcTransport.Config(3, Duration.ofSeconds(30), 3));
+
+        // 一次固定视图内不切换：本次操作失败（由调用方重试）
+        assertThrows(IOException.class, () -> transport.pinned().send("{}"));
+        // 下一个固定视图（例如下一次轮询）必须落到备用端点，而不是继续卡在已宕机的主端点
+        assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x2\"}", transport.pinned().send("{}"));
+        assertEquals(1, primaryCalls.get(), "the next pinned view must not touch the dead primary again");
+    }
+
+    @Test void pinnedViewSkipsAnOpenPrimaryImmediately() throws Exception {
+        JsonRpcTransport deadPrimary = request -> { throw new IOException("connection refused"); };
+        JsonRpcTransport backup = request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x3\"}";
+        FailoverJsonRpcTransport transport = new FailoverJsonRpcTransport(List.of(
+                new FailoverJsonRpcTransport.Endpoint("primary", deadPrimary),
+                new FailoverJsonRpcTransport.Endpoint("backup", backup)),
+                new FailoverJsonRpcTransport.Config(1, Duration.ofSeconds(30), 3));
+        transport.send("{}"); // 普通请求：主端点失败一次即熔断（阈值 1），并切到备用
+        assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x3\"}", transport.pinned().send("{}"));
+    }
 }

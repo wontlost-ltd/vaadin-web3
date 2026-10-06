@@ -82,27 +82,53 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
         throw new IOException("All JSON-RPC endpoints are unavailable: " + String.join("; ", errors));
     }
 
-    /** Returns a transport view bound to the currently selected endpoint. */
-    /** Returns a view bound to the currently selected endpoint; failures are propagated without failover. */
+    /**
+     * Returns a view bound to one healthy endpoint for the duration of a multi-request operation; failures are
+     * propagated without failover inside the view, but they move the active endpoint so the next view uses another.
+     */
     public JsonRpcTransport pinned() {
-        EndpointState fixed = active.get();
+        // 视图创建时选第一个健康端点；不能盲目取 active，否则主端点宕机后所有固定视图都卡在它上面，永远不切换
+        EndpointState fixed = pinCandidate();
         return request -> {
-            if (!fixed.acquireProbe()) throw new IOException("Pinned JSON-RPC endpoint is unavailable: " + fixed.endpoint.id());
+            if (!fixed.acquireProbe()) {
+                moveActiveAwayFrom(fixed);
+                throw new IOException("Pinned JSON-RPC endpoint is unavailable: " + fixed.endpoint.id());
+            }
             long started = System.nanoTime();
             try {
                 String response = fixed.endpoint.transport().send(request);
                 RpcFailure failure = rpcFailure(response);
                 if (failure != null && shouldSwitch(failure.category)) {
                     fixed.failed(failure.category.name(), failure.message, config);
+                    moveActiveAwayFrom(fixed);
                     throw new IOException("Pinned JSON-RPC endpoint failed: " + failure.message);
                 }
                 fixed.succeeded(Duration.ofNanos(System.nanoTime() - started));
                 return response;
             } catch (IOException exception) {
-                if (shouldSwitch(exception)) fixed.failed("IO", exception.getMessage(), config);
+                if (shouldSwitch(exception)) {
+                    fixed.failed("IO", exception.getMessage(), config);
+                    moveActiveAwayFrom(fixed);
+                }
                 throw exception;
             } finally { fixed.releaseProbe(); }
         };
+    }
+
+    private EndpointState pinCandidate() {
+        for (EndpointState candidate : candidates()) if (candidate.state() == State.CLOSED) return candidate;
+        return active.get();
+    }
+
+    /** 固定视图上的失败让 active 让位给下一个未熔断端点，后续视图（例如下一次轮询）即可切换。 */
+    private void moveActiveAwayFrom(EndpointState failed) {
+        if (active.get() != failed) return;
+        for (EndpointState endpoint : endpoints) {
+            if (endpoint != failed && endpoint.state() != State.OPEN) {
+                active.compareAndSet(failed, endpoint);
+                return;
+            }
+        }
     }
 
     /** Returns an immutable snapshot of endpoint health. */

@@ -269,4 +269,13 @@ class Web3ConnectTest {
         assertEquals(4001, Web3Connect.fallbackRefusal(new Web3Connect.Web3Exception(4001, "Rejected"), 4001, allow,
                 request, "0x2105", "0xaa").code(), "a user rejection must never fall back");
     }
+
+    @Test void jsResultsOfAnyShapeBecomeTextInsteadOfHangingTheFuture() {
+        var mapper = new tools.jackson.databind.ObjectMapper();
+        assertEquals("0xabc", Web3Connect.resultText(mapper.valueToTree("0xabc")));
+        assertEquals("{\"id\":\"0x01\"}", Web3Connect.resultText(mapper.readTree("{\"id\":\"0x01\"}")));
+        assertEquals("42", Web3Connect.resultText(mapper.valueToTree(42)));
+        assertEquals(null, Web3Connect.resultText(mapper.nullNode()));
+        assertEquals(null, Web3Connect.resultText(null));
+    }
 }

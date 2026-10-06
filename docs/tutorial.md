@@ -147,7 +147,54 @@ mvn spring-boot:run -pl web3-vaadin-demo \
 
 Configure a browser wallet network to use chain ID 11155111 and `http://127.0.0.1:8545`, then connect an account that holds Sepolia test tokens. The fork executes transactions locally against the Sepolia token contract state; it does not send them to Sepolia. Checkout success is shown only after the normal receipt and transfer verification.
 
-## 6. Test SIWE without a browser wallet
+## 6. Send transactions and batch calls
+
+With Anvil running and the `demo` profile active, open
+<http://localhost:8080/transactions>. The route is anonymous. Connect the
+Development wallet, whose chain is 31337. The page shows the expected network,
+native balance, single transaction status and an EIP-5792 batch form. Plain
+Anvil chain 31337 has no built-in USDC entry, so the page correctly omits a
+USDC balance there.
+
+For a single transfer, enter another Anvil account address and an ETH amount.
+The status component follows the submitted hash until one confirmation by
+default; choose two confirmations if you mine an additional block. For a batch,
+enter two destinations and amounts, keep `atomicRequired` false, choose the
+fallback policy, and submit. The Development wallet reports atomic batching as
+unsupported but accepts non-atomic batches, executes calls sequentially, and
+returns status plus receipts. This does not claim atomic execution. The
+Development wallet stores batch status in memory, so a server restart discards
+it.
+
+To observe endpoint failover, start a second Anvil node on port 8546 in another
+terminal. Add these properties to the demo profile (or pass equivalent
+`--web3.chains.31337.rpc-urls[0]` and `[1]` arguments):
+
+```properties
+web3.chains.31337.rpc-urls[0]=http://127.0.0.1:8545
+web3.chains.31337.rpc-urls[1]=http://127.0.0.1:8546
+```
+
+The configured `rpc-urls` list takes precedence over the existing single
+`rpc-url`. Stop the primary Anvil process and make a request that reads chain
+state; after transport failure, the client uses the second endpoint. Restart
+the primary and a later request probes for recovery. The demo includes
+Spring Boot Actuator and exposes only `/actuator/health` under this profile:
+
+```bash
+curl -i http://localhost:8080/actuator/health
+```
+
+Overall health is `DOWN` if any configured chain has all monitored endpoints
+open, `UP` when no chain meets that condition, and `UNKNOWN` when there are no
+configured chains. The demo keeps
+`management.endpoint.health.show-details=never`, so endpoint details are not
+exposed by default. For a trusted local diagnostic session only, details can
+be enabled with `management.endpoint.health.show-details=always`; do not use
+that setting on an internet-facing demo. A one-endpoint chain is reported as
+`UNMONITORED` in details because no circuit-breaker snapshot exists.
+
+## 7. Test SIWE without a browser wallet
 
 Add the test kit with test scope:
 

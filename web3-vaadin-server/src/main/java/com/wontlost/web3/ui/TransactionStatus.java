@@ -171,7 +171,8 @@ public class TransactionStatus extends com.vaadin.flow.component.Composite<Div> 
     }
     private static String rootMessage(Throwable error) {
         Throwable cause = error; while (cause.getCause() != null) cause = cause.getCause();
-        return String.valueOf(cause.getMessage());
+        // 消息为空时用异常类名，避免界面显示 "null"
+        return cause.getMessage() == null || cause.getMessage().isBlank() ? cause.getClass().getSimpleName() : cause.getMessage();
     }
     @Override protected void onDetach(DetachEvent event) {
         generation++;

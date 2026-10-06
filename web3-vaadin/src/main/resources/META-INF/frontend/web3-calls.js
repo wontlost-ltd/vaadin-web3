@@ -1,18 +1,16 @@
 const VERSION = '2.0.0';
 
+// 组件上的这些方法只供 Java 桥调用：Web3Connect.call() 以 String 读取结果，因此返回 JSON 字符串
+// （直接返回对象会在服务端反序列化为 String 时失败）
 export function installCallsMethods(prototype) {
-  prototype.getCapabilities = function (chainIds) {
-    return getCapabilities(this, chainIds).catch((error) => { this._error(error); throw error; });
+  const bridged = (operation) => function (...args) {
+    return operation(this, ...args).then((result) => JSON.stringify(result ?? null))
+      .catch((error) => { this._error(error); throw error; });
   };
-  prototype.sendCalls = function (request) {
-    return sendCalls(this, request).catch((error) => { this._error(error); throw error; });
-  };
-  prototype.getCallsStatus = function (id) {
-    return getCallsStatus(this, id).catch((error) => { this._error(error); throw error; });
-  };
-  prototype.showCallsStatus = function (id) {
-    return showCallsStatus(this, id).catch((error) => { this._error(error); throw error; });
-  };
+  prototype.getCapabilities = bridged(getCapabilities);
+  prototype.sendCalls = bridged(sendCalls);
+  prototype.getCallsStatus = bridged(getCallsStatus);
+  prototype.showCallsStatus = bridged(showCallsStatus);
 }
 
 export async function getCapabilities(component, chainIds) {

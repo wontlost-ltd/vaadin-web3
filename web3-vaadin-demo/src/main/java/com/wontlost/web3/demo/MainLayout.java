@@ -36,6 +36,7 @@ public class MainLayout extends AppLayout implements BeforeEnterObserver {
         navigation.addItem(new SideNavItem("Sign in", "/login"));
         navigation.addItem(new SideNavItem("Token holders", "/holders"));
         navigation.addItem(new SideNavItem("Checkout", "/checkout"));
+        navigation.addItem(new SideNavItem("Transactions", "/transactions"));
         navigation.addItem(accountItem);
         addToDrawer(navigation);
         signOut.addClickListener(event -> signOut(web3LogoutHandler, contextRepository));

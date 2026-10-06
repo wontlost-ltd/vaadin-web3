@@ -33,6 +33,7 @@ import com.wontlost.web3.calls.WalletCapabilities;
 import com.vaadin.flow.server.VaadinService;
 import com.vaadin.flow.shared.Registration;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -621,10 +622,17 @@ public class Web3Connect extends Component {
         String wrappedExpression = "return Promise.resolve(" + invocation + ").catch(e => { throw new Error('"
                 + ERROR_MARKER
                 + "' + JSON.stringify(this._errorInfo(e))); })";
+        // 以通用 JSON 节点读取结果再转成字符串：若直接按 String 反序列化，JS 返回对象时转换会在回调之前失败，
+        // future 既不成功也不失败而永远挂起
         getElement().executeJs(wrappedExpression, params)
-                .then(String.class, future::complete,
+                .then(JsonNode.class, node -> future.complete(resultText(node)),
                         error -> future.completeExceptionally(parseWeb3Exception(error)));
         return future;
+    }
+
+    static String resultText(JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) return null;
+        return node.isString() ? node.asString() : node.toString();
     }
 
     void trackPendingFuture(CompletableFuture<String> future) {

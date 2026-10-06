@@ -125,7 +125,8 @@ public class Balance extends com.vaadin.flow.component.Composite<Div> {
     }
     private static String rootMessage(Throwable error) {
         Throwable cause = error; while (cause.getCause() != null) cause = cause.getCause();
-        return String.valueOf(cause.getMessage());
+        // 消息为空时用异常类名，避免界面显示 "null"
+        return cause.getMessage() == null || cause.getMessage().isBlank() ? cause.getClass().getSimpleName() : cause.getMessage();
     }
     private static BigInteger hexInteger(String value) { return new BigInteger(value.startsWith("0x") ? value.substring(2) : value, 16); }
     @Override protected void onDetach(DetachEvent event) {
