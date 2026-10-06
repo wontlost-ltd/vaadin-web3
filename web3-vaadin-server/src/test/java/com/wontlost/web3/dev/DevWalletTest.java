@@ -3,6 +3,7 @@ package com.wontlost.web3.dev;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -32,6 +33,7 @@ import com.wontlost.web3.siwe.SiweVerifier;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class DevWalletTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -75,7 +77,7 @@ class DevWalletTest {
         transport.baseFeeUnsupported = true;
         DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
         String tx = "[{\"from\":\"" + wallet.accounts().getFirst() + "\",\"to\":\"0x0000000000000000000000000000000000000001\",\"value\":\"0x2a\",\"data\":\"0x1234\",\"gas\":\"0x5208\",\"nonce\":\"0x7\",\"maxFeePerGas\":\"0x64\",\"maxPriorityFeePerGas\":\"0x2\"}]";
-        assertEquals("0xfeed", result(wallet.request("eth_sendTransaction", tx)));
+        assertEquals("0x" + "0".repeat(63) + "1", result(wallet.request("eth_sendTransaction", tx)));
         RawTransaction decoded = TransactionDecoder.decode(transport.rawHex.substring(2));
         assertEquals(BigInteger.valueOf(7), decoded.getNonce());
         assertEquals("0x0000000000000000000000000000000000000001", decoded.getTo());
@@ -128,6 +130,143 @@ class DevWalletTest {
         assertEquals(-32000, failure(wallet, "eth_sendTransaction", tx).getCode());
     }
 
+    @Test void capabilitiesAreRestrictedToWalletChainAndAuthorizedAccount() throws Exception {
+        DevWallet wallet = new DevWallet(KEY, 31337, null);
+        JsonNode result = MAPPER.readTree(wallet.request("wallet_getCapabilities",
+                json(List.of(wallet.accounts().getFirst()))).join());
+        assertEquals("unsupported", result.path("0x7a69").path("atomic").path("status").asString());
+        assertEquals(0, MAPPER.readTree(wallet.request("wallet_getCapabilities",
+                json(List.of(wallet.accounts().getFirst(), List.of("0x1")))).join()).size());
+        assertEquals(4100, failure(wallet, "wallet_getCapabilities", "[\"0x0000000000000000000000000000000000000001\"]").getCode());
+    }
+
+    @Test void sendCallsValidatesProtocolAndNeverBroadcastsAtomicRequests() throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
+        String request = calls(wallet, true, List.of(call(wallet)));
+        assertEquals(5760, failure(wallet, "wallet_sendCalls", request).getCode());
+        assertEquals(0, transport.broadcasts.get());
+        assertEquals(-32602, failure(wallet, "wallet_sendCalls", callsWithVersion(wallet, "1.0.0")).getCode());
+        assertEquals(5710, failure(wallet, "wallet_sendCalls", callsWithChain(wallet, "0x01")).getCode());
+        assertEquals(4100, failure(wallet, "wallet_sendCalls", callsWithFrom(wallet, "0x0000000000000000000000000000000000000001")).getCode());
+        assertEquals(-32602, failure(wallet, "wallet_sendCalls", callsWithCalls(wallet, "[]")).getCode());
+        assertEquals(-32602, failure(wallet, "wallet_sendCalls", callsWithCalls(wallet,
+                "[{\"to\":\"bad\",\"data\":\"0x\",\"value\":\"0x0\"}]")).getCode());
+        assertEquals(5700, failure(wallet, "wallet_sendCalls", callsWithCapabilities(wallet,
+                "{\"futureFeature\":{}}", false)).getCode());
+        assertEquals(5760, failure(wallet, "wallet_sendCalls", callsWithCapabilities(wallet,
+                "{\"futureFeature\":{\"optional\":true}}", true)).getCode());
+        assertEquals(4200, failure(DevWallet.anvilDefault(31337, null), "wallet_sendCalls",
+                calls(DevWallet.anvilDefault(31337, null), false, List.of(call(wallet)))).getCode());
+    }
+
+    @Test void sendCallsBroadcastsSequentiallyAndPersistsPartialFailure() throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        transport.failBroadcastAt = 2;
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
+        JsonNode response = MAPPER.readTree(wallet.request("wallet_sendCalls", calls(wallet, false,
+                List.of(call(wallet), call(wallet)))).join());
+        String id = response.path("id").asString();
+        assertEquals(2, transport.broadcasts.get());
+        assertEquals(2, transport.nonces.size());
+        // 第一笔已发出但未上链、第二笔发送失败：仍可能部分上链，不能报 400
+        assertEquals(100, status(wallet, id).path("status").asInt());
+        transport.mined = true;
+        assertEquals(600, status(wallet, id).path("status").asInt());
+        assertEquals(5730, failure(wallet, "wallet_getCallsStatus", json(List.of("unknown"))).getCode());
+        assertEquals(5730, failure(wallet, "wallet_showCallsStatus", json(List.of("unknown"))).getCode());
+        assertEquals("null", wallet.request("wallet_showCallsStatus", json(List.of(id))).join());
+    }
+
+    @Test void nothingSentIsTheOnlyOffchainFailure() throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        transport.failBroadcastAt = 1;
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
+        String id = MAPPER.readTree(wallet.request("wallet_sendCalls", calls(wallet, false,
+                List.of(call(wallet), call(wallet)))).join()).path("id").asString();
+        assertEquals(1, transport.broadcasts.get(), "sending stops at the first failure");
+        assertEquals(400, status(wallet, id).path("status").asInt());
+    }
+
+    @Test void callsStatusMovesFromPendingToSuccessAndReturnsReceiptShape() throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
+        String id = MAPPER.readTree(wallet.request("wallet_sendCalls", calls(wallet, false,
+                List.of(call(wallet), call(wallet)))).join()).path("id").asString();
+        assertEquals(100, status(wallet, id).path("status").asInt());
+        transport.mined = true;
+        JsonNode complete = status(wallet, id);
+        assertEquals(200, complete.path("status").asInt());
+        assertEquals(2, complete.path("receipts").size());
+        assertTrue(complete.path("receipts").get(0).has("gasUsed"));
+        assertTrue(complete.path("receipts").get(0).path("logs").isArray());
+    }
+
+    @Test void callsStatusMapsAllRevertsAndPartialReverts() throws Exception {
+        assertEquals(500, minedStatus(new boolean[] {false, false}));
+        assertEquals(600, minedStatus(new boolean[] {true, false}));
+    }
+
+    @Test void duplicateIdsAreRejectedAndOldBatchesAreEvicted() throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
+        String request = callsWithId(wallet, "repeat");
+        wallet.request("wallet_sendCalls", request).join();
+        assertEquals(5720, failure(wallet, "wallet_sendCalls", request).getCode());
+        String oldest = MAPPER.readTree(wallet.request("wallet_sendCalls", callsWithId(wallet, "oldest")).join()).path("id").asString();
+        for (int i = 0; i < 256; i++) wallet.request("wallet_sendCalls", callsWithId(wallet, "id-" + i)).join();
+        assertEquals(5730, failure(wallet, "wallet_getCallsStatus", json(List.of(oldest))).getCode());
+    }
+
+    @Test void missingBatchIdsAreUniqueRandom32ByteValues() throws Exception {
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(new RecordingTransport()));
+        String first = MAPPER.readTree(wallet.request("wallet_sendCalls", calls(wallet, false, List.of(call(wallet)))).join())
+                .path("id").asString();
+        String second = MAPPER.readTree(wallet.request("wallet_sendCalls", calls(wallet, false, List.of(call(wallet)))).join())
+                .path("id").asString();
+        assertTrue(first.matches("0x[0-9a-f]{64}"));
+        assertTrue(second.matches("0x[0-9a-f]{64}"));
+        assertFalse(first.equals(second));
+    }
+
+    private static int minedStatus(boolean[] outcomes) throws Exception {
+        RecordingTransport transport = new RecordingTransport();
+        transport.receiptStatuses = outcomes;
+        transport.mined = true;
+        DevWallet wallet = new DevWallet(KEY, 31337, new EthRpcClient(transport));
+        String id = MAPPER.readTree(wallet.request("wallet_sendCalls", calls(wallet, false,
+                List.of(call(wallet), call(wallet)))).join()).path("id").asString();
+        return status(wallet, id).path("status").asInt();
+    }
+
+    private static JsonNode status(DevWallet wallet, String id) throws Exception {
+        return MAPPER.readTree(wallet.request("wallet_getCallsStatus", json(List.of(id))).join());
+    }
+    private static String call(DevWallet wallet) {
+        return "{\"to\":\"0x0000000000000000000000000000000000000001\",\"data\":\"0x\",\"value\":\"0x0\"}";
+    }
+    private static String calls(DevWallet wallet, boolean atomic, List<String> calls) {
+        return "[{\"version\":\"2.0.0\",\"chainId\":\"0x7a69\",\"atomicRequired\":" + atomic
+                + ",\"calls\":[" + String.join(",", calls) + "]}]";
+    }
+    private static String callsWithVersion(DevWallet wallet, String version) throws Exception { return callsWith(wallet, "\"version\":" + json(version)); }
+    private static String callsWithChain(DevWallet wallet, String chain) throws Exception { return callsWith(wallet, "\"chainId\":" + json(chain)); }
+    private static String callsWithFrom(DevWallet wallet, String from) throws Exception { return callsWith(wallet, "\"from\":" + json(from)); }
+    private static String callsWithCalls(DevWallet wallet, String calls) throws Exception { return callsWith(wallet, "\"calls\":" + calls); }
+    private static String callsWithCapabilities(DevWallet wallet, String capabilities, boolean atomic) throws Exception {
+        return callsWith(wallet, "\"capabilities\":" + capabilities + ",\"atomicRequired\":" + atomic);
+    }
+    private static String callsWithId(DevWallet wallet, String id) {
+        return "[{\"version\":\"2.0.0\",\"id\":" + json(id) + ",\"chainId\":\"0x7a69\",\"atomicRequired\":false,\"calls\":[" + call(wallet) + "]}]";
+    }
+    private static String callsWith(DevWallet wallet, String field) throws Exception {
+        ObjectNode request = MAPPER.createObjectNode().put("version", "2.0.0").put("chainId", "0x7a69")
+                .put("atomicRequired", false);
+        request.putArray("calls").add(MAPPER.readTree(call(wallet)));
+        MAPPER.readTree("{" + field + "}").properties().forEach(entry -> request.set(entry.getKey(), entry.getValue()));
+        return json(List.of(request));
+    }
+
     private static ServerWalletException failure(DevWallet wallet, String method, String params) {
         java.util.concurrent.CompletionException exception = assertThrows(java.util.concurrent.CompletionException.class,
                 () -> wallet.request(method, params).join());
@@ -173,19 +312,35 @@ class DevWalletTest {
         private volatile boolean priorityUnsupported;
         private volatile boolean baseFeeUnsupported;
         private volatile boolean broadcastError;
+        private volatile int failBroadcastAt;
+        private volatile boolean mined;
+        private volatile boolean[] receiptStatuses = new boolean[] {true, true};
 
         @Override public String send(String requestJson) throws IOException {
             JsonNode request = MAPPER.readTree(requestJson);
             String method = request.path("method").asString();
+            int broadcastNumber = "eth_sendRawTransaction".equals(method) ? broadcasts.incrementAndGet() : 0;
+            if ("eth_getTransactionReceipt".equals(method)) {
+                if (!mined) return response(request, "null", false);
+                int index = Integer.parseInt(request.path("params").get(0).asString().substring(58), 16) - 1;
+                boolean status = receiptStatuses[Math.min(Math.max(index, 0), receiptStatuses.length - 1)];
+                String receipt = "{\"transactionHash\":\"" + request.path("params").get(0).asString()
+                        + "\",\"blockNumber\":\"0x1\",\"blockHash\":\"0xbeef\",\"status\":\"" + (status ? "0x1" : "0x0")
+                        + "\",\"gasUsed\":\"0x5208\",\"logs\":[]}";
+                return response(request, receipt, false);
+            }
             if ("eth_maxPriorityFeePerGas".equals(method) && priorityUnsupported) {
                 return "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asString()
                         + ",\"error\":{\"code\":-32601,\"message\":\"method not found\"}}";
             }
             if ("eth_sendRawTransaction".equals(method) && broadcastError) {
                 rawHex = request.path("params").get(0).asString();
-                broadcasts.incrementAndGet();
                 return "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asString()
                         + ",\"error\":{\"code\":-32000,\"message\":\"rejected\"}}";
+            }
+            if ("eth_sendRawTransaction".equals(method) && failBroadcastAt > 0
+                    && broadcastNumber == failBroadcastAt) {
+                return response(request, "{\"code\":-32000,\"message\":\"rejected\"}", true);
             }
             if ("eth_getBlockByNumber".equals(method) && baseFeeUnsupported) {
                 return "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asString()
@@ -203,13 +358,17 @@ class DevWalletTest {
                 case "eth_gasPrice" -> "0x3";
                 case "eth_sendRawTransaction" -> {
                     rawHex = request.path("params").get(0).asString();
-                    broadcasts.incrementAndGet();
-                    yield "0xfeed";
+                    yield "0x" + "0".repeat(63) + Integer.toHexString(broadcastNumber);
                 }
                 default -> throw new IllegalArgumentException("unexpected method " + method);
             };
             String encodedResult = method.equals("eth_getBlockByNumber") ? result : MAPPER.writeValueAsString(result);
             return "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asString() + ",\"result\":" + encodedResult + "}";
+        }
+
+        private static String response(JsonNode request, String payload, boolean error) {
+            return "{\"jsonrpc\":\"2.0\",\"id\":" + request.path("id").asString() + ",\""
+                    + (error ? "error" : "result") + "\":" + payload + "}";
         }
     }
 }
