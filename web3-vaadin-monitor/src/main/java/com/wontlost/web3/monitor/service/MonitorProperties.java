@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("monitor")
 public class MonitorProperties {
     private Map<Long, String> rpc = new LinkedHashMap<>();
+    private Map<Long, String> rpcUrls = new LinkedHashMap<>();
     private String adminToken = "";
     private Duration pollInterval = Duration.ofSeconds(5);
     private Duration defaultExpiry = Duration.ofHours(1);
@@ -16,6 +17,8 @@ public class MonitorProperties {
     private final Webhooks webhooks = new Webhooks();
     public Map<Long, String> getRpc() { return rpc; }
     public void setRpc(Map<Long, String> rpc) { this.rpc = rpc; }
+    public Map<Long, String> getRpcUrls() { return rpcUrls; }
+    public void setRpcUrls(Map<Long, String> rpcUrls) { this.rpcUrls = rpcUrls; }
     public String getAdminToken() { return adminToken; }
     public void setAdminToken(String adminToken) { this.adminToken = adminToken; }
     public Duration getPollInterval() { return pollInterval; }

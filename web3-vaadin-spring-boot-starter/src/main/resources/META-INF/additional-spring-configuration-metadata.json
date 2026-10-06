@@ -1,8 +1,37 @@
 {
   "properties": [
     {
-      "name": "web3.rpc",
-      "type": "java.util.Map<java.lang.Long,java.lang.String>",
+      "name": "web3.chains.*.rpc-urls",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Ordered JSON-RPC endpoint URLs for a chain; takes precedence over rpc-url."
+    },
+    {
+      "name": "web3.rpc.failure-threshold",
+      "type": "java.lang.Integer",
+      "defaultValue": 3,
+      "description": "Consecutive endpoint failures before opening its circuit."
+    },
+    {
+      "name": "web3.rpc.open-duration",
+      "type": "java.time.Duration",
+      "defaultValue": "15s",
+      "description": "Circuit breaker cooldown before a probe."
+    },
+    {
+      "name": "web3.rpc.request-timeout",
+      "type": "java.time.Duration",
+      "defaultValue": "10s",
+      "description": "Timeout for each JSON-RPC HTTP request."
+    },
+    {
+      "name": "web3.rpc.lag-tolerance",
+      "type": "java.lang.Integer",
+      "defaultValue": 3,
+      "description": "Maximum tolerated observed block head lag."
+    },
+    {
+      "name": "web3.rpc.<id>",
+      "type": "java.lang.String",
       "description": "Legacy RPC URLs keyed by chain ID. Use web3.chains.<id>.rpc-url instead.",
       "deprecation": {
         "level": "warning",
