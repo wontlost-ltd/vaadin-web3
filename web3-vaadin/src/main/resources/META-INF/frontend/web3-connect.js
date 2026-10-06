@@ -3,6 +3,7 @@ import { renderWalletPicker, walletPickerStyles, showWalletPicker, chooseWallet,
   handlePickerKeydown, registerDiscoveredWallet, waitForWallet, resolveWalletWaiters,
   attachWalletProvider, detachWalletProvider, setProviderAvailable } from './web3-wallet-picker.js';
 import { installServerWallet, uninstallServerWallet, isServerWallet } from './web3-server-wallet.js';
+import { installCallsMethods } from './web3-calls.js';
 
 export class Web3Connect extends LitElement {
   static get is() { return 'web3-connect'; }
@@ -491,4 +492,5 @@ export class Web3Connect extends LitElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 }
+installCallsMethods(Web3Connect.prototype);
 if (!customElements.get(Web3Connect.is)) customElements.define(Web3Connect.is, Web3Connect);

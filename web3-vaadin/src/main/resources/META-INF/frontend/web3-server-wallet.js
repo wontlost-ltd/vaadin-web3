@@ -3,6 +3,7 @@ const ICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3
 // 转发到服务端钱包的方法：签名类 + 只读节点查询（与 Web3Connect.SERVER_WALLET_METHODS 保持一致）
 const FORWARDED_METHODS = ['personal_sign', 'eth_signTypedData_v4', 'eth_sendTransaction',
   'wallet_switchEthereumChain', 'wallet_addEthereumChain',
+  'wallet_getCapabilities', 'wallet_sendCalls', 'wallet_getCallsStatus', 'wallet_showCallsStatus',
   'eth_blockNumber', 'eth_call', 'eth_estimateGas', 'eth_feeHistory', 'eth_gasPrice', 'eth_getBalance', 'eth_getBlockByHash', 'eth_getBlockByNumber', 'eth_getCode', 'eth_getLogs', 'eth_getStorageAt', 'eth_getTransactionByHash', 'eth_getTransactionCount', 'eth_getTransactionReceipt', 'eth_maxPriorityFeePerGas', 'net_version'];
 
 export function installServerWallet(component) {
