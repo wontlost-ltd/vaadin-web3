@@ -139,8 +139,10 @@ public class Web3VaadinAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     Web3SiweLoginConfigurer web3SiweLoginConfigurer(Web3Properties properties,
-            org.springframework.beans.factory.ObjectProvider<Web3SiweLoginCustomizer> customizers) {
-        return new Web3SiweLoginConfigurer(properties.getSiwe(), customizers.orderedStream().toList());
+            org.springframework.beans.factory.ObjectProvider<Web3SiweLoginCustomizer> customizers,
+            org.springframework.beans.factory.ObjectProvider<SiweLoginCustomizer> requestCustomizers) {
+        return new Web3SiweLoginConfigurer(properties.getSiwe(), customizers.orderedStream().toList(),
+                requestCustomizers.orderedStream().toList());
     }
 
     @Bean
