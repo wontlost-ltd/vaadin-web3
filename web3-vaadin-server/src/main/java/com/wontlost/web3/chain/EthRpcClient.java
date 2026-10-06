@@ -14,6 +14,7 @@ import org.web3j.utils.Numeric;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /** Small thread-safe Ethereum JSON-RPC client. */
@@ -142,6 +143,33 @@ public final class EthRpcClient {
                 nullableString(node.path("from")), nullableString(node.path("to")), logs,
                 nullableString(node.path("blockHash"))));
     }
+    /** Returns logs matching the filter on this client's current endpoint view. */
+    public List<EthLog> getLogs(LogFilter filter) {
+        Objects.requireNonNull(filter, "filter");
+        ObjectNode criteria = MAPPER.createObjectNode();
+        criteria.put("fromBlock", "0x" + Long.toHexString(filter.fromBlock()));
+        criteria.put("toBlock", "0x" + Long.toHexString(filter.toBlock()));
+        if (filter.addresses() != null && !filter.addresses().isEmpty()) {
+            ArrayNode addresses = criteria.putArray("address");
+            filter.addresses().forEach(addresses::add);
+        }
+        if (filter.topics() != null && !filter.topics().isEmpty()) {
+            ArrayNode topics = criteria.putArray("topics");
+            for (List<String> position : filter.topics()) {
+                if (position == null) {
+                    topics.addNull();
+                } else {
+                    ArrayNode alternatives = topics.addArray();
+                    position.forEach(alternatives::add);
+                }
+            }
+        }
+        JsonNode result = result("eth_getLogs", List.of(criteria));
+        if (!result.isArray()) throw new IllegalStateException("eth_getLogs result is not an array");
+        List<EthLog> logs = new ArrayList<>();
+        for (JsonNode log : result) logs.add(parseLog(log));
+        return List.copyOf(logs);
+    }
     /** Returns the transaction when it is known to this endpoint. */
     public Optional<EthTransaction> getTransactionByHash(String hash) {
         JsonNode node = result("eth_getTransactionByHash", List.of(hash));
@@ -182,6 +210,50 @@ public final class EthRpcClient {
         } catch (IOException exception) {
             throw new IllegalStateException("JSON-RPC transport failed", exception);
         }
+    }
+    private static EthLog parseLog(JsonNode log) {
+        if (!log.isObject()) throw new IllegalStateException("eth_getLogs entry is not an object");
+        String address = requiredString(log, "address");
+        if (!address.matches("0x[0-9a-fA-F]{40}")) throw invalidLog("address");
+        JsonNode topicNodes = log.path("topics");
+        if (!topicNodes.isArray()) throw invalidLog("topics");
+        List<String> topics = new ArrayList<>();
+        for (JsonNode topic : topicNodes) {
+            if (!topic.isString() || !topic.asString().matches("0x[0-9a-fA-F]{64}")) throw invalidLog("topics");
+            topics.add(topic.asString().toLowerCase(java.util.Locale.ROOT));
+        }
+        String data = requiredString(log, "data");
+        if (!data.matches("0x(?:[0-9a-fA-F]{2})*")) throw invalidLog("data");
+        String transactionHash = requiredHash(log, "transactionHash");
+        long transactionIndex = requiredQuantity(log, "transactionIndex");
+        long blockNumber = requiredQuantity(log, "blockNumber");
+        String blockHash = requiredHash(log, "blockHash");
+        long logIndex = requiredQuantity(log, "logIndex");
+        // 部分节点省略 removed 字段，缺省视为 false
+        JsonNode removedNode = log.path("removed");
+        if (!removedNode.isMissingNode() && !removedNode.isNull() && !removedNode.isBoolean()) throw invalidLog("removed");
+        return new EthLog(address.toLowerCase(java.util.Locale.ROOT), List.copyOf(topics), data.toLowerCase(java.util.Locale.ROOT),
+                transactionHash.toLowerCase(java.util.Locale.ROOT), transactionIndex, blockNumber,
+                blockHash.toLowerCase(java.util.Locale.ROOT), logIndex, removedNode.asBoolean());
+    }
+    private static String requiredHash(JsonNode log, String field) {
+        String value = requiredString(log, field);
+        if (!value.matches("0x[0-9a-fA-F]{64}")) throw invalidLog(field);
+        return value;
+    }
+    private static String requiredString(JsonNode log, String field) {
+        JsonNode value = log.path(field);
+        if (!value.isString() || value.asString().isBlank()) throw invalidLog(field);
+        return value.asString();
+    }
+    private static long requiredQuantity(JsonNode log, String field) {
+        String value = requiredString(log, field);
+        if (!value.matches("0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)")) throw invalidLog(field);
+        try { return hexLong(value); }
+        catch (ArithmeticException | NumberFormatException exception) { throw invalidLog(field); }
+    }
+    private static IllegalStateException invalidLog(String field) {
+        return new IllegalStateException("Invalid or missing eth_getLogs field: " + field);
     }
     private static boolean isKnownTransaction(EthRpcException exception) {
         String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase(java.util.Locale.ROOT);
