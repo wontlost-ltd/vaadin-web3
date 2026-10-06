@@ -21,11 +21,6 @@ import com.wontlost.web3.ServerWallet;
 import com.wontlost.web3.chain.ChainRegistry;
 import com.wontlost.web3.dev.DevWallet;
 import com.wontlost.web3.monitor.PaymentMonitorClient;
-import com.wontlost.web3.onramp.CoinbaseOnramp;
-import com.wontlost.web3.onramp.MoonPayOnramp;
-import com.wontlost.web3.onramp.OnrampProvider;
-import com.wontlost.web3.onramp.OnrampProviders;
-import com.wontlost.web3.onramp.TransakOnramp;
 import com.wontlost.web3.pay.InMemoryPaymentLedger;
 import com.wontlost.web3.pay.PaymentLedger;
 import com.wontlost.web3.pay.PaymentVerifier;
@@ -102,24 +97,6 @@ public class Web3VaadinAutoConfiguration {
         return url.isBlank() || key.isBlank() ? null : new PaymentMonitorClient(URI.create(url), key);
     }
 
-    @Bean
-    @ConditionalOnClass(OnrampProvider.class)
-    @ConditionalOnMissingBean(OnrampProvider.class)
-    OnrampProvider web3OnrampProvider(Web3Properties properties) {
-        var p = properties.getOnramp();
-        if (!p.getMoonpay().getPublishableKey().isBlank() && !p.getMoonpay().getSecretKey().isBlank()) {
-            return new MoonPayOnramp(p.getMoonpay().getPublishableKey(), p.getMoonpay().getSecretKey());
-        }
-        if (!p.getTransak().getApiKey().isBlank() && !p.getTransak().getApiSecret().isBlank()) {
-            return new TransakOnramp(p.getTransak().getApiKey(), p.getTransak().getApiSecret(),
-                    p.getTransak().getReferrerDomain(), p.getTransak().isStaging());
-        }
-        if (!p.getCoinbase().getKeyId().isBlank() && !p.getCoinbase().getKeySecret().isBlank()) {
-            return new CoinbaseOnramp(p.getCoinbase().getKeyId(), p.getCoinbase().getKeySecret());
-        }
-        return null;
-    }
-
     // 按名称而非类型判断：VaadinServiceInitListener 是通用类型，vaadin-spring（启用 Spring Security 时的访问控制初始化器）
     // 与 Pro 都会注册同类型 bean，按类型的 @ConditionalOnMissingBean 会让本监听器静默失效
     @Bean
@@ -129,15 +106,14 @@ public class Web3VaadinAutoConfiguration {
             ObjectProvider<NonceStore> nonces,
             ObjectProvider<AddressScreening> screening,
             ObjectProvider<ServerWallet> wallets,
-            ObjectProvider<OnrampProvider> onramps,
             ObjectProvider<PaymentMonitorClient> monitor,
             ObjectProvider<Web3Properties> properties) {
-        return event -> initialize(event, chains, nonces, screening, wallets, onramps, monitor, properties);
+        return event -> initialize(event, chains, nonces, screening, wallets, monitor, properties);
     }
 
     private static void initialize(ServiceInitEvent event, ObjectProvider<ChainRegistry> chains,
             ObjectProvider<NonceStore> nonces, ObjectProvider<AddressScreening> screening,
-            ObjectProvider<ServerWallet> wallets, ObjectProvider<OnrampProvider> onramps,
+            ObjectProvider<ServerWallet> wallets,
             ObjectProvider<PaymentMonitorClient> monitor, ObjectProvider<Web3Properties> properties) {
         Web3Properties config = properties.getIfAvailable(Web3Properties::new);
         ServerWallet wallet = wallets.getIfAvailable();
@@ -162,8 +138,6 @@ public class Web3VaadinAutoConfiguration {
         AddressScreening addressScreening = screening.getIfAvailable();
         if (addressScreening != null) AddressScreening.register(context, addressScreening);
         if (wallet != null) ServerWallet.register(context, wallet);
-        OnrampProvider onramp = onramps.getIfAvailable();
-        if (onramp != null) OnrampProviders.register(context, onramp);
         PaymentMonitorClient client = monitor.getIfAvailable();
         if (client != null) PaymentMonitorClient.register(context, client);
     }

@@ -1,3 +1,4 @@
 com.wontlost.web3.autoconfigure.Web3VaadinAutoConfiguration
+com.wontlost.web3.autoconfigure.Web3OnrampAutoConfiguration
 com.wontlost.web3.autoconfigure.Web3WalletConnectAutoConfiguration
 com.wontlost.web3.autoconfigure.security.Web3SecurityAutoConfiguration
