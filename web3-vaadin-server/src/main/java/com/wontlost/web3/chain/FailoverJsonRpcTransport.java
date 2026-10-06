@@ -101,10 +101,14 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
                 if (failure != null && shouldSwitch(failure.category)) {
                     fixed.failed(failure.category.name(), failure.message, config);
                     moveActiveAwayFrom(fixed);
-                    throw new IOException("Pinned JSON-RPC endpoint failed: " + failure.message);
+                    throw new PinnedRpcFailure("Pinned JSON-RPC endpoint failed: " + failure.message);
                 }
                 fixed.succeeded(Duration.ofNanos(System.nanoTime() - started));
+                // 固定视图成功后同样安排主端点恢复探测：只影响后续操作的 active，不改变本视图的节点
+                probePrimaryForNextRequest(fixed);
                 return response;
+            } catch (PinnedRpcFailure exception) {
+                throw exception; // 已按原始类别记录过一次失败，避免在 IO 分支重复计数
             } catch (IOException exception) {
                 if (shouldSwitch(exception)) {
                     fixed.failed("IO", exception.getMessage(), config);
@@ -113,6 +117,12 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
                 throw exception;
             } finally { fixed.releaseProbe(); }
         };
+    }
+
+    /** 固定视图中已记录的暂态 JSON-RPC 失败；与传输层 IOException 区分，以免重复计入熔断。 */
+    private static final class PinnedRpcFailure extends IOException {
+        private static final long serialVersionUID = 1L;
+        private PinnedRpcFailure(String message) { super(message); }
     }
 
     private EndpointState pinCandidate() {

@@ -15,6 +15,16 @@ describe('EIP-5792 provider calls', () => {
       params: ['0xabc', ['0x1', '0x89']] });
   });
 
+  it('forwards request-level and call-level capabilities unchanged', async () => {
+    const component = componentFor(() => ({ id: 'batch-2' }));
+    const paymaster = { paymasterService: { url: 'https://pm.example', optional: true } };
+    await sendCalls(component, { chainId: 8453, atomicRequired: false, capabilities: { auxiliaryFunds: { optional: true } },
+      calls: [{ to: '0x1', capabilities: paymaster }, { to: '0x2' }] });
+    const [params] = component.provider.request.mock.calls[0][0].params;
+    expect(params.capabilities).toEqual({ auxiliaryFunds: { optional: true } });
+    expect(params.calls).toEqual([{ to: '0x1', capabilities: paymaster }, { to: '0x2' }]);
+  });
+
   it('passes through status methods and wallet error code and message', async () => {
     const component = componentFor(({ method }) => {
       if (method === 'wallet_getCallsStatus') return { status: 200 };

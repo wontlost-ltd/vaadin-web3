@@ -187,4 +187,43 @@ class FailoverJsonRpcTransportTest {
         transport.send("{}"); // 普通请求：主端点失败一次即熔断（阈值 1），并切到备用
         assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x3\"}", transport.pinned().send("{}"));
     }
+
+    @Test void pinnedOnlyTrafficReturnsToTheRecoveredPrimary() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean primaryUp = new java.util.concurrent.atomic.AtomicBoolean(false);
+        AtomicInteger primaryServed = new AtomicInteger();
+        JsonRpcTransport primary = request -> {
+            if (!primaryUp.get()) throw new IOException("connection refused");
+            primaryServed.incrementAndGet();
+            return "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x1\"}";
+        };
+        JsonRpcTransport backup = request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x2\"}";
+        FailoverJsonRpcTransport transport = new FailoverJsonRpcTransport(List.of(
+                new FailoverJsonRpcTransport.Endpoint("primary", primary),
+                new FailoverJsonRpcTransport.Endpoint("backup", backup)),
+                new FailoverJsonRpcTransport.Config(1, Duration.ofMillis(50), 3));
+
+        assertThrows(IOException.class, () -> transport.pinned().send("{}"));
+        assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x2\"}", transport.pinned().send("{}"));
+
+        primaryUp.set(true);
+        Thread.sleep(80); // 冷却期过后才允许恢复探测
+        transport.pinned().send("{}"); // 仍在备用端点完成，但成功后探测到主端点恢复
+        int servedBefore = primaryServed.get();
+        assertEquals("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x1\"}", transport.pinned().send("{}"),
+                "only pinned traffic must still move back to the recovered primary");
+        assertTrue(primaryServed.get() > servedBefore);
+    }
+
+    @Test void pinnedTransientRpcErrorIsCountedOnceWithItsCategory() {
+        JsonRpcTransport syncing = request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"message\":\"header not found\"}}";
+        JsonRpcTransport backup = request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x2\"}";
+        FailoverJsonRpcTransport transport = new FailoverJsonRpcTransport(List.of(
+                new FailoverJsonRpcTransport.Endpoint("primary", syncing),
+                new FailoverJsonRpcTransport.Endpoint("backup", backup)),
+                new FailoverJsonRpcTransport.Config(3, Duration.ofSeconds(30), 3));
+        assertThrows(IOException.class, () -> transport.pinned().send("{}"));
+        var health = transport.healthSnapshot().getFirst();
+        assertEquals(1, health.consecutiveFailures(), "one pinned failure must count once");
+        assertEquals("TRANSIENT_NODE", health.lastErrorCategory());
+    }
 }

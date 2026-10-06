@@ -270,6 +270,21 @@ class Web3ConnectTest {
                 request, "0x2105", "0xaa").code(), "a user rejection must never fall back");
     }
 
+    @Test void fallbackRefusesRequiredCapabilitiesThatIndividualTransactionsCannotHonour() {
+        var sponsored = new com.wontlost.web3.calls.CallsRequest(null, null, 8453, false, java.util.List.of(
+                new com.wontlost.web3.calls.Call("0x00000000000000000000000000000000000000bb", null, "0x1",
+                        java.util.Map.of("paymasterService", java.util.Map.of("url", "https://pm.example")))), null);
+        var refusal = Web3Connect.fallbackRefusal(new Web3Connect.Web3Exception(4200, "Unsupported"), 4200,
+                com.wontlost.web3.calls.FallbackPolicy.ALLOW_NON_ATOMIC, sponsored, "0x2105", "0xaa");
+        org.junit.jupiter.api.Assertions.assertNotNull(refusal, "a sponsored call must not silently become a self-paid one");
+        assertEquals(5700, refusal.code());
+
+        var optional = new com.wontlost.web3.calls.CallsRequest(null, null, 8453, false, java.util.List.of(
+                new com.wontlost.web3.calls.Call("0x00000000000000000000000000000000000000bb", null, "0x1",
+                        java.util.Map.of("paymasterService", java.util.Map.of("optional", true)))), null);
+        assertEquals(null, Web3Connect.fallbackMismatch(optional, "0x2105", "0xaa"));
+    }
+
     @Test void jsResultsOfAnyShapeBecomeTextInsteadOfHangingTheFuture() {
         var mapper = new tools.jackson.databind.ObjectMapper();
         assertEquals("0xabc", Web3Connect.resultText(mapper.valueToTree("0xabc")));

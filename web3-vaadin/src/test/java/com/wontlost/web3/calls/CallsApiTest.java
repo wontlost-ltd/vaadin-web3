@@ -107,4 +107,43 @@ class CallsApiTest {
         assertEquals(javaMethods, frontendMethods);
     }
 
+
+    @Test
+    void serializesCallLevelCapabilitiesAndFindsRequiredOnes() {
+        Call sponsored = new Call("0xdef", null, "0x1", Map.of("paymasterService", Map.of("url", "https://pm.example")));
+        CallsRequest request = new CallsRequest(null, "0xabc", 1, false,
+                List.of(new Call("0x1", null, null), sponsored), Map.of("auxiliaryFunds", Map.of("optional", true)));
+        String json = request.toProviderJson();
+        assertTrue(json.contains("{\"to\":\"0xdef\",\"value\":\"0x1\",\"capabilities\":{\"paymasterService\":{\"url\":\"https://pm.example\"}}}"), json);
+        assertFalse(json.contains("{\"to\":\"0x1\",\"capabilities\""), "calls without capabilities must not carry an empty object");
+        assertEquals("paymasterService", request.firstRequiredCapability());
+        assertTrue(new Call("0x1", null, null, null).capabilities().isEmpty());
+
+        CallsRequest optionalOnly = new CallsRequest(null, null, 1, false,
+                List.of(new Call("0x1", null, null, Map.of("paymasterService", Map.of("optional", true)))),
+                Map.of("auxiliaryFunds", Map.of("optional", true)));
+        assertEquals(null, optionalOnly.firstRequiredCapability());
+        CallsRequest requestLevel = new CallsRequest(null, null, 1, false, List.of(new Call("0x1", null, null)),
+                Map.of("atomic", Map.of("optional", false)));
+        assertEquals("atomic", requestLevel.firstRequiredCapability());
+    }
+
+    @Test
+    void capabilitiesAreDeeplyCopiedAndMissingOptionalMeansRequired() {
+        Map<String, Object> paymaster = new java.util.HashMap<>(Map.of("optional", true));
+        Map<String, Object> callCapabilities = new java.util.HashMap<>(Map.of("paymasterService", paymaster));
+        CallsRequest request = new CallsRequest(null, null, 1, false,
+                List.of(new Call("0x1", null, null, callCapabilities)), null);
+        paymaster.put("optional", false);
+        callCapabilities.put("other", Map.of());
+        assertEquals(null, request.firstRequiredCapability(), "later caller mutations must not leak into the request");
+        assertFalse(request.toProviderJson().contains("other"));
+
+        CallsRequest noOptionalKey = new CallsRequest(null, null, 1, false, List.of(new Call("0x1", null, null)),
+                Map.of("paymasterService", Map.of("url", "https://pm.example")));
+        assertEquals("paymasterService", noOptionalKey.firstRequiredCapability());
+        CallsRequest notAMap = new CallsRequest(null, null, 1, false, List.of(new Call("0x1", null, null)),
+                Map.of("flag", "optional"));
+        assertEquals("flag", notAMap.firstRequiredCapability());
+    }
 }

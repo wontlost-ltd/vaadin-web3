@@ -487,6 +487,12 @@ public class Web3Connect extends Component {
     }
 
     static CallsException fallbackMismatch(CallsRequest request, String walletChainIdHex, String walletAccount) {
+        String requiredCapability = request.firstRequiredCapability();
+        if (requiredCapability != null) {
+            // 逐笔 eth_sendTransaction 无法兑现任何能力，必需能力只能拒绝（EIP-5792 5700）
+            return new CallsException(5700, "Capability '" + requiredCapability
+                    + "' is required and cannot be honoured by individual transactions");
+        }
         long walletChain;
         try {
             walletChain = Long.parseLong(walletChainIdHex.startsWith("0x") ? walletChainIdHex.substring(2) : walletChainIdHex,
