@@ -12,7 +12,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("web3")
 public class Web3Properties {
     private Map<Long, Chain> chains = new LinkedHashMap<>();
-    private Map<Long, String> rpc = new LinkedHashMap<>();
     private final Siwe siwe = new Siwe();
     private final WalletConnect walletconnect = new WalletConnect();
     private final Onramp onramp = new Onramp();
@@ -23,8 +22,6 @@ public class Web3Properties {
 
     public Map<Long, Chain> getChains() { return chains; }
     public void setChains(Map<Long, Chain> chains) { this.chains = chains; }
-    public Map<Long, String> getRpc() { return rpc; }
-    public void setRpc(Map<Long, String> rpc) { this.rpc = rpc; }
     public Siwe getSiwe() { return siwe; }
     /** Returns WalletConnect settings for constructing the opt-in {@code WalletConnect} UI component. */
     public WalletConnect getWalletconnect() { return walletconnect; }
@@ -36,9 +33,13 @@ public class Web3Properties {
 
     public static class Chain {
         private String rpcUrl;
+        private List<String> rpcUrls = new ArrayList<>();
         public String getRpcUrl() { return rpcUrl; }
         public void setRpcUrl(String rpcUrl) { this.rpcUrl = rpcUrl; }
+        public List<String> getRpcUrls() { return rpcUrls; }
+        public void setRpcUrls(List<String> rpcUrls) { this.rpcUrls = rpcUrls; }
     }
+
 
     public static class Siwe {
         private String domain;

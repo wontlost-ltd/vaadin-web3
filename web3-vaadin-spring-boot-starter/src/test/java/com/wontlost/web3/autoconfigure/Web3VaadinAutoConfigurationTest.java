@@ -56,6 +56,119 @@ class Web3VaadinAutoConfigurationTest {
     }
 
     @Test
+    void configuresFailoverOnlyForMultipleUrlsAndBindsRpcSettings() {
+        contextRunner.withPropertyValues("web3.chains.10.rpc-urls[0]=https://one.example",
+                "web3.chains.10.rpc-urls[1]=https://two.example", "web3.chains.11.rpc-url=https://single.example",
+                "web3.rpc.failure-threshold=4", "web3.rpc.open-duration=PT20S",
+                "web3.rpc.request-timeout=PT4S", "web3.rpc.lag-tolerance=6")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    RpcTransportLifecycle lifecycle = context.getBean(RpcTransportLifecycle.class);
+                    assertThat(lifecycle.failovers()).containsKey(10L).doesNotContainKey(11L);
+                    var failover = lifecycle.failovers().get(10L);
+                    assertThat(failover.healthSnapshot()).hasSize(2);
+                    assertThat(failover.healthSnapshot().getFirst().id()).isEqualTo("https://one.example");
+                    Web3RpcProperties rpc = context.getBean(Web3RpcProperties.class);
+                    assertThat(rpc.getFailureThreshold()).isEqualTo(4);
+                    assertThat(rpc.getOpenDuration()).isEqualTo(Duration.ofSeconds(20));
+                    assertThat(rpc.getRequestTimeout()).isEqualTo(Duration.ofSeconds(4));
+                    assertThat(rpc.getLagTolerance()).isEqualTo(6);
+                });
+    }
+
+    @Test
+    void redactsCredentialsQueryFragmentAndKeyLikePathSegments() {
+        assertThat(Web3RpcHealthAutoConfiguration.redact(
+                "https://user:pass@eth-mainnet.g.alchemy.com/v2/abcdef123456789012345678?secret=x#frag"))
+                .isEqualTo("https://eth-mainnet.g.alchemy.com/v2/***");
+    }
+
+    @Test
+    void closesTrackedTransportsAtLifecycleEnd() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+        RpcTransportLifecycle lifecycle = new RpcTransportLifecycle(java.net.http.HttpClient.newHttpClient());
+        lifecycle.track(new com.wontlost.web3.chain.JsonRpcTransport() {
+            @Override public String send(String request) { return "{}"; }
+            @Override public void close() { closed.set(true); }
+        });
+        lifecycle.close();
+        assertThat(closed).isTrue();
+    }
+
+    @Test
+    void rpcHealthAggregatesUnknownUpAndDown() throws Exception {
+        RpcTransportLifecycle emptyLifecycle = new RpcTransportLifecycle(java.net.http.HttpClient.newHttpClient());
+        var emptyHealth = new Web3RpcHealthAutoConfiguration().web3RpcHealthIndicator(new ChainRegistry(), emptyLifecycle);
+        assertThat(emptyHealth.health().getStatus().getCode()).isEqualTo("UNKNOWN");
+
+        var partial = healthFixture(true);
+        assertThat(partial.health().getStatus().getCode()).isEqualTo("UP");
+        assertThat(partial.health().getDetails()).containsKey("1");
+
+        var allOpen = healthFixture(false);
+        assertThat(allOpen.health().getStatus().getCode()).isEqualTo("DOWN");
+        String details = allOpen.health().getDetails().toString();
+        assertThat(details).contains("eth-mainnet.example/v2/***").doesNotContain("abcdef123456789012345678");
+    }
+
+    @Test
+    void rpcHealthIsDownWhenAnyChainIsFullyDownAndMarksSingleEndpointsUnmonitored() throws Exception {
+        var ok = (com.wontlost.web3.chain.JsonRpcTransport) request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x1\"}";
+        var failing = (com.wontlost.web3.chain.JsonRpcTransport) request -> { throw new java.io.IOException("offline"); };
+        var config = new com.wontlost.web3.chain.FailoverJsonRpcTransport.Config(1, Duration.ofSeconds(30), 0);
+        var healthyEndpoints = java.util.List.of(
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint("https://a.example", ok),
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint("https://b.example", ok));
+        var downEndpoints = java.util.List.of(
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint("https://c.example", failing),
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint("https://d.example", failing));
+        var healthy = new com.wontlost.web3.chain.FailoverJsonRpcTransport(healthyEndpoints, config);
+        var down = new com.wontlost.web3.chain.FailoverJsonRpcTransport(downEndpoints, config);
+        try { down.send("{}"); } catch (java.io.IOException ignored) { }
+
+        RpcTransportLifecycle lifecycle = new RpcTransportLifecycle(java.net.http.HttpClient.newHttpClient());
+        lifecycle.track(1, healthy);
+        lifecycle.endpoints(1, java.util.List.of("https://a.example", "https://b.example"));
+        lifecycle.track(10, down);
+        lifecycle.endpoints(10, java.util.List.of("https://c.example", "https://d.example"));
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(healthy));
+        chains.register(10, new com.wontlost.web3.chain.EthRpcClient(down));
+        var indicator = new Web3RpcHealthAutoConfiguration().web3RpcHealthIndicator(chains, lifecycle);
+        assertThat(indicator.health().getStatus().getCode())
+                .as("one chain fully down means sign-in and payments on it cannot be served").isEqualTo("DOWN");
+
+        RpcTransportLifecycle single = new RpcTransportLifecycle(java.net.http.HttpClient.newHttpClient());
+        single.endpoints(137, java.util.List.of("https://polygon.example"));
+        ChainRegistry singleChains = new ChainRegistry();
+        singleChains.register(137, "https://polygon.example");
+        var singleHealth = new Web3RpcHealthAutoConfiguration().web3RpcHealthIndicator(singleChains, single).health();
+        assertThat(singleHealth.getStatus().getCode()).isEqualTo("UP");
+        assertThat(singleHealth.getDetails().toString()).contains("UNMONITORED");
+    }
+
+    private static org.springframework.boot.health.contributor.HealthIndicator healthFixture(boolean oneHealthy)
+            throws Exception {
+        var failing = (com.wontlost.web3.chain.JsonRpcTransport) request -> { throw new java.io.IOException("offline"); };
+        var endpoints = new java.util.ArrayList<com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint>();
+        endpoints.add(new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint(
+                "https://user:pass@eth-mainnet.example/v2/abcdef123456789012345678?secret=x#frag", failing));
+        if (oneHealthy) endpoints.add(new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint(
+                "https://backup.example/rpc", request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x1\"}"));
+        else endpoints.add(new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint(
+                "https://backup.example/rpc", failing));
+        var failover = new com.wontlost.web3.chain.FailoverJsonRpcTransport(endpoints,
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Config(1, Duration.ofSeconds(30), 0));
+        RpcTransportLifecycle lifecycle = new RpcTransportLifecycle(java.net.http.HttpClient.newHttpClient());
+        lifecycle.track(1, failover);
+        lifecycle.endpoints(1, endpoints.stream().map(com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint::id).toList());
+        ChainRegistry chains = new ChainRegistry();
+        chains.register(1, new com.wontlost.web3.chain.EthRpcClient(failover));
+        try { failover.send("{}"); } catch (java.io.IOException ignored) { }
+        return new Web3RpcHealthAutoConfiguration().web3RpcHealthIndicator(chains, lifecycle);
+    }
+
+    @Test
     void userBeansOverrideDefaults() {
         ChainRegistry registry = new ChainRegistry();
         NonceStore nonceStore = mock(NonceStore.class);

@@ -123,6 +123,31 @@ class PaymentVerifierTest {
                         new PaymentRequest(1, token, recipient, amount, payer, Finality.finalized())));
     }
 
+    @Test void pinnedReadFailurePropagatesAndDoesNotClaimPayment() throws Exception {
+        String token = Tokens.usdc(1).orElseThrow().address();
+        var ledger = new InMemoryPaymentLedger();
+        var primaryFixture = new OnChainSupportTest.FixtureTransport(fixture);
+        com.wontlost.web3.chain.JsonRpcTransport primary = request -> {
+            JsonNode parsed = MAPPER.readTree(request);
+            if ("eth_getBlockByNumber".equals(parsed.path("method").asString())) throw new java.io.IOException("pinned node lost");
+            return primaryFixture.send(request);
+        };
+        var failover = new com.wontlost.web3.chain.FailoverJsonRpcTransport(java.util.List.of(
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint("primary", primary),
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Endpoint("backup", transport)),
+                new com.wontlost.web3.chain.FailoverJsonRpcTransport.Config(1, java.time.Duration.ofSeconds(30), 3));
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(1, new com.wontlost.web3.chain.EthRpcClient(failover));
+        PaymentVerifier pinnedVerifier = new PaymentVerifier(registry, ledger);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> pinnedVerifier.verify("pinned-failure", hash,
+                        new PaymentRequest(1, token, recipient, amount, payer)));
+
+        PaymentVerifier recovered = new PaymentVerifier(registryFor(transport), ledger);
+        assertEquals(PaymentStatus.CONFIRMED, recovered.verify("pinned-failure", hash,
+                new PaymentRequest(1, token, recipient, amount, payer)).status());
+    }
+
     @Test void rejectsTransactionsMinedBeforeTheOrderWasCreated() {
         String token = Tokens.usdc(1).orElseThrow().address();
         java.time.Instant mined = java.time.Instant.parse("2026-10-04T11:35:23Z");

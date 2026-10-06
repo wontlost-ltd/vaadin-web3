@@ -21,6 +21,8 @@ class StarterWithoutOptionalModulesTest {
         assertThrows(ClassNotFoundException.class, () -> Class.forName("com.wontlost.web3.walletconnect.WalletConnect"));
         assertThrows(ClassNotFoundException.class,
                 () -> Class.forName("org.springframework.security.core.context.SecurityContext"));
+        assertThrows(ClassNotFoundException.class,
+                () -> Class.forName("org.springframework.boot.health.contributor.HealthIndicator"));
     }
 
     @Test void starterStartsWithoutOptionalModules() {
@@ -35,5 +37,15 @@ class StarterWithoutOptionalModulesTest {
                     assertThat(context).hasBean("web3VaadinContextInitializer");
                     assertThat(context).doesNotHaveBean("web3OnrampProvider");
                 });
+    }
+
+    @Test void actuatorHealthConfigurationIsSkippedWhenItsApiIsAbsent() throws Exception {
+        Class<?> healthConfiguration = Class.forName(
+                "com.wontlost.web3.autoconfigure.Web3RpcHealthAutoConfiguration");
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        Class configurationType = healthConfiguration;
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(configurationType)).run(context -> {
+            assertThat(context).hasNotFailed().doesNotHaveBean("web3RpcHealthIndicator");
+        });
     }
 }

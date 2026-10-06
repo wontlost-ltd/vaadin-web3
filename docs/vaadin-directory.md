@@ -4,9 +4,9 @@ Use this text when publishing the add-on to https://vaadin.com/directory.
 
 **Name:** Web3 Add-on for Vaadin
 
-**Summary (one line):** Wallet login, token-gated views, stablecoin payments and card purchases for Vaadin Flow, in plain Java.
+**Summary (one line):** Wallet login, transaction and network components, EIP-5792 batches, stablecoin payments and card purchases for Vaadin Flow, in plain Java.
 
-**Tags:** web3, ethereum, wallet, metamask, siwe, authentication, payments, stablecoin, usdc, blockchain, onramp, card, spring-boot
+**Tags:** web3, ethereum, wallet, metamask, siwe, authentication, transactions, EIP-5792, payments, stablecoin, usdc, blockchain, onramp, card, spring-boot
 
 ## Compatibility
 
@@ -23,6 +23,9 @@ Bring Ethereum wallets to your Vaadin application without writing JavaScript. Us
 - **Sign in with Ethereum.** `SiweLogin` verifies EIP-4361 messages and stores the verified identity in `Web3Session`. With optional Spring Security, `Web3SiweLoginConfigurer.configure(login)` also connects verified SIWE events to a persisted `Web3Principal`. The application configures its own `SecurityFilterChain`.
 - **Gate views on token ownership.** Put `@RequiresToken(chainId = 1, token = "USDC", minBalance = "10")` on a route. Built-in USDC, USDT, EURC and PYUSD symbols are available on supported networks.
 - **Take stablecoin payments.** `StablecoinCheckout` checks on-chain receipts and Transfer logs before confirming a payment. A `PaymentLedger` prevents one transaction from paying for multiple orders.
+- **Track transactions and balances.** `TransactionStatus`, `Balance` and `NetworkIndicator` provide server-observed confirmation, on-chain balance and wallet network status components.
+- **Submit batch calls.** `Web3Connect` exposes EIP-5792 capabilities and status with caller-selected non-atomic fallback. The Development wallet executes batches sequentially and does not provide atomic execution.
+- **Configure reliable RPC.** The Spring Boot starter accepts ordered endpoint lists with circuit breakers and optional Actuator health reporting.
 - **Buy stablecoins with a card.** The optional `web3-vaadin-onramp` module supports hosted MoonPay, Transak and Coinbase purchase flows.
 - **Use a Development wallet locally.** `web3.dev.mock-wallet.enabled=true` exposes an Anvil-backed test wallet only in Vaadin development mode. Anvil's default keys are public; never use them with real assets. Production mode rejects the setting.
 - **Test SIWE and checkout.** `web3-vaadin-test` supplies test wallet and RPC fixtures that exercise the normal verification paths.
@@ -44,6 +47,7 @@ Add screenshots captured from the running demo under `docs/images/`:
 - `docs/images/protected-account.png` — authenticated account route using non-personal test identity data.
 - `docs/images/sepolia-checkout.png` — checkout state on Sepolia without credentials. *(not yet captured: needs a funded Sepolia test wallet)*
 - `docs/images/sepolia-payment-confirmed.png` — optional real testnet confirmation only; never use a fabricated success state. *(not yet captured)*
+- `docs/images/transactions.png` — Transactions route showing network, balances, a real transaction status and honest non-atomic batch capability. *(not yet captured)*
 
 ## Links
 

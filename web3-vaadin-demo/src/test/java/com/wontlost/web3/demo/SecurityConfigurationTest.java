@@ -26,6 +26,18 @@ class SecurityConfigurationTest {
         assertEquals(200, get("/login").statusCode());
     }
 
+    @Test
+    void transactionsRouteIsPublic() throws Exception {
+        assertEquals(200, get("/transactions").statusCode());
+    }
+
+    @Test
+    void actuatorHealthIsPublicWithoutDetails() throws Exception {
+        HttpResponse<String> response = get("/actuator/health");
+        assertEquals(200, response.statusCode());
+        org.junit.jupiter.api.Assertions.assertFalse(response.body().contains("components"));
+    }
+
     private HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
                 .send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),

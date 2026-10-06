@@ -14,6 +14,7 @@ import com.wontlost.web3.chain.Transfer;
  * <p>
  * The {@link PaymentRequest} defines what counts as payment (token, recipient, minimum amount), so it must be
  * built on the server from your own order data &mdash; never from values sent by the browser.
+ * All reads within one verification use a pinned RPC endpoint; a read failure is propagated before the payment is claimed.
  */
 public final class PaymentVerifier {
     private final ChainRegistry chains;
@@ -24,7 +25,7 @@ public final class PaymentVerifier {
     }
     public PaymentResult verify(String orderId, String txHash, PaymentRequest request) {
         EthRpcClient rpc = chains.get(request.chainId()).orElseThrow(
-                () -> new IllegalStateException("No RPC registered for chain " + request.chainId()));
+                () -> new IllegalStateException("No RPC registered for chain " + request.chainId())).pinned();
         TransactionReceipt receipt = rpc.getTransactionReceipt(txHash).orElse(null);
         if (receipt == null) return result(PaymentStatus.PENDING, txHash, request.payer(), BigInteger.ZERO, 0);
         if (!receipt.status()) return result(PaymentStatus.FAILED, txHash, receipt.from(), BigInteger.ZERO, 0);

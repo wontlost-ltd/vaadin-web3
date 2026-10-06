@@ -21,12 +21,12 @@ import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
-import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.shared.Registration;
+import com.wontlost.web3.ui.UiPolling;
 import com.wontlost.web3.Chains;
 import com.wontlost.web3.Web3Connect;
 import com.wontlost.web3.chain.ChainRegistry;
@@ -50,7 +50,6 @@ import java.util.function.Supplier;
  * payer should require SIWE before accepting the payment.
  */
 public class StablecoinCheckout extends VerticalLayout {
-    private static final String POLLER_COUNT = StablecoinCheckout.class.getName() + ".pollerCount";
     private static final Executor DEFAULT_EXECUTOR = new ThreadPoolExecutor(2, 4, 30,
             java.util.concurrent.TimeUnit.SECONDS, new ArrayBlockingQueue<>(64), task -> {
                 Thread thread = new Thread(task, "web3-payment-verifier");
@@ -542,26 +541,7 @@ public class StablecoinCheckout extends VerticalLayout {
     void startPolling() {
         UI ui = UI.getCurrent();
         pollingUi = ui;
-        retainPolling(ui);
-        pollRegistration = ui.addPollListener(event -> verifyPayment());
-    }
-
-    private static synchronized void retainPolling(UI ui) {
-        Integer previous = (Integer) ComponentUtil.getData(ui, POLLER_COUNT);
-        int count = previous == null ? 0 : previous;
-        if (count == 0) ui.setPollInterval(3000);
-        ComponentUtil.setData(ui, POLLER_COUNT, count + 1);
-    }
-
-    private static synchronized void releasePolling(UI ui) {
-        Integer previous = (Integer) ComponentUtil.getData(ui, POLLER_COUNT);
-        int count = previous == null ? 0 : previous;
-        if (count <= 1) {
-            ComponentUtil.setData(ui, POLLER_COUNT, null);
-            ui.setPollInterval(-1);
-        } else {
-            ComponentUtil.setData(ui, POLLER_COUNT, count - 1);
-        }
+        pollRegistration = UiPolling.register(ui, java.time.Duration.ofSeconds(3), this::verifyPayment);
     }
 
     /** 测试缝隙：模拟一笔已提交、等待校验的交易。 */
@@ -683,7 +663,6 @@ public class StablecoinCheckout extends VerticalLayout {
         verificationInProgress = new AtomicBoolean();
         if (pollRegistration != null) pollRegistration.remove();
         pollRegistration = null;
-        if (pollingUi != null) releasePolling(pollingUi);
         pollingUi = null;
         if (!paid) setPayEnabled(true);
     }

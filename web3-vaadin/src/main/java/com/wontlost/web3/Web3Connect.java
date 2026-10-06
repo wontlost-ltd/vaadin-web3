@@ -23,9 +23,17 @@ import com.vaadin.flow.component.Tag;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
+import com.wontlost.web3.calls.Call;
+import com.wontlost.web3.calls.CallsException;
+import com.wontlost.web3.calls.CallsRequest;
+import com.wontlost.web3.calls.CallsStatus;
+import com.wontlost.web3.calls.CallsSubmission;
+import com.wontlost.web3.calls.FallbackPolicy;
+import com.wontlost.web3.calls.WalletCapabilities;
 import com.vaadin.flow.server.VaadinService;
 import com.vaadin.flow.shared.Registration;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -56,6 +64,7 @@ public class Web3Connect extends Component {
     // 签名类方法 + 只读节点方法（与 DevWallet 的只读透传一致）；其余一律拒绝
     private static final Set<String> SERVER_WALLET_METHODS = Set.of("personal_sign", "eth_signTypedData_v4",
             "eth_sendTransaction", "wallet_switchEthereumChain", "wallet_addEthereumChain",
+            "wallet_getCapabilities", "wallet_sendCalls", "wallet_getCallsStatus", "wallet_showCallsStatus",
             "eth_blockNumber", "eth_call", "eth_estimateGas", "eth_feeHistory", "eth_gasPrice", "eth_getBalance", "eth_getBlockByHash", "eth_getBlockByNumber", "eth_getCode", "eth_getLogs", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionCount", "eth_getTransactionReceipt", "eth_maxPriorityFeePerGas", "net_version");
     static final int MAX_PENDING_SERVER_WALLET_REQUESTS = 8;
     private transient List<CompletableFuture<String>> pendingFutures;
@@ -392,6 +401,145 @@ public class Web3Connect extends Component {
         return call("return this.sendTransaction(JSON.parse($0))", tx.toString());
     }
 
+    /** Returns wallet capabilities for the connected account and current chain. */
+    public CompletableFuture<WalletCapabilities> getCapabilities() {
+        if (!isConnected()) return CompletableFuture.failedFuture(new CallsException(4100, "No wallet connected"));
+        return call("return this.getCapabilities()")
+                .thenApply(WalletCapabilities::fromJson).exceptionallyCompose(Web3Connect::callsFailure);
+    }
+
+    /** Returns wallet capabilities for the requested chain IDs. */
+    public CompletableFuture<WalletCapabilities> getCapabilities(List<Long> chainIds) {
+        Objects.requireNonNull(chainIds, "chainIds is required");
+        if (!isConnected()) return CompletableFuture.failedFuture(new CallsException(4100, "No wallet connected"));
+        String idsJson = MAPPER.writeValueAsString(chainIds.stream().map(Web3Connect::toHexChainId).toList());
+        return call("return this.getCapabilities(JSON.parse($0))", idsJson)
+                .thenApply(WalletCapabilities::fromJson).exceptionallyCompose(Web3Connect::callsFailure);
+    }
+
+    /** Submits an EIP-5792 batch, optionally allowing sequential non-atomic fallback. */
+    public CompletableFuture<CallsSubmission> sendCalls(CallsRequest request, FallbackPolicy fallbackPolicy) {
+        Objects.requireNonNull(request, "request is required");
+        Objects.requireNonNull(fallbackPolicy, "fallbackPolicy is required");
+        if (!isConnected()) return CompletableFuture.failedFuture(new CallsException(4100, "No wallet connected"));
+        return call("return this.sendCalls(JSON.parse($0))", request.toProviderJson())
+                .thenApply(CallsSubmission::fromJson)
+                .exceptionallyCompose(error -> {
+                    Throwable cause = unwrap(error);
+                    int code = cause instanceof Web3Exception walletError ? walletError.getCode()
+                            : cause instanceof CallsException callsError ? callsError.code() : Integer.MIN_VALUE;
+                    CallsException refusal = fallbackRefusal(cause, code, fallbackPolicy, request, getChainId(), getAccount());
+                    if (refusal != null) return CompletableFuture.failedFuture(refusal);
+                    return sendCallsSequentially(request, call -> {
+                        Map<String, String> transaction = new java.util.LinkedHashMap<>();
+                        if (call.to() != null) transaction.put("to", call.to());
+                        if (call.data() != null) transaction.put("data", call.data());
+                        if (call.value() != null) transaction.put("value", call.value());
+                        return sendTransaction(transaction);
+                    });
+                });
+    }
+
+    /** Returns status for a previously submitted EIP-5792 batch. */
+    public CompletableFuture<CallsStatus> getCallsStatus(String id) {
+        Objects.requireNonNull(id, "id is required");
+        if (!isConnected()) return CompletableFuture.failedFuture(new CallsException(4100, "No wallet connected"));
+        return call("return this.getCallsStatus($0)", id).thenApply(CallsStatus::fromJson)
+                .exceptionallyCompose(Web3Connect::callsFailure);
+    }
+
+    /** Asks the wallet to display status for a previously submitted batch. */
+    public CompletableFuture<Void> showCallsStatus(String id) {
+        Objects.requireNonNull(id, "id is required");
+        if (!isConnected()) return CompletableFuture.failedFuture(new CallsException(4100, "No wallet connected"));
+        return call("return this.showCallsStatus($0)", id).thenApply(ignored -> (Void) null)
+                .exceptionallyCompose(Web3Connect::callsFailure);
+    }
+
+    static CompletableFuture<CallsSubmission> sendCallsSequentially(CallsRequest request,
+            java.util.function.Function<Call, CompletableFuture<String>> sender) {
+        CompletableFuture<CallsSubmission> result = CompletableFuture.completedFuture(
+                new CallsSubmission(request.id(), true, new ArrayList<>(), new ArrayList<>()));
+        for (Call call : request.calls()) {
+            result = result.thenCompose(submission -> {
+                if (!submission.errors().isEmpty()) return CompletableFuture.completedFuture(submission);
+                return sender.apply(call).handle((hash, error) -> {
+                    List<String> hashes = new ArrayList<>(submission.transactionHashes());
+                    List<String> errors = new ArrayList<>(submission.errors());
+                    if (error == null) hashes.add(hash);
+                    else errors.add(errorMessage(unwrap(error)));
+                    return new CallsSubmission(submission.id(), true, hashes, errors);
+                });
+            });
+        }
+        return result;
+    }
+
+    /**
+     * 回退决策唯一入口：返回 null 表示可以顺序发送单笔交易；否则返回应抛出的异常。
+     * 只有"方法不支持"（4200/-32601）+ 显式允许 + 非原子要求时才可能回退；
+     * 且 eth_sendTransaction 发往钱包当前链与账户，与批次不一致时绝不回退。
+     */
+    static CallsException fallbackRefusal(Throwable cause, int code, FallbackPolicy policy, CallsRequest request,
+            String walletChainIdHex, String walletAccount) {
+        if (!shouldFallback(code, policy, request.atomicRequired())) return asCallsException(cause);
+        return fallbackMismatch(request, walletChainIdHex, walletAccount);
+    }
+
+    static CallsException fallbackMismatch(CallsRequest request, String walletChainIdHex, String walletAccount) {
+        String requiredCapability = request.firstRequiredCapability();
+        if (requiredCapability != null) {
+            // 逐笔 eth_sendTransaction 无法兑现任何能力，必需能力只能拒绝（EIP-5792 5700）
+            return new CallsException(5700, "Capability '" + requiredCapability
+                    + "' is required and cannot be honoured by individual transactions");
+        }
+        long walletChain;
+        try {
+            walletChain = Long.parseLong(walletChainIdHex.startsWith("0x") ? walletChainIdHex.substring(2) : walletChainIdHex,
+                    walletChainIdHex.startsWith("0x") ? 16 : 10);
+        } catch (RuntimeException exception) {
+            return new CallsException(5710, "Wallet chain is unknown; cannot fall back to individual transactions");
+        }
+        if (walletChain != request.chainId()) {
+            return new CallsException(5710, "Wallet is on chain " + walletChain + " but the batch targets chain "
+                    + request.chainId() + "; switch chains before falling back to individual transactions");
+        }
+        if (request.from() != null && (walletAccount == null || !request.from().equalsIgnoreCase(walletAccount))) {
+            return new CallsException(4100, "Batch sender is not the connected account");
+        }
+        return null;
+    }
+
+    static boolean shouldFallback(int code, FallbackPolicy policy, boolean atomicRequired) {
+        return (code == 4200 || code == -32601) && policy == FallbackPolicy.ALLOW_NON_ATOMIC && !atomicRequired;
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        Throwable cause = error;
+        while ((cause instanceof CompletionException || cause instanceof java.util.concurrent.ExecutionException)
+                && cause.getCause() != null) cause = cause.getCause();
+        return cause;
+    }
+
+    private static String errorMessage(Throwable error) {
+        return error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
+    }
+
+    private static <T> CompletableFuture<T> callsFailure(Throwable error) {
+        return CompletableFuture.failedFuture(asCallsException(unwrap(error)));
+    }
+
+    private static CallsException asCallsException(Throwable error) {
+        if (error instanceof CallsException callsError) return callsError;
+        if (error instanceof Web3Exception web3Error) return new CallsException(web3Error.getCode(), web3Error.getMessage());
+        return new CallsException(-32603, errorMessage(error));
+    }
+
+    private static String toHexChainId(long chainId) {
+        if (chainId < 0) throw new IllegalArgumentException("chainId must not be negative");
+        return "0x" + Long.toHexString(chainId);
+    }
+
     /**
      * Returns the balance of the connected account in wei, as a hex string.
      */
@@ -480,10 +628,17 @@ public class Web3Connect extends Component {
         String wrappedExpression = "return Promise.resolve(" + invocation + ").catch(e => { throw new Error('"
                 + ERROR_MARKER
                 + "' + JSON.stringify(this._errorInfo(e))); })";
+        // 以通用 JSON 节点读取结果再转成字符串：若直接按 String 反序列化，JS 返回对象时转换会在回调之前失败，
+        // future 既不成功也不失败而永远挂起
         getElement().executeJs(wrappedExpression, params)
-                .then(String.class, future::complete,
+                .then(JsonNode.class, node -> future.complete(resultText(node)),
                         error -> future.completeExceptionally(parseWeb3Exception(error)));
         return future;
+    }
+
+    static String resultText(JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) return null;
+        return node.isString() ? node.asString() : node.toString();
     }
 
     void trackPendingFuture(CompletableFuture<String> future) {

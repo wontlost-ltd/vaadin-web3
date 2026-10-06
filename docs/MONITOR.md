@@ -21,7 +21,8 @@ For PostgreSQL, set `MONITOR_DATABASE_URL` (for example `jdbc:postgresql://db:54
 
 | Property | Environment variable | Default | Purpose |
 |---|---|---|---|
-| `monitor.rpc.<chainId>` | `MONITOR_RPC_<chainId>` | unset | EVM JSON-RPC URL; only chains with an RPC are accepted |
+| `monitor.rpc.<chainId>` | `MONITOR_RPC_<chainId>` | unset | EVM JSON-RPC URL; comma-separated URLs enable ordered failover |
+| `monitor.rpc-urls.<chainId>` | `MONITOR_RPC_URLS_<chainId>` | unset | Ordered EVM JSON-RPC URLs; takes precedence over `monitor.rpc.<chainId>` |
 | `monitor.admin-token` | `MONITOR_ADMIN_TOKEN` | empty | Required to enable admin operations; unset or blank means every admin request returns 403 |
 | `monitor.poll-interval` | `MONITOR_POLL_INTERVAL` | `5s` | Delay between worker batches |
 | `monitor.default-expiry` | `MONITOR_DEFAULT_EXPIRY` | `1h` | Default intent lifetime; all intent lifetimes are limited to seven days |
@@ -34,7 +35,7 @@ For PostgreSQL, set `MONITOR_DATABASE_URL` (for example `jdbc:postgresql://db:54
 | `spring.datasource.password` | `MONITOR_DATABASE_PASSWORD` | empty | Database password |
 | `server.port` | `PORT` | `8080` | HTTP port |
 
-For a chain, set a Java property such as `monitor.rpc.11155111=https://...` or its environment binding `MONITOR_RPC_11155111`. Configure RPC URLs only on trusted deployment infrastructure.
+For one URL, keep the existing Java property `monitor.rpc.11155111=https://...` or environment binding `MONITOR_RPC_11155111`. Multiple URLs can be supplied as a comma-separated value (`monitor.rpc.11155111=https://primary.example,https://backup.example`) or with the explicit list-style property `monitor.rpc-urls.11155111=https://primary.example,https://backup.example`. The `rpc-urls` form takes precedence when both are configured. A single URL uses the direct HTTP transport; multiple URLs use ordered failover. Configure RPC URLs only on trusted deployment infrastructure.
 
 ## Create a merchant
 

@@ -112,6 +112,17 @@ class Web3ConnectTest {
     }
 
     @Test
+    void callsConnectionErrorsRetainWalletCode() {
+        Web3Connect component = new Web3Connect();
+        java.util.concurrent.CompletionException error = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> component.sendCalls(new com.wontlost.web3.calls.CallsRequest(null, null, 1, false,
+                        List.of(new com.wontlost.web3.calls.Call("0xabc", null, null)), java.util.Map.of()),
+                        com.wontlost.web3.calls.FallbackPolicy.NEVER).join());
+        assertTrue(error.getCause() instanceof com.wontlost.web3.calls.CallsException);
+        assertEquals(4100, ((com.wontlost.web3.calls.CallsException) error.getCause()).code());
+    }
+
+    @Test
     void doesNotExposeWalletWhenNoVaadinServiceIsAvailable() {
         Web3Connect component = new Web3Connect();
         ComponentUtil.onComponentAttach(component, false);
@@ -225,5 +236,61 @@ class Web3ConnectTest {
         } finally {
             com.vaadin.flow.server.VaadinService.setCurrent(null);
         }
+    }
+
+    @org.junit.jupiter.api.Test
+    void fallbackIsRefusedWhenWalletChainOrAccountDiffersFromTheBatch() {
+        com.wontlost.web3.calls.CallsRequest onBase = new com.wontlost.web3.calls.CallsRequest(null,
+                "0x00000000000000000000000000000000000000aa", 8453, false,
+                java.util.List.of(new com.wontlost.web3.calls.Call("0x00000000000000000000000000000000000000bb", null, "0x1")),
+                null);
+        var wrongChain = Web3Connect.fallbackMismatch(onBase, "0x1", "0x00000000000000000000000000000000000000aa");
+        org.junit.jupiter.api.Assertions.assertNotNull(wrongChain, "must not send a Base batch on Ethereum");
+        org.junit.jupiter.api.Assertions.assertEquals(5710, wrongChain.code());
+
+        var wrongAccount = Web3Connect.fallbackMismatch(onBase, "0x2105", "0x00000000000000000000000000000000000000cc");
+        org.junit.jupiter.api.Assertions.assertNotNull(wrongAccount);
+        org.junit.jupiter.api.Assertions.assertEquals(4100, wrongAccount.code());
+
+        org.junit.jupiter.api.Assertions.assertNull(Web3Connect.fallbackMismatch(onBase, "0x2105",
+                "0x00000000000000000000000000000000000000AA"), "same chain and account (case-insensitive) may fall back");
+    }
+
+    @Test void fallbackRefusalCombinesPolicyAndWalletMismatch() {
+        var request = new com.wontlost.web3.calls.CallsRequest(null, null, 8453, false,
+                java.util.List.of(new com.wontlost.web3.calls.Call("0x00000000000000000000000000000000000000bb", null, "0x1")), null);
+        var unsupported = new Web3Connect.Web3Exception(4200, "Unsupported");
+        var allow = com.wontlost.web3.calls.FallbackPolicy.ALLOW_NON_ATOMIC;
+        assertEquals(null, Web3Connect.fallbackRefusal(unsupported, 4200, allow, request, "0x2105", "0xaa"));
+        assertEquals(5710, Web3Connect.fallbackRefusal(unsupported, 4200, allow, request, "0x1", "0xaa").code(),
+                "an allowed fallback must still be refused on the wrong chain");
+        assertEquals(4200, Web3Connect.fallbackRefusal(unsupported, 4200,
+                com.wontlost.web3.calls.FallbackPolicy.NEVER, request, "0x2105", "0xaa").code());
+        assertEquals(4001, Web3Connect.fallbackRefusal(new Web3Connect.Web3Exception(4001, "Rejected"), 4001, allow,
+                request, "0x2105", "0xaa").code(), "a user rejection must never fall back");
+    }
+
+    @Test void fallbackRefusesRequiredCapabilitiesThatIndividualTransactionsCannotHonour() {
+        var sponsored = new com.wontlost.web3.calls.CallsRequest(null, null, 8453, false, java.util.List.of(
+                new com.wontlost.web3.calls.Call("0x00000000000000000000000000000000000000bb", null, "0x1",
+                        java.util.Map.of("paymasterService", java.util.Map.of("url", "https://pm.example")))), null);
+        var refusal = Web3Connect.fallbackRefusal(new Web3Connect.Web3Exception(4200, "Unsupported"), 4200,
+                com.wontlost.web3.calls.FallbackPolicy.ALLOW_NON_ATOMIC, sponsored, "0x2105", "0xaa");
+        org.junit.jupiter.api.Assertions.assertNotNull(refusal, "a sponsored call must not silently become a self-paid one");
+        assertEquals(5700, refusal.code());
+
+        var optional = new com.wontlost.web3.calls.CallsRequest(null, null, 8453, false, java.util.List.of(
+                new com.wontlost.web3.calls.Call("0x00000000000000000000000000000000000000bb", null, "0x1",
+                        java.util.Map.of("paymasterService", java.util.Map.of("optional", true)))), null);
+        assertEquals(null, Web3Connect.fallbackMismatch(optional, "0x2105", "0xaa"));
+    }
+
+    @Test void jsResultsOfAnyShapeBecomeTextInsteadOfHangingTheFuture() {
+        var mapper = new tools.jackson.databind.ObjectMapper();
+        assertEquals("0xabc", Web3Connect.resultText(mapper.valueToTree("0xabc")));
+        assertEquals("{\"id\":\"0x01\"}", Web3Connect.resultText(mapper.readTree("{\"id\":\"0x01\"}")));
+        assertEquals("42", Web3Connect.resultText(mapper.valueToTree(42)));
+        assertEquals(null, Web3Connect.resultText(mapper.nullNode()));
+        assertEquals(null, Web3Connect.resultText(null));
     }
 }
