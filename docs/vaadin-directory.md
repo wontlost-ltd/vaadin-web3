@@ -47,7 +47,7 @@ Add screenshots captured from the running demo under `docs/images/`:
 - `docs/images/protected-account.png` — authenticated account route using non-personal test identity data.
 - `docs/images/sepolia-checkout.png` — checkout state on Sepolia without credentials. *(not yet captured: needs a funded Sepolia test wallet)*
 - `docs/images/sepolia-payment-confirmed.png` — optional real testnet confirmation only; never use a fabricated success state. *(not yet captured)*
-- `docs/images/transactions.png` — Transactions route showing network, balances, a real transaction status and honest non-atomic batch capability. *(not yet captured)*
+- `docs/images/transactions.png` — Transactions route showing network, balances, a real transaction status and honest non-atomic batch capability.
 
 ## Links
 
