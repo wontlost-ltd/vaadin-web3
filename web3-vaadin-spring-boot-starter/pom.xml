@@ -179,6 +179,33 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/StarterWithoutOptionalModulesTest.java</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <!-- 可选模块在使用者应用中并不存在：真正从 classpath 移除它们，验证 starter 仍能启动 -->
+                    <execution>
+                        <id>without-optional-modules</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <excludes combine.self="override"/>
+                            <includes>
+                                <include>**/StarterWithoutOptionalModulesTest.java</include>
+                            </includes>
+                            <classpathDependencyExcludes>
+                                <classpathDependencyExclude>com.wontlost:web3-vaadin-onramp</classpathDependencyExclude>
+                                <classpathDependencyExclude>com.wontlost:web3-vaadin-walletconnect</classpathDependencyExclude>
+                                <classpathDependencyExclude>org.springframework.security:spring-security-config</classpathDependencyExclude>
+                                <classpathDependencyExclude>org.springframework.security:spring-security-web</classpathDependencyExclude>
+                                <classpathDependencyExclude>org.springframework.security:spring-security-core</classpathDependencyExclude>
+                            </classpathDependencyExcludes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
