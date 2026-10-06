@@ -2,18 +2,10 @@ import { LitElement, html, css } from 'lit';
 import { renderWalletPicker, walletPickerStyles, showWalletPicker, chooseWallet, closeWalletPicker,
   handlePickerKeydown, registerDiscoveredWallet, waitForWallet, resolveWalletWaiters,
   attachWalletProvider, detachWalletProvider, setProviderAvailable } from './web3-wallet-picker.js';
+import { installServerWallet, uninstallServerWallet, isServerWallet } from './web3-server-wallet.js';
 
-/**
- * `<web3-connect>` — Vaadin web3 wallet connector.
- *
- * Talks to any EIP-1193 provider injected at `window.ethereum`
- * (MetaMask, Coinbase Wallet, Brave, Rabby, ...). All heavy lifting is
- * plain provider RPC — no bundled web3 library required.
- */
 export class Web3Connect extends LitElement {
-  static get is() {
-    return 'web3-connect';
-  }
+  static get is() { return 'web3-connect'; }
 
   static get properties() {
     return {
@@ -29,6 +21,8 @@ export class Web3Connect extends LitElement {
       pickerTitle: { type: String, attribute: 'picker-title' },
       noWalletText: { type: String, attribute: 'no-wallet-text' },
       closeLabel: { type: String, attribute: 'close-label' },
+      serverWallet: { type: String, attribute: 'server-wallet' },
+      developmentWalletWarning: { type: String, attribute: 'development-wallet-warning' },
       _busy: { state: true },
       _pickerOpen: { state: true }
     };
@@ -60,6 +54,8 @@ export class Web3Connect extends LitElement {
         margin-inline-start: 0.5em;
       }
       ${walletPickerStyles}
+      .wallet-warning, .development-wallet-warning { display: block; color: var(--lumo-error-text-color, #a40000); font-weight: 700; }
+      .development-wallet-warning { margin-block: 0.35rem; }
     `;
   }
 
@@ -77,6 +73,8 @@ export class Web3Connect extends LitElement {
     this.pickerTitle = 'Choose a wallet';
     this.noWalletText = 'No wallets found.';
     this.closeLabel = 'Close';
+    this.serverWallet = '';
+    this.developmentWalletWarning = 'Development wallet — never use with real assets';
     this._walletProviders = new Map();
     this._lastWalletInfo = new Map();
     this._pickerResolver = null;
@@ -131,6 +129,7 @@ export class Web3Connect extends LitElement {
     window.addEventListener('storage', this._onStorage);
     window.addEventListener('eip6963:announceProvider', this._onAnnounceProvider);
     window.dispatchEvent(new Event('eip6963:requestProvider'));
+    installServerWallet(this);
     this._attachProvider(this.provider);
     if (!this.provider) window.addEventListener('ethereum#initialized', this._onProviderInitialized, { once: true });
   }
@@ -140,6 +139,7 @@ export class Web3Connect extends LitElement {
     window.removeEventListener('web3-connect:disconnect-state', this._onDisconnectState);
     window.removeEventListener('storage', this._onStorage);
     window.removeEventListener('eip6963:announceProvider', this._onAnnounceProvider);
+    uninstallServerWallet(this);
     window.removeEventListener('keydown', this._onPickerKeydown);
     this._closeWalletPicker(false);
     this._detachProvider();
@@ -156,6 +156,7 @@ export class Web3Connect extends LitElement {
       ${!this.hideButton && this.account
         ? html`<span part="account" class="account">${this._short(this.account)}</span>`
         : ''}
+      ${this.account && isServerWallet(this) ? html`<strong class="development-wallet-warning" role="status">${this.developmentWalletWarning}</strong>` : ''}
       ${this._pickerOpen ? renderWalletPicker(this.wallets, this.pickerTitle, this.noWalletText,
         this.closeLabel, (rdns) => this._chooseWallet(rdns), () => this._closeWalletPicker()) : ''}
     `;
@@ -295,13 +296,9 @@ export class Web3Connect extends LitElement {
     handlePickerKeydown(this, event);
   }
 
-  _waitForWallet(rdns, timeout) {
-    return waitForWallet(this, rdns, timeout);
-  }
+  _waitForWallet(rdns, timeout) { return waitForWallet(this, rdns, timeout); }
 
-  _resolveWalletWaiters(rdns) {
-    resolveWalletWaiters(this, rdns);
-  }
+  _resolveWalletWaiters(rdns) { resolveWalletWaiters(this, rdns); }
 
   /** personal_sign over the connected account. Resolves to the signature. */
   async signMessage(message) {
@@ -486,9 +483,7 @@ export class Web3Connect extends LitElement {
     return attachWalletProvider(this, provider);
   }
 
-  _setProviderAvailable(available) {
-    setProviderAvailable(this, available);
-  }
+  _setProviderAvailable(available) { setProviderAvailable(this, available); }
   _detachProvider() {
     detachWalletProvider(this);
   }

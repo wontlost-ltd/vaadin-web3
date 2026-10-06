@@ -9,6 +9,7 @@ public class Web3ConnectI18n implements Serializable {
     private String pickerTitle = "Choose a wallet";
     private String noWallets = "No wallets found.";
     private String close = "Close";
+    private String developmentWalletWarning = "Development wallet — never use with real assets";
 
     public String getConnect() { return connect; }
     public Web3ConnectI18n setConnect(String value) { connect = value; return this; }
@@ -20,4 +21,9 @@ public class Web3ConnectI18n implements Serializable {
     public Web3ConnectI18n setNoWallets(String value) { noWallets = value; return this; }
     public String getClose() { return close; }
     public Web3ConnectI18n setClose(String value) { close = value; return this; }
+    public String getDevelopmentWalletWarning() { return developmentWalletWarning; }
+    public Web3ConnectI18n setDevelopmentWalletWarning(String value) {
+        developmentWalletWarning = value;
+        return this;
+    }
 }

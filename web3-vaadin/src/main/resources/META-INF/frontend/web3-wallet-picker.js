@@ -20,7 +20,7 @@ export function renderWalletPicker(wallets, title, emptyText, closeLabel, choose
       ${wallets.length ? wallets.map((wallet) => html`
         <button class="wallet-option" part="wallet-option" @click=${() => chooseWallet(wallet.rdns)}>
           ${typeof wallet.icon === 'string' && wallet.icon.startsWith('data:image/') ? html`<img src=${wallet.icon} alt="">` : ''}
-          <span>${wallet.name}</span>
+          <span>${wallet.name}${wallet.warning ? html`<strong class="wallet-warning">${wallet.warning}</strong>` : ''}</span>
         </button>`)
         : html`<p>${emptyText}</p>`}
       <button class="wallet-picker-close" aria-label=${closeLabel} @click=${closePicker}>${closeLabel}</button>
@@ -98,7 +98,9 @@ export function registerDiscoveredWallet(component, event) {
   component._lastWalletInfo.set(info.uuid, info);
   component.wallets = [...component._walletProviders].map(([rdns, wallet]) => {
     const announced = component._lastWalletInfo.get(wallet.uuid) || info;
-    return { uuid: wallet.uuid, name: announced.name || rdns, icon: announced.icon || '', rdns };
+    const isServerWallet = rdns === component._serverWalletInfo?.rdns;
+    return { uuid: wallet.uuid, name: announced.name || rdns, icon: announced.icon || '', rdns,
+      warning: isServerWallet ? component.developmentWalletWarning : '' };
   });
   component._notify('web3-wallets-changed', { wallets: component.wallets });
   component._attachProvider(component.provider);
