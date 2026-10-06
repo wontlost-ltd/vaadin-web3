@@ -26,6 +26,24 @@ import tools.jackson.databind.node.ObjectNode;
 /** A server-signed development wallet for local, valueless chains. */
 public final class DevWallet implements ServerWallet {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    /** 只读方法透传到配置的节点，与浏览器钱包行为一致；任何签名类方法都不在此列。 */
+    private static final java.util.Set<String> READ_ONLY_METHODS = java.util.Set.of(
+            "eth_blockNumber",
+            "eth_call",
+            "eth_estimateGas",
+            "eth_feeHistory",
+            "eth_gasPrice",
+            "eth_getBalance",
+            "eth_getBlockByHash",
+            "eth_getBlockByNumber",
+            "eth_getCode",
+            "eth_getLogs",
+            "eth_getStorageAt",
+            "eth_getTransactionByHash",
+            "eth_getTransactionCount",
+            "eth_getTransactionReceipt",
+            "eth_maxPriorityFeePerGas",
+            "net_version");
     private static final String ANVIL_KEY = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
     private final ECKeyPair keyPair;
     private final long chain;
@@ -69,7 +87,7 @@ public final class DevWallet implements ServerWallet {
                 case "eth_signTypedData_v4" -> typedDataSign(paramsJson);
                 case "eth_sendTransaction" -> sendTransaction(paramsJson);
                 case "wallet_switchEthereumChain" -> switchChain(paramsJson);
-                default -> throw new ServerWalletException(4200, "unsupported method: " + method);
+                default -> readOnly(method, paramsJson);
             };
             return CompletableFuture.completedFuture(MAPPER.writeValueAsString(result));
         } catch (ServerWalletException exception) {
@@ -156,6 +174,16 @@ public final class DevWallet implements ServerWallet {
                               BigInteger value, String data) {
         RawTransaction transaction = RawTransaction.createTransaction(nonce, gasPrice, gas, to, value, data);
         return TransactionEncoder.signMessage(transaction, chain, org.web3j.crypto.Credentials.create(keyPair));
+    }
+
+    private Object readOnly(String method, String paramsJson) throws Exception {
+        if (!READ_ONLY_METHODS.contains(method)) throw new ServerWalletException(4200, "unsupported method: " + method);
+        if (rpc == null) throw new ServerWalletException(4200, "no RPC configured");
+        JsonNode params = MAPPER.readTree(paramsJson);
+        if (!params.isArray()) throw new IllegalArgumentException("invalid params");
+        java.util.List<JsonNode> list = new java.util.ArrayList<>();
+        params.forEach(list::add);
+        return rpc.request(method, list);
     }
 
     private Object switchChain(String paramsJson) throws Exception {

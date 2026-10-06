@@ -140,6 +140,31 @@ class DevWalletTest {
 
     private static String json(Object value) { return MAPPER.writeValueAsString(value); }
 
+
+    @Test void forwardsOnlyAllowListedReadOnlyMethodsToTheNode() {
+        java.util.List<String> seen = new CopyOnWriteArrayList<>();
+        com.wontlost.web3.chain.JsonRpcTransport node = request -> {
+            JsonNode json = MAPPER.readTree(request);
+            seen.add(json.path("method").asString());
+            return "{\"jsonrpc\":\"2.0\",\"id\":" + json.path("id").asString() + ",\"result\":\"0xde0b6b3a7640000\"}";
+        };
+        DevWallet wallet = DevWallet.anvilDefault(31337, new EthRpcClient(node));
+        String params = "[\"" + wallet.accounts().getFirst() + "\",\"latest\"]";
+
+        assertEquals("\"0xde0b6b3a7640000\"", wallet.request("eth_getBalance", params).join());
+        assertEquals(java.util.List.of("eth_getBalance"), seen);
+
+        var signing = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> wallet.request("eth_sign", params).join());
+        assertEquals(4200, ((ServerWalletException) signing.getCause()).getCode());
+        assertEquals(java.util.List.of("eth_getBalance"), seen, "non-allow-listed methods must never reach the node");
+
+        DevWallet offline = DevWallet.anvilDefault(31337, null);
+        var noRpc = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> offline.request("eth_getBalance", params).join());
+        assertEquals(4200, ((ServerWalletException) noRpc.getCause()).getCode());
+    }
+
     private static final class RecordingTransport implements JsonRpcTransport {
         private final AtomicInteger nonce = new AtomicInteger(4);
         private final AtomicInteger broadcasts = new AtomicInteger();

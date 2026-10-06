@@ -102,6 +102,10 @@ public final class EthRpcClient {
                 block.isNull() ? null : hexLong(block.asString())));
     }
 
+    /** Sends an arbitrary JSON-RPC request and returns its {@code result}; RPC errors throw {@link EthRpcException}. */
+    public JsonNode request(String method, List<?> params) {
+        return result(method, params);
+    }
     private JsonNode result(String method, List<?> params) {
         long id = ids.incrementAndGet();
         ObjectNode request = MAPPER.createObjectNode();

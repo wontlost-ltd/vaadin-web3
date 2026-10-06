@@ -13,6 +13,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 - Optional confirmation-count or finalized-block payment finality, localized wallet-picker/on-ramp labels, and finality/localization guidance.
+- `web3-vaadin-spring-boot-starter` with `web3.*` auto-configuration and an optional Spring Security SIWE bridge. `Web3SiweLoginConfigurer.configure(login)` applies configured SIWE values and attaches the bridge when Spring Security is available.
+- `web3-vaadin-test` with `TestWallet`, `TestNonceStore`, `SiweTestSupport` and `PaymentTestSupport` for exercising the real verification paths.
+- A Development wallet for local Anvil workflows, plus `ServerWallet` support and server-side transaction signing and broadcast. Anvil default keys are public and are for local chains only.
+- Spring Security `Web3Principal` authentication persistence and `Web3LogoutHandler` cleanup integration.
+
+### Changed
+- **Behavior change:** `SiweLogin.setMaxAge(Duration)` now limits the accepted age of a SIWE message's `issuedAt` value.
+- **Behavior change:** `SiweLogin` fires `SignedInEvent` before navigating to a safe `continue` target, allowing listeners such as the Spring Security bridge to persist authentication before navigation.
 
 Modules use the `web3-vaadin-*` naming (for example `com.wontlost:web3-vaadin`),
 matching the other WontLost add-ons.

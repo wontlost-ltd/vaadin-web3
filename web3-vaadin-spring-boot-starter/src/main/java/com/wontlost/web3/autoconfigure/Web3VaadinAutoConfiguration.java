@@ -120,8 +120,10 @@ public class Web3VaadinAutoConfiguration {
         return null;
     }
 
+    // 按名称而非类型判断：VaadinServiceInitListener 是通用类型，vaadin-spring（启用 Spring Security 时的访问控制初始化器）
+    // 与 Pro 都会注册同类型 bean，按类型的 @ConditionalOnMissingBean 会让本监听器静默失效
     @Bean
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(name = "web3VaadinContextInitializer")
     VaadinServiceInitListener web3VaadinContextInitializer(
             ObjectProvider<ChainRegistry> chains,
             ObjectProvider<NonceStore> nonces,

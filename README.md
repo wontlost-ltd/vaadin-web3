@@ -18,35 +18,65 @@ step.
   networks where you register an RPC endpoint. Each payment is checked against
   the on-chain receipt before it is confirmed.
 
-Requires **Vaadin 25.3+** and **Java 21+**.
+## Compatibility
 
-## Finality and reorgs
+| Java | Vaadin | Spring Boot | Spring Security |
+|---|---|---|---|
+| 21 | 25.3+ | 4.1.x (starter) | Optional; add `spring-boot-starter-security` |
 
-The default payment policy requires one confirmation for compatibility. A receipt can still be reorganized from the canonical chain at that depth, so applications should choose a stronger policy when the value or consequences of a payment justify it. Use `setMinConfirmations(n)` for a confirmation count, or `setFinality(Finality.finalized())` when the RPC node supports the `finalized` block tag. The checkout rechecks the receipt block hash against the canonical block before confirmation. Hosted monitoring currently supports confirmation counts only.
+The core Vaadin components do not require Spring Boot. The starter targets Spring Boot 4.1.x.
 
-Confirm finality guidance with the official documentation for each chain you support. L1s, rollups and sidechains can have different settlement and reorganization properties; do not assume one confirmation count is suitable across them.
+## Development wallet
 
-SIWE rotates the underlying HTTP session ID after successful verification when the callback runs on a servlet request. Use Vaadin's default `WEBSOCKET_XHR` or long-polling transport for this behavior. With a pure WebSocket push callback, rotation cannot set a response cookie; the component logs a warning and completes sign-in, so the application can disable component rotation with `setSessionIdRotation(false)` and perform its own session handling.
+The `demo` profile enables an Anvil-backed Development wallet for local use. Anvil's default accounts and private keys are public. Use only a local chain with no valuable assets. The starter rejects `web3.dev.mock-wallet.enabled=true` when Vaadin production mode is active.
 
-## Localization
+## Spring Security
 
-Components expose serializable `*I18n` objects with English defaults and chainable setters. For example:
+Add `spring-boot-starter-security`, configure a `SecurityFilterChain` with `VaadinSecurityConfigurer.vaadin()`, and pass each `SiweLogin` through `Web3SiweLoginConfigurer.configure(login)`. That applies the configured SIWE expectations and, when Spring Security is present, connects verified SIWE events to the persisted `SecurityContext`. Add the starter's `Web3LogoutHandler` with `addLogoutHandler(...)`; `SiweLogin.signOut()` also clears the Spring context through the event bridge.
 
-```java
-Web3Connect wallet = new Web3Connect();
-wallet.setI18n(new Web3ConnectI18n()
-        .setConnect("Connect")
-        .setPickerTitle("Choose your wallet")
-        .setNoWallets("No compatible wallets were found."));
+The bridge needs a servlet request and response. A pure WebSocket push callback cannot persist the authentication cookie and fails closed; use Vaadin's `WEBSOCKET_XHR` or long-polling transport for SIWE authentication.
+
+## Quick start
+
+Add the starter (currently install this repository locally with `mvn -B -ntp install`; use `1.0.0` after release):
+
+```xml
+<dependency>
+    <groupId>com.wontlost</groupId>
+    <artifactId>web3-vaadin-spring-boot-starter</artifactId>
+    <version>1.0.0</version>
+</dependency>
 ```
 
-Existing text setters remain available; the most recently applied text or i18n setting controls the visible label.
+Configure the SIWE origin and an RPC endpoint (five lines):
+
+```properties
+web3.siwe.domain=localhost
+web3.siwe.uri=http://localhost:8080
+web3.chains.11155111.rpc-url=${SEPOLIA_RPC_URL:https://ethereum-sepolia-rpc.publicnode.com}
+```
+
+Create a login route using the starter's nonce store and configurer:
+
+```java
+@Route("login")
+@AnonymousAllowed
+public class LoginView extends VerticalLayout {
+    public LoginView(NonceStore nonces, Web3SiweLoginConfigurer configurer) {
+        add(configurer.configure(new SiweLogin(nonces)));
+    }
+}
+```
+
+For a guided flow, see [the tutorial](docs/tutorial.md).
 
 ## What you get
 
 | Feature | Module | Highlights |
 |---|---|---|
 | `Web3Connect` wallet button and API | `web3-vaadin` | Connect, restore, disconnect, sign, EIP-712, send transactions, switch or add chains |
+| Spring Boot auto-configuration | `web3-vaadin-spring-boot-starter` | Chain registry, nonce store, payment ledger and verifier defaults; optional SIWE Spring Security bridge |
+| Test wallets and fixtures | `web3-vaadin-test` | Signed SIWE messages, test nonce store and JSON-RPC payment fixture |
 | Multi-wallet discovery | `web3-vaadin` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
 | `Web3Address` | `web3-vaadin` | Shortened address, colour badge, click to copy |
 | WalletConnect mobile wallets | `web3-vaadin-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
@@ -61,56 +91,6 @@ Existing text setters remain available; the most recently applied text or i18n s
 The `web3-vaadin` component module has **no third-party dependencies**. The
 `web3-vaadin-server` module adds `org.web3j:crypto` for signature
 verification.
-
-## Quick start
-
-1. Add the dependencies. Add `web3-vaadin-server` only if you need the
-   server-side features.
-
-   ```xml
-   <dependency>
-       <groupId>com.wontlost</groupId>
-       <artifactId>web3-vaadin</artifactId>
-       <version>1.0.0</version>
-   </dependency>
-   <dependency>
-       <groupId>com.wontlost</groupId>
-       <artifactId>web3-vaadin-server</artifactId>
-       <version>1.0.0</version>
-   </dependency>
-   ```
-
-2. Connect a wallet:
-
-   ```java
-   Web3Connect wallet = new Web3Connect();
-   wallet.addConnectedListener(e -> Notification.show("Connected " + e.getAccount()));
-   add(wallet);
-   ```
-
-3. Sign users in with their wallet:
-
-   ```java
-   private static final NonceStore NONCES = new InMemoryNonceStore();
-
-   SiweLogin login = new SiweLogin(NONCES);
-   login.addSignedInListener(e -> Notification.show("Signed in as " + e.getSignIn().address()));
-   add(login);
-   ```
-
-4. Gate a view on a token balance, or take a payment. Both need a
-   `ChainRegistry`; see [On-chain reads](#on-chain-reads).
-
-   ```java
-   @Route("holders")
-   @RequiresToken(chainId = 11155111, token = "USDC", minBalance = "1")
-   public class HoldersView extends VerticalLayout { }
-
-   // chains: your ChainRegistry; ledger: e.g. new InMemoryPaymentLedger()
-   add(new StablecoinCheckout(chains, ledger, "0xYourReceivingAddress", new BigDecimal("25.00")));
-   ```
-
-A full Spring Boot demo is in [`web3-vaadin-demo/`](web3-vaadin-demo). See [Running the demo](#running-the-demo).
 
 ## Wallet components (`web3-vaadin`)
 
@@ -240,6 +220,20 @@ wallet.switchChain(Chains.POLYGON);
 wallet.switchChain(Chains.BASE, "Base", "https://mainnet.base.org", "ETH");
 ```
 
+## Localization
+
+Components expose serializable `*I18n` objects with English defaults and chainable setters. For example:
+
+```java
+Web3Connect wallet = new Web3Connect();
+wallet.setI18n(new Web3ConnectI18n()
+        .setConnect("Connect")
+        .setPickerTitle("Choose your wallet")
+        .setNoWallets("No compatible wallets were found."));
+```
+
+Existing text setters remain available; the most recently applied text or i18n setting controls the visible label.
+
 ### Show an address
 
 ```java
@@ -277,6 +271,8 @@ applies to the whole site. It is shared with other instances on the same page
 and with other tabs.
 
 ## Server features (`web3-vaadin-server`)
+
+Spring Boot applications should use `web3-vaadin-spring-boot-starter` for default beans and Vaadin context registration. For non-Spring Boot applications, register a `ChainRegistry` and `NonceStore` yourself as described in [On-chain reads](#on-chain-reads) and [SIWE](#sign-in-with-ethereum-siwe).
 
 ### Sign-In with Ethereum (SIWE)
 
@@ -327,6 +323,8 @@ register the application nonce store with
 After sign-in, users go back to the page they first requested, taken from
 the `continue` query parameter. Only relative paths on the same site are
 followed.
+
+SIWE rotates the underlying HTTP session ID after successful verification when the callback runs on a servlet request. Use Vaadin's default `WEBSOCKET_XHR` or long-polling transport for this behavior. With a pure WebSocket push callback, rotation cannot set a response cookie; the component logs a warning and completes sign-in, so the application can disable component rotation with `setSessionIdRotation(false)` and perform its own session handling.
 
 #### Smart-contract wallets (ERC-1271 and ERC-6492)
 
@@ -584,6 +582,12 @@ Payment events expose `getToken()` so applications can identify the token
 contract and symbol used. It can be `null` when a failure occurs before the
 token is determined.
 
+#### Finality and reorgs
+
+The default payment policy requires one confirmation for compatibility. A receipt can still be reorganized from the canonical chain at that depth, so applications should choose a stronger policy when the value or consequences of a payment justify it. Use `setMinConfirmations(n)` for a confirmation count, or `setFinality(Finality.finalized())` when the RPC node supports the `finalized` block tag. The checkout rechecks the receipt block hash against the canonical block before confirmation. Hosted monitoring currently supports confirmation counts only.
+
+Confirm finality guidance with the official documentation for each chain you support. L1s, rollups and sidechains can have different settlement and reorganization properties; do not assume one confirmation count is suitable across them.
+
 #### Hosted payment monitor
 
 Use hosted monitoring when payment confirmation must continue after the buyer closes the checkout page, or when merchants should not operate their own chain RPC polling. The separate `web3-vaadin-monitor` service watches the chain through RPC, stores payment state in JDBC, and retries signed webhooks. It never holds funds or private keys.
@@ -616,7 +620,8 @@ Register `PaymentMonitorClient` once in the application's `VaadinContext`, then 
 
 ```bash
 mvn install -DskipTests
-mvn spring-boot:run -pl web3-vaadin-demo    # http://localhost:8080
+anvil                                      # in another terminal
+mvn spring-boot:run -pl web3-vaadin-demo -Dspring-boot.run.profiles=demo
 ```
 
 | Route | Shows |
@@ -626,8 +631,7 @@ mvn spring-boot:run -pl web3-vaadin-demo    # http://localhost:8080
 | `/holders` | A view gated on 1 Sepolia USDC |
 | `/checkout` | A 1.00 Sepolia USDC or PYUSD checkout |
 
-You need a browser wallet extension such as MetaMask on the Sepolia test
-network. You can get test USDC from the
+The demo profile provides a Development wallet for local SIWE. Anvil accounts are publicly known test keys and must never be used with valuable assets. The default demo checkout uses Sepolia and a real wallet. For a local fork checkout, plain Anvil is insufficient: its default chain ID 31337 has no built-in Sepolia token entries. See the tutorial for the Sepolia fork command and the matching local RPC override. You can get test USDC from the
 [Circle faucet](https://faucet.circle.com/), and test PYUSD from the
 [Paxos faucet](https://faucet.paxos.com/). Before trying the checkout, set
 `web3.demo.recipient` in `web3-vaadin-demo/src/main/resources/application.properties` to
@@ -642,7 +646,9 @@ an address you control.
 - `web3-vaadin-server/`: SIWE, on-chain reads, token gates and checkout (`com.wontlost:web3-vaadin-server`).
 - `web3-vaadin-onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:web3-vaadin-onramp`).
 - `web3-vaadin-monitor/`: optional hosted payment tracking service (`com.wontlost:web3-vaadin-monitor`).
-- `web3-vaadin-demo/`: a Spring Boot demo application that exercises every feature.
+- `web3-vaadin-spring-boot-starter/`: Spring Boot auto-configuration and optional SIWE Spring Security bridge.
+- `web3-vaadin-test/`: test wallets and SIWE test fixtures.
+- `web3-vaadin-demo/`: a Spring Boot demo application.
 
 ## Pro
 

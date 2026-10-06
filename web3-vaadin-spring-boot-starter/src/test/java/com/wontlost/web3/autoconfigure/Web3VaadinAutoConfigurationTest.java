@@ -161,4 +161,13 @@ class Web3VaadinAutoConfigurationTest {
                     login, com.wontlost.web3.siwe.SiweLogin.SignedInEvent.class));
         });
     }
+
+    @Test
+    void contextInitializerSurvivesOtherVaadinServiceInitListenerBeans() {
+        contextRunner.withBean("someOtherListener", com.vaadin.flow.server.VaadinServiceInitListener.class,
+                () -> event -> { }).run(context -> {
+                    assertThat(context).hasBean("web3VaadinContextInitializer");
+                    assertThat(context).hasBean("someOtherListener");
+                });
+    }
 }

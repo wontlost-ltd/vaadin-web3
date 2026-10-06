@@ -53,8 +53,10 @@ public class Web3Connect extends Component {
 
     private static final String ERROR_MARKER = "WEB3_ERROR:";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    // 签名类方法 + 只读节点方法（与 DevWallet 的只读透传一致）；其余一律拒绝
     private static final Set<String> SERVER_WALLET_METHODS = Set.of("personal_sign", "eth_signTypedData_v4",
-            "eth_sendTransaction", "wallet_switchEthereumChain", "wallet_addEthereumChain");
+            "eth_sendTransaction", "wallet_switchEthereumChain", "wallet_addEthereumChain",
+            "eth_blockNumber", "eth_call", "eth_estimateGas", "eth_feeHistory", "eth_gasPrice", "eth_getBalance", "eth_getBlockByHash", "eth_getBlockByNumber", "eth_getCode", "eth_getLogs", "eth_getStorageAt", "eth_getTransactionByHash", "eth_getTransactionCount", "eth_getTransactionReceipt", "eth_maxPriorityFeePerGas", "net_version");
     private transient List<CompletableFuture<String>> pendingFutures;
     private transient Map<String, CompletableFuture<String>> serverWalletRequests;
     private transient ServerWallet serverWallet;
@@ -209,6 +211,18 @@ public class Web3Connect extends Component {
     @Synchronize(property = "providerAvailable", value = "web3-provider-detected")
     public boolean isProviderAvailable() {
         return getElement().getProperty("providerAvailable", false);
+    }
+
+    /**
+     * Returns whether the given wallet is the application's registered {@link ServerWallet}, for example the development
+     * wallet. Applications that render their own wallet list should show
+     * {@link Web3ConnectI18n#getDevelopmentWalletWarning()} next to such a wallet.
+     */
+    public boolean isServerWallet(WalletInfo info) {
+        if (info == null) return false;
+        VaadinService service = VaadinService.getCurrent();
+        ServerWallet wallet = ServerWallet.find(service == null ? null : service.getContext());
+        return wallet != null && wallet.rdns().equals(info.rdns());
     }
 
     /** Returns the EIP-6963 wallets currently discovered by the browser. */
