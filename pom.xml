@@ -36,6 +36,7 @@
         <module>web3-vaadin</module>
         <module>web3-vaadin-walletconnect</module>
         <module>web3-vaadin-server</module>
+        <module>web3-vaadin-test</module>
         <module>web3-vaadin-onramp</module>
         <module>web3-vaadin-monitor</module>
         <module>web3-vaadin-demo</module>
