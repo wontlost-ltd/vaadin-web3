@@ -35,12 +35,13 @@ public final class SignatureValidator {
 
     /**
      * Returns whether {@code signature} is a valid signature of {@code hash} by {@code signer} on the client's chain.
+     * All RPC reads use a pinned endpoint view. A pinned read failure is propagated so callers can retry the operation.
      *
      * @throws EthRpcException when the endpoint reports an error other than an execution revert
      * @throws IllegalStateException when the endpoint cannot be reached
      */
     public static boolean isValidSignature(EthRpcClient client, String signer, byte[] hash, byte[] signature) {
-        Objects.requireNonNull(client, "client");
+        client = Objects.requireNonNull(client, "client").pinned();
         if (Objects.requireNonNull(hash, "hash").length != 32) throw new IllegalArgumentException("hash must be 32 bytes");
         String result;
         try {
