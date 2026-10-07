@@ -19,6 +19,7 @@ public class Web3Properties {
     private final Dev dev = new Dev();
     private final Security security = new Security();
     private final Payments payments = new Payments();
+    private final X402 x402 = new X402();
 
     public Map<Long, Chain> getChains() { return chains; }
     public void setChains(Map<Long, Chain> chains) { this.chains = chains; }
@@ -30,6 +31,88 @@ public class Web3Properties {
     public Dev getDev() { return dev; }
     public Security getSecurity() { return security; }
     public Payments getPayments() { return payments; }
+    public X402 getX402() { return x402; }
+
+    public static class X402 {
+        private boolean enabled;
+        private String origin = "";
+        private Duration validAfterSkew = Duration.ofSeconds(600);
+        private Duration reconcileInterval = Duration.ZERO;
+        private int reconcileConfirmations = 3;
+        private boolean allowInMemoryStore;
+        private final Facilitator facilitator = new Facilitator();
+        private final Protocol protocol = new Protocol();
+        private final LocalFacilitator localFacilitator = new LocalFacilitator();
+        private List<Long> allowedChainIds = new ArrayList<>();
+        private List<String> allowedNetworks = new ArrayList<>();
+        private List<String> allowedAssets = new ArrayList<>();
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean value) { enabled = value; }
+        public String getOrigin() { return origin; }
+        public void setOrigin(String value) { origin = value; }
+        public Duration getValidAfterSkew() { return validAfterSkew; }
+        public void setValidAfterSkew(Duration value) { validAfterSkew = value; }
+        public Duration getReconcileInterval() { return reconcileInterval; }
+        public void setReconcileInterval(Duration value) { reconcileInterval = value; }
+        public int getReconcileConfirmations() { return reconcileConfirmations; }
+        public void setReconcileConfirmations(int value) { reconcileConfirmations = value; }
+        public boolean isAllowInMemoryStore() { return allowInMemoryStore; }
+        public void setAllowInMemoryStore(boolean value) { allowInMemoryStore = value; }
+        public Facilitator getFacilitator() { return facilitator; }
+        public Protocol getProtocol() { return protocol; }
+        public LocalFacilitator getLocalFacilitator() { return localFacilitator; }
+        public List<Long> getAllowedChainIds() { return allowedChainIds; }
+        public void setAllowedChainIds(List<Long> value) { allowedChainIds = value; }
+        public List<String> getAllowedNetworks() { return allowedNetworks; }
+        public void setAllowedNetworks(List<String> value) { allowedNetworks = value; }
+        public List<String> getAllowedAssets() { return allowedAssets; }
+        public void setAllowedAssets(List<String> value) { allowedAssets = value; }
+    }
+    public static class Facilitator {
+        private String baseUrl = "";
+        private String apiKey = "";
+        private String apiKeyHeader = "Authorization";
+        private Duration connectTimeout = Duration.ofSeconds(2);
+        private Duration requestTimeout = Duration.ofSeconds(5);
+        private int maxResponseBytes = 262144;
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String value) { baseUrl = value; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String value) { apiKey = value; }
+        public String getApiKeyHeader() { return apiKeyHeader; }
+        public void setApiKeyHeader(String value) { apiKeyHeader = value; }
+        public Duration getConnectTimeout() { return connectTimeout; }
+        public void setConnectTimeout(Duration value) { connectTimeout = value; }
+        public Duration getRequestTimeout() { return requestTimeout; }
+        public void setRequestTimeout(Duration value) { requestTimeout = value; }
+        public int getMaxResponseBytes() { return maxResponseBytes; }
+        public void setMaxResponseBytes(int value) { maxResponseBytes = value; }
+    }
+    public static class Protocol {
+        private int maxHeaderBytes = 65536;
+        private int maxJsonBytes = 49152;
+        private int maxTimeoutSeconds = 300;
+        public int getMaxHeaderBytes() { return maxHeaderBytes; }
+        public void setMaxHeaderBytes(int value) { maxHeaderBytes = value; }
+        public int getMaxJsonBytes() { return maxJsonBytes; }
+        public void setMaxJsonBytes(int value) { maxJsonBytes = value; }
+        public int getMaxTimeoutSeconds() { return maxTimeoutSeconds; }
+        public void setMaxTimeoutSeconds(int value) { maxTimeoutSeconds = value; }
+    }
+    public static class LocalFacilitator {
+        private boolean enabled;
+        private long chainId = 31337;
+        private String tokenAddress = "";
+        private String payTo = "";
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean value) { enabled = value; }
+        public long getChainId() { return chainId; }
+        public void setChainId(long value) { chainId = value; }
+        public String getTokenAddress() { return tokenAddress; }
+        public void setTokenAddress(String value) { tokenAddress = value; }
+        public String getPayTo() { return payTo; }
+        public void setPayTo(String value) { payTo = value; }
+    }
 
     public static class Chain {
         private String rpcUrl;

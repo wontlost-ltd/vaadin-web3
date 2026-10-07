@@ -141,6 +141,14 @@ For a guided flow, see [the tutorial](docs/tutorial.md).
 | `Balance`, `TransactionStatus`, `UiPolling` | `web3-vaadin-server` | Server RPC balances and transaction finality with coordinated UI polling |
 | Multi-endpoint RPC and health | `web3-vaadin-spring-boot-starter` | Ordered failover, circuit breakers and optional Actuator health indicator |
 
+### x402 v2 payment core
+
+The server module includes the x402 v2 `exact` payment core for EVM networks using EIP-3009 `transferWithAuthorization`: strict Base64/JSON codecs, server-created EIP-712 authorization intents, facilitator verification and settlement, and a payment state store. The Spring Boot integration is opt-in with `web3.x402.enabled=true`; configure a canonical `web3.x402.origin` and an HTTPS facilitator URL. Authorization `validAfter` defaults to 600 seconds before the server clock to tolerate chain timestamp lag; configure this with `web3.x402.valid-after-skew`. `web3.x402.reconcile-interval` is disabled by default; set a positive duration such as `PT1M` to periodically reconcile pending outcomes. `web3.x402.reconcile-confirmations` defaults to 3 and accepts 0; reconciliation evaluates authorization state and expiry at one confirmed block snapshot and waits for transaction receipts to reach the same confirmation depth. Reconciliation never rebroadcasts settlement. A `SETTLING` record is recovered only after the facilitator request timeout plus a 10-second margin. The default store is in-memory and loses payment state on restart; Vaadin production mode rejects it unless `web3.x402.allow-in-memory-store=true`. Production deployments should provide a persistent `PaidResourceStore` (the Pro edition provides JDBC).
+
+The current implementation supports EVM `eip155` networks and 65-byte EOA signatures. It does not implement Permit2, ERC-7710, smart-account signatures, the HTTP payment filter, or the Vaadin browser paywall yet. The test kit includes a local EIP-3009 token and Anvil facilitator for valueless development chains. Public facilitators have not been tested for interoperability; treat their configuration as unverified until tested against the facilitator you intend to use.
+
+The token bytecode in `web3-vaadin-test` was built with Foundry 1.5.1 and solc 0.8.28. From the repository root, compile with `forge build --root "$PWD/web3-vaadin-test/src/main/resources/contracts" --contracts "$PWD/web3-vaadin-test/src/main/resources/contracts" --use 0.8.28 --out /tmp/x402-forge-out --cache-path /tmp/x402-forge-cache`.
+
 The `web3-vaadin` component module has **no third-party dependencies**. The
 `web3-vaadin-server` module adds `org.web3j:crypto` for signature
 verification.
