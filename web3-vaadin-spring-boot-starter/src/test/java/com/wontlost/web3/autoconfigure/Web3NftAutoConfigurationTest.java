@@ -16,6 +16,10 @@ import com.wontlost.web3.chain.ChainRegistry;
 import com.wontlost.web3.nft.NftCollection;
 import com.wontlost.web3.nft.NftOwnershipPage;
 import com.wontlost.web3.nft.NftOwnershipSource;
+import com.wontlost.web3.nft.NftMetadataFetcher;
+import com.wontlost.web3.nft.NftMetadataResolver;
+import com.wontlost.web3.nft.NftMetadataOptions;
+import com.wontlost.web3.nft.RpcNftMetadataResolver;
 import com.wontlost.web3.nft.RpcNftOwnershipSource;
 
 class Web3NftAutoConfigurationTest {
@@ -31,6 +35,7 @@ class Web3NftAutoConfigurationTest {
     @Test
     void registersConfiguredSourceAndCollectionListOnlyWhenEnabled() {
         runner.withPropertyValues("web3.nft.enabled=true", "web3.nft.max-concurrency=3",
+                "web3.nft.metadata.max-uri-length=4096",
                 "web3.nft.queue-capacity=7",
                 "web3.nft.collections[0].chain-id=31337",
                 "web3.nft.collections[0].contract=0x0000000000000000000000000000000000000001",
@@ -39,7 +44,10 @@ class Web3NftAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(NftOwnershipSource.class)).isInstanceOf(RpcNftOwnershipSource.class);
+                    assertThat(context.getBean(NftMetadataResolver.class)).isInstanceOf(RpcNftMetadataResolver.class);
+                    assertThat(context).hasSingleBean(NftMetadataFetcher.class);
                     assertThat(context.getBean(Web3Properties.class).getNft().getQueueCapacity()).isEqualTo(7);
+                    assertThat(context.getBean(NftMetadataOptions.class).maxUriLength()).isEqualTo(4096);
                     assertThat(context).doesNotHaveBean(List.class);
                     NftCollections configuredCollections = context.getBean("web3NftCollections", NftCollections.class);
                     List<NftCollection> collections = configuredCollections.collections();
@@ -90,6 +98,10 @@ class Web3NftAutoConfigurationTest {
         assertInvalidSetting("max-page-size", "501", "web3.nft.max-page-size must be between 1 and 500");
         assertInvalidSetting("max-token-ids", "10001", "web3.nft.max-token-ids must be between 1 and 10000");
         assertInvalidSetting("queue-capacity", "4097", "web3.nft.queue-capacity must be between 1 and 4096");
+        assertInvalidSetting("metadata.max-redirects", "11",
+                "web3.nft.metadata.max-redirects must be between 0 and 10");
+        assertInvalidSetting("metadata.max-uri-length", "1000001",
+                "web3.nft.metadata.max-uri-length must be between 1 and 1000000");
     }
 
     private void assertInvalidSetting(String name, String value, String expectedMessage) {

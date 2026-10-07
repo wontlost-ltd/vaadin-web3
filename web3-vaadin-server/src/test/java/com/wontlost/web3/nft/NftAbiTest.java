@@ -33,6 +33,18 @@ class NftAbiTest {
     }
 
     @Test
+    void encodesMetadataUriCallsAndDecodesDynamicStrings() {
+        BigInteger maximum = BigInteger.ONE.shiftLeft(256).subtract(BigInteger.ONE);
+        String dynamicString = "0x" + "0".repeat(62) + "20"
+                + "0".repeat(63) + "4"
+                + "7465737400000000000000000000000000000000000000000000000000000000";
+
+        assertEquals("0xc87b56dd", NftAbi.tokenUriData(maximum).substring(0, 10));
+        assertEquals("0x0e89341c", NftAbi.uriData(maximum).substring(0, 10));
+        assertEquals("test", NftAbi.decodeString(dynamicString));
+    }
+
+    @Test
     void rejectsOutOfRangeUintAndEmptyReturnData() {
         assertThrows(IllegalArgumentException.class, () -> NftAbi.ownerOfData(BigInteger.ONE.shiftLeft(256)));
         assertThrows(IllegalArgumentException.class, () -> NftAbi.decodeUint("0x"));

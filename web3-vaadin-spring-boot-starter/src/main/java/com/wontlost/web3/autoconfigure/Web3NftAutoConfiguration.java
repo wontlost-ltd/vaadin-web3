@@ -15,11 +15,41 @@ import com.wontlost.web3.nft.NftOwnershipSource;
 import com.wontlost.web3.nft.NftStandard;
 import com.wontlost.web3.nft.NftTokenIdRange;
 import com.wontlost.web3.nft.RpcNftOwnershipSource;
+import com.wontlost.web3.nft.NftMetadataFetcher;
+import com.wontlost.web3.nft.NftMetadataOptions;
+import com.wontlost.web3.nft.NftMetadataResolver;
+import com.wontlost.web3.nft.RpcNftMetadataResolver;
+import com.wontlost.web3.nft.ApacheNftMetadataFetcher;
 
 /** 注册可选的 RPC NFT 所有权数据源。 */
 @AutoConfiguration(after = Web3VaadinAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "web3.nft", name = "enabled", havingValue = "true")
 public class Web3NftAutoConfiguration {
+    @Bean
+    @ConditionalOnMissingBean(NftMetadataOptions.class)
+    NftMetadataOptions web3NftMetadataOptions(Web3Properties properties) {
+        Web3Properties.Nft.Metadata config = properties.getNft().getMetadata();
+        return new NftMetadataOptions(config.getIpfsGateways(), config.getMaxResponseBytes(),
+                config.getMaxDataUriBytes(), config.getMaxUriLength(), config.getMaxRedirects(),
+                config.getRequestTimeout(),
+                config.getCacheCapacity(), config.getPositiveTtl(), config.getNegativeTtl(), config.getErrorTtl(),
+                config.getMaxConcurrency(), java.util.Set.copyOf(config.getAllowedPorts()),
+                config.getMaxAttributes(), config.getMaxTextLength());
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean(NftMetadataFetcher.class)
+    NftMetadataFetcher web3NftMetadataFetcher(NftMetadataOptions options) {
+        return new ApacheNftMetadataFetcher(options.allowedPorts());
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean(NftMetadataResolver.class)
+    NftMetadataResolver web3NftMetadataResolver(ChainRegistry chains, NftMetadataFetcher fetcher,
+            NftMetadataOptions options) {
+        return new RpcNftMetadataResolver(chains, fetcher, options);
+    }
+
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean(NftOwnershipSource.class)
     RpcNftOwnershipSource web3NftOwnershipSource(ChainRegistry chains, Web3Properties properties) {

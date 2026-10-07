@@ -141,6 +141,9 @@ The service is non-custodial and watches configured chains through RPC; it does 
 - loopback, any-local and multicast addresses;
 - RFC 1918 private ranges and link-local addresses, including the cloud metadata address `169.254.169.254`;
 - `0.0.0.0/8`, `100.64.0.0/10`, `192.0.0.0/24`, `198.18.0.0/15` and `240.0.0.0/4`;
+- documentation, protocol-assignment and benchmarking ranges, including `192.0.2.0/24`, `192.88.99.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32` and `2001:2::/48`;
 - IPv6 unique-local addresses and NAT64 (`64:ff9b::/96`).
+
+The shared public-address policy also rejects other IANA special-purpose IPv6 ranges. This is stricter than blocking private ranges alone.
 
 The URL is checked when it is saved. At delivery time the webhook HTTP client uses the same policy as its DNS resolver, so the addresses that are checked are exactly the addresses it connects to. A hostname cannot pass the check and then be re-resolved to an internal address (DNS rebinding). Redirects are disabled. Enable private targets only for isolated local tests.

@@ -12,6 +12,7 @@ import org.web3j.abi.datatypes.DynamicArray;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.Uint;
+import org.web3j.abi.datatypes.Utf8String;
 import org.web3j.abi.datatypes.generated.Bytes4;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.utils.Numeric;
@@ -25,6 +26,14 @@ public final class NftAbi {
 
     public static String ownerOfData(BigInteger tokenId) {
         return encode("ownerOf", List.of(new Uint256(requireUint256(tokenId))));
+    }
+
+    public static String tokenUriData(BigInteger tokenId) {
+        return encode("tokenURI", List.of(new Uint256(requireUint256(tokenId))));
+    }
+
+    public static String uriData(BigInteger tokenId) {
+        return encode("uri", List.of(new Uint256(requireUint256(tokenId))));
     }
 
     public static String balanceOfData(String owner) {
@@ -76,6 +85,11 @@ public final class NftAbi {
 
     public static String decodeAddress(String data) {
         return (String) decode(data, new TypeReference<Address>() {
+        }).getFirst().getValue();
+    }
+
+    public static String decodeString(String data) {
+        return (String) decode(data, new TypeReference<Utf8String>() {
         }).getFirst().getValue();
     }
 

@@ -26,6 +26,11 @@ contract Nft721Mock {
         return tokenOwner;
     }
 
+    function tokenURI(uint256 tokenId) external view returns (string memory) {
+        require(owners[tokenId] != address(0), "missing token");
+        return "data:application/json,%7B%22name%22%3A%22Test%20NFT%22%7D";
+    }
+
     function balanceOf(address owner) external view returns (uint256) {
         require(owner != address(0), "zero owner");
         return balances[owner];

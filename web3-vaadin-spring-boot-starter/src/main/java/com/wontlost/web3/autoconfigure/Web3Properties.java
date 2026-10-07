@@ -47,6 +47,7 @@ public class Web3Properties {
         private int maxTokenIds = 1000;
         private Integer queueCapacity;
         private List<NftCollection> collections = new ArrayList<>();
+        private final Metadata metadata = new Metadata();
         public boolean isEnabled() {
             return enabled;
         }
@@ -114,6 +115,53 @@ public class Web3Properties {
 
         public void setCollections(List<NftCollection> value) {
             collections = value;
+        }
+
+        public Metadata getMetadata() { return metadata; }
+
+        public static class Metadata {
+            private List<String> ipfsGateways = new ArrayList<>(List.of("https://ipfs.io/ipfs/"));
+            private int maxResponseBytes = 262144;
+            private int maxDataUriBytes = 262144;
+            private int maxUriLength = 8192;
+            private int maxRedirects = 3;
+            private Duration requestTimeout = Duration.ofSeconds(10);
+            private int cacheCapacity = 10000;
+            private Duration positiveTtl = Duration.ofHours(1);
+            private Duration negativeTtl = Duration.ofMinutes(1);
+            private Duration errorTtl = Duration.ofSeconds(10);
+            private int maxConcurrency = 8;
+            private List<Integer> allowedPorts = new ArrayList<>(List.of(443));
+            private int maxAttributes = 100;
+            private int maxTextLength = 2048;
+            public List<String> getIpfsGateways() { return ipfsGateways; }
+            public void setIpfsGateways(List<String> value) { ipfsGateways = value; }
+            public int getMaxResponseBytes() { return maxResponseBytes; }
+            public void setMaxResponseBytes(int value) { maxResponseBytes = value; }
+            public int getMaxDataUriBytes() { return maxDataUriBytes; }
+            public void setMaxDataUriBytes(int value) { maxDataUriBytes = value; }
+            public int getMaxUriLength() { return maxUriLength; }
+            public void setMaxUriLength(int value) { maxUriLength = value; }
+            public int getMaxRedirects() { return maxRedirects; }
+            public void setMaxRedirects(int value) { maxRedirects = value; }
+            public Duration getRequestTimeout() { return requestTimeout; }
+            public void setRequestTimeout(Duration value) { requestTimeout = value; }
+            public int getCacheCapacity() { return cacheCapacity; }
+            public void setCacheCapacity(int value) { cacheCapacity = value; }
+            public Duration getPositiveTtl() { return positiveTtl; }
+            public void setPositiveTtl(Duration value) { positiveTtl = value; }
+            public Duration getNegativeTtl() { return negativeTtl; }
+            public void setNegativeTtl(Duration value) { negativeTtl = value; }
+            public Duration getErrorTtl() { return errorTtl; }
+            public void setErrorTtl(Duration value) { errorTtl = value; }
+            public int getMaxConcurrency() { return maxConcurrency; }
+            public void setMaxConcurrency(int value) { maxConcurrency = value; }
+            public List<Integer> getAllowedPorts() { return allowedPorts; }
+            public void setAllowedPorts(List<Integer> value) { allowedPorts = value; }
+            public int getMaxAttributes() { return maxAttributes; }
+            public void setMaxAttributes(int value) { maxAttributes = value; }
+            public int getMaxTextLength() { return maxTextLength; }
+            public void setMaxTextLength(int value) { maxTextLength = value; }
         }
     }
 

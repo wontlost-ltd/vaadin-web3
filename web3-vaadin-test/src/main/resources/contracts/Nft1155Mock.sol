@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 contract Nft1155Mock {
-    string private baseUri = "https://metadata.example/{id}.json";
+    string private baseUri = "ipfs://bafybeigdyrzt/{id}.json";
     mapping(uint256 => mapping(address => uint256)) private balances;
 
     event TransferSingle(address indexed operator, address indexed from, address indexed to,
