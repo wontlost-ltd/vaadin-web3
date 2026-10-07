@@ -11,7 +11,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 import com.wontlost.web3.x402.payment.PaymentRecord;
 import com.wontlost.web3.x402.payment.PaymentStatus;
-import com.wontlost.web3.x402.store.PaymentStateChangedException;
 
 public final class InMemoryPaidResourceStore implements PaidResourceStore {
     private final ConcurrentHashMap<String, PaymentRecord> records = new ConcurrentHashMap<>();
@@ -47,7 +46,7 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
             String existingId = idempotency.get(record.idempotencyKey());
             if (existingId != null) {
                 PaymentRecord existing = records.get(existingId);
-                if (!sameIntent(existing, record)) throw new IllegalStateException("idempotency conflict");
+                if (!PaymentRecord.sameIntent(existing, record)) throw new IllegalStateException("idempotency conflict");
                 return existing;
             }
             if (records.size() >= maxRecords) throw new IllegalStateException("payment store capacity reached");
@@ -59,11 +58,11 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
     }
 
     @Override public PaymentRecord transition(String paymentId, PaymentStatus expected, PaymentRecord update) {
-        if (!paymentId.equals(update.paymentId()) || !legal(expected, update.status()))
+        if (!paymentId.equals(update.paymentId()) || !expected.canTransitionTo(update.status()))
             throw new IllegalArgumentException("invalid payment transition");
         PaymentRecord changed = records.compute(paymentId, (id, current) -> {
             if (current == null || current.status() != expected) throw new PaymentStateChangedException();
-            if (!sameIntent(current, update)) throw new IllegalArgumentException("payment intent is immutable");
+            if (!PaymentRecord.sameIntent(current, update)) throw new IllegalArgumentException("payment intent is immutable");
             if (update.status() == PaymentStatus.SETTLED) add(settledByIdentity, update);
             return update;
         });
@@ -129,27 +128,6 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
         if (entries == null) return;
         entries.remove(order(record), record.paymentId());
         if (entries.isEmpty()) index.remove(key, entries);
-    }
-
-    private static boolean legal(PaymentStatus from, PaymentStatus to) {
-        return switch (from) {
-            case READY -> to == PaymentStatus.VERIFIED || to == PaymentStatus.FAILED;
-            case VERIFIED -> to == PaymentStatus.SETTLING || to == PaymentStatus.FAILED;
-            case SETTLING -> to == PaymentStatus.SETTLED || to == PaymentStatus.PENDING || to == PaymentStatus.FAILED || to == PaymentStatus.UNKNOWN;
-            case PENDING -> to == PaymentStatus.SETTLED || to == PaymentStatus.FAILED;
-            case UNKNOWN -> to == PaymentStatus.SETTLED || to == PaymentStatus.FAILED;
-            case SETTLED, FAILED -> false;
-        };
-    }
-    private static boolean sameIntent(PaymentRecord first, PaymentRecord second) {
-        return first != null && first.idempotencyKey().equals(second.idempotencyKey())
-                && first.resourceId().equals(second.resourceId()) && first.walletAddress().equals(second.walletAddress())
-                && first.network().equals(second.network()) && first.asset().equalsIgnoreCase(second.asset())
-                && first.amount().equals(second.amount()) && first.policyVersion().equals(second.policyVersion())
-                && java.util.Objects.equals(first.nonce(), second.nonce())
-                && java.util.Objects.equals(first.validAfter(), second.validAfter())
-                && java.util.Objects.equals(first.validBefore(), second.validBefore())
-                && java.util.Objects.equals(first.to(), second.to()) && java.util.Objects.equals(first.value(), second.value());
     }
 
     private record LookupKey(String resourceId, String walletAddress, String policyVersion) { }

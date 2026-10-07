@@ -96,7 +96,7 @@ class X402LocalFacilitatorAnvilIT {
         var boundary = boundaryFacilitator.verify(
                 payload(payer, policy, now, now + 300, AMOUNT, policy.payTo(), policy.network(), token), policy.requirements());
         assertFalse(boundary.valid());
-        assertEquals("simulation_failed", boundary.invalidReason());
+        assertEquals("authorization_not_yet_valid", boundary.invalidReason());
         assertFalse(facilitator.verify(payload(payer, policy, now - 400, now - 1, AMOUNT, policy.payTo(), policy.network(), token), policy.requirements()).valid());
         assertFalse(facilitator.verify(payload(payer, policy, now - 1, now + 300, AMOUNT, TestWallet.anvil(1).address(), policy.network(), token), policy.requirements()).valid());
         assertFalse(facilitator.verify(payload(payer, policy, now - 1, now + 300, AMOUNT.add(BigInteger.ONE), policy.payTo(), policy.network(), token), policy.requirements()).valid());
@@ -179,6 +179,51 @@ class X402LocalFacilitatorAnvilIT {
         var expired = reconciliationService.reconcile(paymentId);
         assertEquals(PaymentStatus.FAILED, expired.status());
         assertEquals("authorization_expired", expired.failureCode());
+    }
+
+    @Test @Order(5) void paymentServiceSettlementUnlocksResourceAccess() {
+        var store = new InMemoryPaidResourceStore();
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(rpc.chainId(), rpc);
+        var service = new DefaultX402PaymentService(Map.of(policy.resourceId(), policy), store, facilitator,
+                new Eip3009TypedDataFactory(Clock.systemUTC(), Duration.ofSeconds(600)), Clock.systemUTC(), registry);
+        var attempt = service.prepare(policy.resourceId(), payer.address());
+        PaymentPayload payload = new PaymentPayload(2, policy.resource(), attempt.requirements(),
+                new Eip3009Payload(payer.signTypedData(attempt.typedDataJson()), attempt.authorization()));
+        var outcome = service.verifyAndSettle(policy.resourceId(), payload);
+        assertEquals(PaymentStatus.SETTLED, outcome.status());
+        assertNotNull(outcome.txHash());
+        assertEquals(com.wontlost.web3.x402.payment.AccessDecision.ALLOW,
+                service.hasAccess(policy.resourceId(), payer.address()));
+    }
+
+    @Test @Order(6) void devWalletTypedDataRpcSignaturePaysFromItsOwnAccount() throws Exception {
+        String devAddress = relay.accounts().getFirst();
+        send(token, "mint(address,uint256)", wordAddress(devAddress) + wordUint(AMOUNT));
+        ResourcePolicy selfPaymentPolicy = new ResourcePolicy("devwallet-self-payment", "1",
+                new X402Resource("http://localhost/devwallet-self-payment", "DevWallet payment", "text/plain"),
+                "eip155:" + rpc.chainId(), AMOUNT, token, devAddress, 300, "X402 Test Token", "1");
+        var store = new InMemoryPaidResourceStore();
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(rpc.chainId(), rpc);
+        var service = new DefaultX402PaymentService(Map.of(selfPaymentPolicy.resourceId(), selfPaymentPolicy),
+                store, facilitator, new Eip3009TypedDataFactory(Clock.systemUTC(), Duration.ofSeconds(600)),
+                Clock.systemUTC(), registry);
+
+        var attempt = service.prepare(selfPaymentPolicy.resourceId(), devAddress);
+        String params = MAPPER.writeValueAsString(List.of(devAddress, attempt.typedDataJson()));
+        String encodedSignature = relay.request("eth_signTypedData_v4", params).join();
+        String signature = MAPPER.readTree(encodedSignature).asString();
+        PaymentPayload payload = new PaymentPayload(2, selfPaymentPolicy.resource(), attempt.requirements(),
+                new Eip3009Payload(signature, attempt.authorization()));
+        var outcome = service.verifyAndSettle(selfPaymentPolicy.resourceId(), payload);
+
+        assertEquals(PaymentStatus.SETTLED, outcome.status(), "DevWallet verify failure: " + outcome.failureCode()
+                + ", authorization=" + attempt.authorization() + ", chainTime=" + chainTimestamp()
+                + ", hostTime=" + Instant.now().getEpochSecond());
+        assertNotNull(outcome.txHash());
+        assertEquals(com.wontlost.web3.x402.payment.AccessDecision.ALLOW,
+                service.hasAccess(selfPaymentPolicy.resourceId(), devAddress));
     }
 
     private static void markUnknown(InMemoryPaidResourceStore store, String paymentId) {

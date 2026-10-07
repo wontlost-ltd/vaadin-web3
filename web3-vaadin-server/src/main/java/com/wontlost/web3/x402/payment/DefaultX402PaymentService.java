@@ -75,9 +75,9 @@ public final class DefaultX402PaymentService implements X402PaymentService {
     @Override public PaymentAttempt prepare(String resourceId, String walletAddress) {
         ResourcePolicy policy = policy(resourceId);
         String address = X402Validation.address(walletAddress);
-        Instant now = clock.instant();
+        Instant now = paymentTime(policy);
         store.purgeExpired(now);
-        var generated = typedDataFactory.create(policy, address);
+        var generated = typedDataFactory.create(policy, address, now);
         var authorization = generated.authorization();
         String idempotencyKey = idempotencyKey(resourceId, address, policy, authorization.nonce());
         String paymentId = UUID.randomUUID().toString();
@@ -102,7 +102,7 @@ public final class DefaultX402PaymentService implements X402PaymentService {
         while (true) {
             switch (current.status()) {
                 case READY -> {
-                    if (clock.instant().getEpochSecond() > Long.parseLong(current.validBefore())) {
+                    if (paymentTime(policy).getEpochSecond() > Long.parseLong(current.validBefore())) {
                         return outcome(transitionOrReload(current, PaymentStatus.FAILED, null, "authorization_expired"));
                     }
                     VerifyResult verification;
@@ -239,6 +239,12 @@ public final class DefaultX402PaymentService implements X402PaymentService {
         return AccessDecision.PAYMENT_REQUIRED;
     }
 
+    @Override public java.util.Optional<PaymentOutcome> latestOutcome(String resourceId, String walletAddress) {
+        ResourcePolicy policy = policy(resourceId);
+        String address = X402Validation.normalizedAddress(walletAddress);
+        return store.findLatest(resourceId, address, policy.version()).map(this::outcome);
+    }
+
     private PaymentOutcome settle(PaymentPayload payload, ResourcePolicy policy, PaymentRecord settling) {
         SettlementResult result;
         try { result = facilitator.settle(payload, policy.requirements()); }
@@ -305,6 +311,17 @@ public final class DefaultX402PaymentService implements X402PaymentService {
         ResourcePolicy value = policies.get(resourceId);
         if (value == null) throw new IllegalArgumentException("unknown resource policy");
         return value;
+    }
+
+    private Instant paymentTime(ResourcePolicy policy) {
+        long chainId = X402Validation.chainId(policy.network(), java.util.Set.of());
+        EthRpcClient rpc = chains == null ? null : chains.get(chainId).orElse(null);
+        if (rpc == null) {
+            return clock.instant();
+        }
+        var latestBlock = rpc.request("eth_getBlockByNumber", java.util.List.of("latest", false));
+        long timestamp = parseHexLong(latestBlock.path("timestamp").asString(), "latest block timestamp");
+        return Instant.ofEpochSecond(timestamp);
     }
     private PaymentOutcome outcome(PaymentRecord record) {
         return new PaymentOutcome(record.paymentId(), record.status(), record.txHash(), record.failureCode());
