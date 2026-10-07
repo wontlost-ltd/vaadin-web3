@@ -46,6 +46,21 @@ class X402CodecTest {
         assertThrows(IllegalArgumentException.class, () -> new JacksonX402Codec(8, 8).decodePaymentPayload("eyJ4NDAyVmVyc2lvbiI6Mn0"));
     }
 
+    @Test void settlementResponseUsesProtocolFieldsWithoutPendingExtension() throws Exception {
+        String encoded = codec.encodePaymentResponse(new SettlementResponse(false, "settlement_pending", null,
+                "0x0000000000000000000000000000000000000001", "0xtx"));
+        byte[] json = java.util.Base64.getDecoder().decode(encoded);
+        var result = new ObjectMapper().readTree(json);
+
+        assertEquals(false, result.path("success").asBoolean());
+        assertEquals("settlement_pending", result.path("errorReason").asString());
+        assertEquals("0xtx", result.path("transaction").asString());
+        assertFalse(result.has("pending"));
+        assertEquals(new SettlementResponse(false, "settlement_pending", null,
+                "0x0000000000000000000000000000000000000001", "0xtx"),
+                codec.decodePaymentResponse(encoded));
+    }
+
     @Test void validatesAmountsNetworksAddressesNoncesAndSignatureLengths() {
         for (String value : new String[]{"-1", "+1", "1.0", "1e3", "01", "0", "9".repeat(79)})
             assertThrows(IllegalArgumentException.class, () -> X402Validation.amount(value));

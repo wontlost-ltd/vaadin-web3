@@ -75,6 +75,115 @@ class DefaultX402PaymentServiceTest {
                 .latestOutcome(policy.resourceId(), ADDRESS).isEmpty());
     }
 
+    @Test void httpAuthorizationCanVerifyBeforeBusinessAndSettleAfterward() {
+        var facilitator = new FakeFacilitator();
+        var store = new InMemoryPaidResourceStore();
+        var service = service(store, facilitator, policy);
+        var attempt = service.prepare(policy.resourceId(), ADDRESS);
+
+        var verified = service.verifyPayment(policy.resourceId(), payload(attempt));
+
+        assertEquals(PaymentStatus.VERIFIED, verified.status());
+        assertEquals(1, facilitator.verifies.get());
+        assertEquals(0, facilitator.settles.get());
+        assertEquals(AccessDecision.PAYMENT_REQUIRED, service.hasAccess(policy.resourceId(), ADDRESS));
+        var settled = service.settlePayment(policy.resourceId(), payload(attempt));
+        assertEquals(PaymentStatus.SETTLED, settled.status());
+        assertEquals(1, facilitator.settles.get());
+        assertEquals(AccessDecision.ALLOW, service.hasAccess(policy.resourceId(), ADDRESS));
+    }
+
+    @Test void clientBuiltAuthorizationVerifiesAndSettlesWithoutPrepareAndIsIdempotent() {
+        var facilitator = new FakeFacilitator();
+        var store = new InMemoryPaidResourceStore();
+        var service = service(store, facilitator, policy);
+        PaymentPayload payload = clientPayload(policy, "0x" + "55".repeat(32), 1_699_999_400L, 1_700_000_300L,
+                policy.amount().toString(), policy.payTo());
+
+        var verified = service.verifyPayment(policy.resourceId(), payload);
+        var replay = service.verifyPayment(policy.resourceId(), payload);
+        var settled = service.settlePayment(policy.resourceId(), payload);
+        var settledReplay = service.settlePayment(policy.resourceId(), payload);
+
+        assertEquals(PaymentStatus.VERIFIED, verified.status());
+        assertEquals(verified.paymentId(), replay.paymentId());
+        assertEquals(PaymentStatus.SETTLED, settled.status());
+        assertEquals(PaymentStatus.SETTLED, settledReplay.status());
+        assertEquals(1, facilitator.verifies.get());
+        assertEquals(1, facilitator.settles.get());
+        assertEquals(PaymentStatus.SETTLED,
+                store.findLatest(policy.resourceId(), ADDRESS, policy.version()).orElseThrow().status());
+    }
+
+    @Test void clientBuiltAuthorizationVerifyFailureDoesNotCreateARecord() {
+        var facilitator = new FakeFacilitator();
+        facilitator.verify = new VerifyResult(false, "invalid_signature", ADDRESS);
+        var store = new InMemoryPaidResourceStore();
+        var service = service(store, facilitator, policy);
+        PaymentPayload payload = clientPayload(policy, "0x" + "56".repeat(32), 1_699_999_400L, 1_700_000_300L,
+                policy.amount().toString(), policy.payTo());
+
+        var result = service.verifyPayment(policy.resourceId(), payload);
+
+        assertEquals(PaymentStatus.FAILED, result.status());
+        assertEquals("invalid_signature", result.failureCode());
+        assertTrue(store.findLatest(policy.resourceId(), ADDRESS, policy.version()).isEmpty());
+        assertEquals(1, facilitator.verifies.get());
+    }
+
+    @Test void clientBuiltAuthorizationPolicyAndTimeMismatchesAreRejectedBeforeVerify() {
+        var facilitator = new FakeFacilitator();
+        var store = new InMemoryPaidResourceStore();
+        var service = service(store, facilitator, policy);
+        long now = clock.instant().getEpochSecond();
+        java.util.List<PaymentPayload> invalid = java.util.List.of(
+                clientPayload(policy, "0x" + "61".repeat(32), now - 601, now + 300,
+                        policy.amount().toString(), policy.payTo()),
+                clientPayload(policy, "0x" + "62".repeat(32), now - 1_000, now - 1,
+                        policy.amount().toString(), policy.payTo()),
+                clientPayload(policy, "0x" + "63".repeat(32), now - 600, now + 300,
+                        policy.amount().add(BigInteger.ONE).toString(), policy.payTo()),
+                clientPayload(policy, "0x" + "64".repeat(32), now - 600, now + 300,
+                        policy.amount().toString(), "0x0000000000000000000000000000000000000004"),
+                clientPayload(policy, "invalid", now - 600, now + 300,
+                        policy.amount().toString(), policy.payTo()),
+                clientPayload(policy, "0x" + "65".repeat(32), now + 1, now + 300,
+                        policy.amount().toString(), policy.payTo()));
+
+        for (PaymentPayload payload : invalid) {
+            assertEquals(PaymentStatus.FAILED,
+                    service.verifyPayment(policy.resourceId(), payload).status());
+        }
+
+        assertEquals(0, facilitator.verifies.get());
+        assertTrue(store.findLatest(policy.resourceId(), ADDRESS, policy.version()).isEmpty());
+    }
+
+    @Test void clientBuiltAuthorizationNonceCannotBeReusedForAnotherResource() {
+        var facilitator = new FakeFacilitator();
+        var store = new InMemoryPaidResourceStore();
+        ResourcePolicy secondPolicy = new ResourcePolicy("article-two", "v1",
+                new X402Resource("https://example.test/another-article", "Other paid article", "text/plain"),
+                policy.network(), policy.amount(), policy.asset(), policy.payTo(), policy.maxTimeoutSeconds(),
+                policy.tokenName(), policy.tokenVersion());
+        var service = new DefaultX402PaymentService(Map.of(policy.resourceId(), policy,
+                secondPolicy.resourceId(), secondPolicy), store, facilitator,
+                new Eip3009TypedDataFactory(clock, () -> HexFormat.of().parseHex("42".repeat(32))), clock);
+        String nonce = "0x" + "66".repeat(32);
+        PaymentPayload first = clientPayload(policy, nonce, 1_699_999_400L, 1_700_000_300L,
+                policy.amount().toString(), policy.payTo());
+        PaymentPayload second = clientPayload(secondPolicy, nonce, 1_699_999_400L, 1_700_000_300L,
+                secondPolicy.amount().toString(), secondPolicy.payTo());
+
+        assertEquals(PaymentStatus.VERIFIED, service.verifyPayment(policy.resourceId(), first).status());
+        var conflict = service.verifyPayment(secondPolicy.resourceId(), second);
+
+        assertEquals(PaymentStatus.FAILED, conflict.status());
+        assertEquals("payment_nonce_conflict", conflict.failureCode());
+        assertEquals(1, facilitator.verifies.get());
+        assertTrue(store.findLatest(secondPolicy.resourceId(), ADDRESS, secondPolicy.version()).isEmpty());
+    }
+
     @Test void concurrentCallsWithSameNonceEnterSettleExactlyOnce() throws Exception {
         var facilitator = new FakeFacilitator(); facilitator.settleWait = new CountDownLatch(1);
         var store = new InMemoryPaidResourceStore();
@@ -482,6 +591,13 @@ class DefaultX402PaymentServiceTest {
     private PaymentPayload payload(PaymentAttempt attempt) {
         return new PaymentPayload(2, policy.resource(), attempt.requirements(),
                 new Eip3009Payload("0x" + "11".repeat(64) + "1b", attempt.authorization()));
+    }
+    private PaymentPayload clientPayload(ResourcePolicy resourcePolicy, String nonce, long validAfter,
+            long validBefore, String value, String to) {
+        var authorization = new TransferAuthorization(ADDRESS, to, value, Long.toString(validAfter),
+                Long.toString(validBefore), nonce);
+        return new PaymentPayload(2, resourcePolicy.resource(), resourcePolicy.requirements(),
+                new Eip3009Payload("0x" + "11".repeat(64) + "1b", authorization));
     }
     private static ResourcePolicy policy(String version) {
         return new ResourcePolicy("article", version, new X402Resource("https://example.test/article", "Paid", "text/plain"),

@@ -9,6 +9,8 @@ import com.wontlost.web3.x402.payment.PaymentStatus;
 
 public interface PaidResourceStore {
     Optional<PaymentRecord> findByIdempotencyKey(String key);
+    /** 按链、代币、付款人和授权 nonce 查询，阻止不同资源复用同一份链上授权。 */
+    Optional<PaymentRecord> findByAuthorizationNonce(String network, String asset, String walletAddress, String nonce);
     Optional<PaymentRecord> findByPaymentId(String paymentId);
     Optional<PaymentRecord> findSettled(String resourceId, String walletAddress);
     Optional<PaymentRecord> findSettled(String resourceId, String walletAddress, String policyVersion);

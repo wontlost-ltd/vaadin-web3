@@ -43,6 +43,7 @@ public class Web3Properties {
         private final Facilitator facilitator = new Facilitator();
         private final Protocol protocol = new Protocol();
         private final LocalFacilitator localFacilitator = new LocalFacilitator();
+        private final Http http = new Http();
         private List<Long> allowedChainIds = new ArrayList<>();
         private List<String> allowedNetworks = new ArrayList<>();
         private List<String> allowedAssets = new ArrayList<>();
@@ -61,12 +62,50 @@ public class Web3Properties {
         public Facilitator getFacilitator() { return facilitator; }
         public Protocol getProtocol() { return protocol; }
         public LocalFacilitator getLocalFacilitator() { return localFacilitator; }
+        public Http getHttp() { return http; }
         public List<Long> getAllowedChainIds() { return allowedChainIds; }
         public void setAllowedChainIds(List<Long> value) { allowedChainIds = value; }
         public List<String> getAllowedNetworks() { return allowedNetworks; }
         public void setAllowedNetworks(List<String> value) { allowedNetworks = value; }
         public List<String> getAllowedAssets() { return allowedAssets; }
         public void setAllowedAssets(List<String> value) { allowedAssets = value; }
+    }
+    public static class Http {
+        private boolean enabled;
+        private int maxResponseBytes = 262144;
+        private Duration siwxChallengeTtl = Duration.ofMinutes(5);
+        private int siwxChallengeCapacity = 10_000;
+        private List<HttpResource> resources = new ArrayList<>();
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean value) { enabled = value; }
+        public int getMaxResponseBytes() { return maxResponseBytes; }
+        public void setMaxResponseBytes(int value) { maxResponseBytes = value; }
+        public Duration getSiwxChallengeTtl() { return siwxChallengeTtl; }
+        public void setSiwxChallengeTtl(Duration value) { siwxChallengeTtl = value; }
+        public int getSiwxChallengeCapacity() { return siwxChallengeCapacity; }
+        public void setSiwxChallengeCapacity(int value) { siwxChallengeCapacity = value; }
+        public List<HttpResource> getResources() { return resources; }
+        public void setResources(List<HttpResource> value) { resources = value; }
+    }
+    public static class HttpResource {
+        private String resourceId;
+        private String method = "GET";
+        private String path;
+        private boolean idempotent;
+        private boolean requireSiwx;
+        private List<Long> allowedChainIds = new ArrayList<>();
+        public String getResourceId() { return resourceId; }
+        public void setResourceId(String value) { resourceId = value; }
+        public String getMethod() { return method; }
+        public void setMethod(String value) { method = value; }
+        public String getPath() { return path; }
+        public void setPath(String value) { path = value; }
+        public boolean isIdempotent() { return idempotent; }
+        public void setIdempotent(boolean value) { idempotent = value; }
+        public boolean isRequireSiwx() { return requireSiwx; }
+        public void setRequireSiwx(boolean value) { requireSiwx = value; }
+        public List<Long> getAllowedChainIds() { return allowedChainIds; }
+        public void setAllowedChainIds(List<Long> value) { allowedChainIds = value; }
     }
     public static class Facilitator {
         private String baseUrl = "";

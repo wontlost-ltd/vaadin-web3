@@ -107,8 +107,11 @@ class PaymentGateTest {
         private final Access access;
         private FakePayments(Access access) { this.access = access; }
         @Override public AccessDecision hasAccess(String resource, String address) { return access.check(address); }
+        @Override public PaymentRequired createChallenge(String resource) { throw new UnsupportedOperationException(); }
         @Override public PaymentRequired createChallenge(String resource, URI uri) { throw new UnsupportedOperationException(); }
         @Override public PaymentAttempt prepare(String resource, String address) { throw new UnsupportedOperationException(); }
+        @Override public PaymentOutcome verifyPayment(String resource, PaymentPayload payload) { throw new UnsupportedOperationException(); }
+        @Override public PaymentOutcome settlePayment(String resource, PaymentPayload payload) { throw new UnsupportedOperationException(); }
         @Override public PaymentOutcome verifyAndSettle(String resource, PaymentPayload payload) { throw new UnsupportedOperationException(); }
         @Override public PaymentOutcome reconcile(String id) { throw new UnsupportedOperationException(); }
         @Override public java.util.Optional<PaymentOutcome> latestOutcome(String resource, String address) {

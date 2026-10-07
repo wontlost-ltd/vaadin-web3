@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.math.BigInteger;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
@@ -67,6 +68,12 @@ public final class DefaultX402PaymentService implements X402PaymentService {
         ResourcePolicy policy = policy(resourceId);
         if (canonicalUri == null || !policy.resource().url().equals(canonicalUri.toString()))
             throw new IllegalArgumentException("resource URI does not match configured policy");
+        return createChallenge(resourceId);
+    }
+
+    @Override public PaymentRequired createChallenge(String resourceId) {
+        ResourcePolicy policy = policy(resourceId);
+        URI canonicalUri = URI.create(policy.resource().url());
         return new PaymentRequired(2, null,
                 new X402Resource(canonicalUri.toString(), policy.resource().description(), policy.resource().mimeType()),
                 java.util.List.of(policy.requirements()), Map.of());
@@ -90,13 +97,23 @@ public final class DefaultX402PaymentService implements X402PaymentService {
     }
 
     @Override public PaymentOutcome verifyAndSettle(String resourceId, PaymentPayload payload) {
+        PaymentOutcome verified = verifyPayment(resourceId, payload);
+        if (verified.status() != PaymentStatus.VERIFIED) {
+            return verified;
+        }
+        return settlePayment(resourceId, payload);
+    }
+
+    @Override public PaymentOutcome verifyPayment(String resourceId, PaymentPayload payload) {
         if (payload == null || payload.payload() == null || payload.payload().authorization() == null)
             throw new IllegalArgumentException("payment payload is incomplete");
         ResourcePolicy policy = policy(resourceId);
         TransferAuthorization authorization = payload.payload().authorization();
         String idempotencyKey = idempotencyKey(resourceId, authorization.from(), policy, authorization.nonce());
-        PaymentRecord current = store.findByIdempotencyKey(idempotencyKey)
-                .orElseThrow(() -> new IllegalArgumentException("unknown payment nonce"));
+        PaymentRecord current = store.findByIdempotencyKey(idempotencyKey).orElse(null);
+        if (current == null) {
+            return verifyClientAuthorization(resourceId, payload, policy, authorization, idempotencyKey);
+        }
         verifyIntent(payload, policy, resourceId, current);
 
         while (true) {
@@ -120,16 +137,137 @@ public final class DefaultX402PaymentService implements X402PaymentService {
                     current = transitionOrReload(current, PaymentStatus.VERIFIED, null, null);
                 }
                 case VERIFIED -> {
-                    PaymentRecord claimed = transitionIfCurrent(current, PaymentStatus.SETTLING, null, null);
-                    if (claimed == null) {
-                        current = latest(current.paymentId());
-                        continue;
-                    }
-                    return settle(payload, policy, claimed);
+                    return outcome(current);
                 }
                 default -> { return outcome(current); }
             }
         }
+    }
+
+    private PaymentOutcome verifyClientAuthorization(String resourceId, PaymentPayload payload,
+            ResourcePolicy policy, TransferAuthorization authorization, String idempotencyKey) {
+        String failureCode = clientAuthorizationFailure(payload, policy, authorization);
+        if (failureCode != null) {
+            return failedOutcome(failureCode);
+        }
+
+        String from = X402Validation.normalizedAddress(authorization.from());
+        if (store.findByAuthorizationNonce(policy.network(), policy.asset(), from, authorization.nonce()).isPresent()) {
+            return failedOutcome("payment_nonce_conflict");
+        }
+
+        Instant now = paymentTime(policy);
+        BigInteger paymentTimestamp = BigInteger.valueOf(now.getEpochSecond());
+        BigInteger validAfter = new BigInteger(authorization.validAfter());
+        BigInteger validBefore = new BigInteger(authorization.validBefore());
+        if (paymentTimestamp.compareTo(validAfter) < 0 || paymentTimestamp.compareTo(validBefore) > 0) {
+            return failedOutcome("authorization_outside_time_window");
+        }
+
+        VerifyResult verification;
+        try {
+            verification = facilitator.verify(payload, policy.requirements());
+        } catch (FacilitatorException exception) {
+            if (exception.failure() == FacilitatorFailure.REJECTED) {
+                return failedOutcome("payment_rejected");
+            }
+            throw exception;
+        }
+        if (!verification.valid()) {
+            return failedOutcome(verification.invalidReason() == null
+                    ? "payment_rejected" : stableCode(verification.invalidReason()));
+        }
+        if (verification.payer() != null && !verification.payer().equalsIgnoreCase(from)) {
+            return failedOutcome("payer_mismatch");
+        }
+
+        PaymentRecord ready = new PaymentRecord(UUID.randomUUID().toString(), idempotencyKey, resourceId,
+                from, policy.network(), policy.asset().toLowerCase(java.util.Locale.ROOT),
+                policy.amount().toString(), policy.version(), PaymentStatus.READY, null, null, now, now, null,
+                authorization.nonce(), authorization.validAfter(), authorization.validBefore(), authorization.to(),
+                authorization.value());
+        PaymentRecord created;
+        try {
+            created = store.createReady(ready);
+        } catch (IllegalStateException exception) {
+            return failedOutcome("payment_nonce_conflict");
+        }
+        verifyIntent(payload, policy, resourceId, created);
+        return outcome(transitionOrReload(created, PaymentStatus.VERIFIED, null, null));
+    }
+
+    private String clientAuthorizationFailure(PaymentPayload payload, ResourcePolicy policy,
+            TransferAuthorization authorization) {
+        if (payload.x402Version() != 2 || payload.resource() == null
+                || !payload.resource().equals(policy.resource()) || !policy.requirements().equals(payload.accepted())) {
+            return "payment_policy_mismatch";
+        }
+
+        String from;
+        try {
+            from = X402Validation.normalizedAddress(authorization.from());
+        } catch (IllegalArgumentException exception) {
+            return "invalid_payer";
+        }
+        if (authorization.to() == null || !policy.payTo().equalsIgnoreCase(authorization.to())) {
+            return "pay_to_mismatch";
+        }
+        try {
+            if (!X402Validation.amount(authorization.value()).equals(policy.amount())) {
+                return "amount_mismatch";
+            }
+            X402Validation.nonce(authorization.nonce());
+        } catch (IllegalArgumentException exception) {
+            return "payment_authorization_invalid";
+        }
+        try {
+            X402Validation.address(authorization.to());
+            X402Validation.signature(payload.payload().signature());
+        } catch (IllegalArgumentException exception) {
+            return "payment_authorization_invalid";
+        }
+
+        BigInteger validAfter;
+        BigInteger validBefore;
+        try {
+            validAfter = X402Validation.uint(authorization.validAfter());
+            validBefore = X402Validation.uint(authorization.validBefore());
+        } catch (IllegalArgumentException exception) {
+            return "invalid_time_window";
+        }
+        if (validAfter.compareTo(validBefore) >= 0) {
+            return "invalid_time_window";
+        }
+        BigInteger maximumWindow = BigInteger.valueOf(policy.maxTimeoutSeconds())
+                .add(BigInteger.valueOf(typedDataFactory.validAfterSkewSeconds()));
+        if (validBefore.subtract(validAfter).compareTo(maximumWindow) > 0) {
+            return "authorization_window_too_long";
+        }
+
+        return null;
+    }
+
+    private static PaymentOutcome failedOutcome(String failureCode) {
+        return new PaymentOutcome(null, PaymentStatus.FAILED, null, failureCode);
+    }
+
+    @Override public PaymentOutcome settlePayment(String resourceId, PaymentPayload payload) {
+        if (payload == null || payload.payload() == null || payload.payload().authorization() == null)
+            throw new IllegalArgumentException("payment payload is incomplete");
+        ResourcePolicy policy = policy(resourceId);
+        TransferAuthorization authorization = payload.payload().authorization();
+        String idempotencyKey = idempotencyKey(resourceId, authorization.from(), policy, authorization.nonce());
+        PaymentRecord current = store.findByIdempotencyKey(idempotencyKey)
+                .orElseThrow(() -> new IllegalArgumentException("unknown payment nonce"));
+        verifyIntent(payload, policy, resourceId, current);
+        while (current.status() == PaymentStatus.VERIFIED) {
+            PaymentRecord claimed = transitionIfCurrent(current, PaymentStatus.SETTLING, null, null);
+            if (claimed != null) {
+                return settle(payload, policy, claimed);
+            }
+            current = latest(current.paymentId());
+        }
+        return outcome(current);
     }
 
     @Override public PaymentOutcome reconcile(String paymentId) {

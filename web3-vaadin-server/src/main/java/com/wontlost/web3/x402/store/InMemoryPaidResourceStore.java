@@ -15,6 +15,7 @@ import com.wontlost.web3.x402.payment.PaymentStatus;
 public final class InMemoryPaidResourceStore implements PaidResourceStore {
     private final ConcurrentHashMap<String, PaymentRecord> records = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String> idempotency = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<AuthorizationNonceKey, String> authorizationNonces = new ConcurrentHashMap<>();
     private final Map<LookupKey, ConcurrentSkipListMap<IndexOrder, String>> recordsByIdentity = new ConcurrentHashMap<>();
     private final Map<LookupKey, ConcurrentSkipListMap<IndexOrder, String>> settledByIdentity = new ConcurrentHashMap<>();
     private final int maxRecords;
@@ -27,6 +28,11 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
 
     @Override public Optional<PaymentRecord> findByIdempotencyKey(String key) {
         String id = idempotency.get(key);
+        return id == null ? Optional.empty() : findByPaymentId(id);
+    }
+    @Override public Optional<PaymentRecord> findByAuthorizationNonce(String network, String asset,
+            String walletAddress, String nonce) {
+        String id = authorizationNonces.get(nonceKey(network, asset, walletAddress, nonce));
         return id == null ? Optional.empty() : findByPaymentId(id);
     }
     @Override public Optional<PaymentRecord> findByPaymentId(String paymentId) { return Optional.ofNullable(records.get(paymentId)); }
@@ -49,9 +55,16 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
                 if (!PaymentRecord.sameIntent(existing, record)) throw new IllegalStateException("idempotency conflict");
                 return existing;
             }
+            AuthorizationNonceKey nonceKey = nonceKey(record.network(), record.asset(),
+                    record.walletAddress(), record.nonce());
+            String nonceOwner = authorizationNonces.get(nonceKey);
+            if (nonceOwner != null) {
+                throw new IllegalStateException("authorization nonce conflict");
+            }
             if (records.size() >= maxRecords) throw new IllegalStateException("payment store capacity reached");
             if (records.putIfAbsent(record.paymentId(), record) != null) throw new IllegalStateException("payment id conflict");
             idempotency.put(record.idempotencyKey(), record.paymentId());
+            authorizationNonces.put(nonceKey, record.paymentId());
             add(recordsByIdentity, record);
             return record;
         }
@@ -87,6 +100,8 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
                         || Long.parseLong(record.validBefore()) >= now.getEpochSecond()) continue;
                 if (!records.remove(record.paymentId(), record)) continue;
                 idempotency.remove(record.idempotencyKey(), record.paymentId());
+                authorizationNonces.remove(nonceKey(record.network(), record.asset(), record.walletAddress(), record.nonce()),
+                        record.paymentId());
                 remove(recordsByIdentity, record);
                 removed++;
             }
@@ -106,6 +121,10 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
 
     private static LookupKey key(String resourceId, String walletAddress, String policyVersion) {
         return new LookupKey(resourceId, normalize(walletAddress), policyVersion);
+    }
+    private static AuthorizationNonceKey nonceKey(String network, String asset, String walletAddress, String nonce) {
+        return new AuthorizationNonceKey(network.toLowerCase(Locale.ROOT), asset.toLowerCase(Locale.ROOT),
+                normalize(walletAddress), nonce.toLowerCase(Locale.ROOT));
     }
     private static String normalize(String walletAddress) { return walletAddress.toLowerCase(Locale.ROOT); }
     private static IndexOrder order(PaymentRecord record) { return new IndexOrder(record.createdAt(), record.paymentId()); }
@@ -131,6 +150,7 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
     }
 
     private record LookupKey(String resourceId, String walletAddress, String policyVersion) { }
+    private record AuthorizationNonceKey(String network, String asset, String walletAddress, String nonce) { }
     private record IndexOrder(Instant createdAt, String paymentId) implements Comparable<IndexOrder> {
         @Override public int compareTo(IndexOrder other) {
             int byCreatedAt = createdAt.compareTo(other.createdAt);

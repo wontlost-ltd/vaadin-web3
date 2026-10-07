@@ -52,8 +52,11 @@ class X402PaywallTest {
     }
 
     private static final class EmptyPayments implements X402PaymentService {
+        @Override public PaymentRequired createChallenge(String resourceId) { throw new UnsupportedOperationException(); }
         @Override public PaymentRequired createChallenge(String resourceId, URI uri) { throw new UnsupportedOperationException(); }
         @Override public PaymentAttempt prepare(String resourceId, String address) { throw new UnsupportedOperationException(); }
+        @Override public PaymentOutcome verifyPayment(String resourceId, PaymentPayload payload) { throw new UnsupportedOperationException(); }
+        @Override public PaymentOutcome settlePayment(String resourceId, PaymentPayload payload) { throw new UnsupportedOperationException(); }
         @Override public PaymentOutcome verifyAndSettle(String resourceId, PaymentPayload payload) { throw new UnsupportedOperationException(); }
         @Override public PaymentOutcome reconcile(String paymentId) { throw new UnsupportedOperationException(); }
         @Override public AccessDecision hasAccess(String resourceId, String address) { return AccessDecision.PAYMENT_REQUIRED; }

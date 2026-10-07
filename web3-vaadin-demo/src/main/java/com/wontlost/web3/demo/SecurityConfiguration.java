@@ -15,7 +15,8 @@ public class SecurityConfiguration {
         http.with(VaadinSecurityConfigurer.vaadin(), configurer -> configurer
                 .loginView(LoginView.class)
                 .addLogoutHandler(web3LogoutHandler));
-        http.authorizeHttpRequests(authorize -> authorize.requestMatchers("/actuator/health").permitAll());
+        http.authorizeHttpRequests(authorize -> authorize
+                .requestMatchers("/api/x402/**", "/actuator/health").permitAll());
         return http.build();
     }
 }
