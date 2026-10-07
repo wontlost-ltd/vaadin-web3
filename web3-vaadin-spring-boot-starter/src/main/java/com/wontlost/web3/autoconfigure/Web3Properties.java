@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.wontlost.web3.nft.NftQueryLimits;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Configuration properties for the Web3Vaadin starter. */
@@ -20,6 +22,7 @@ public class Web3Properties {
     private final Security security = new Security();
     private final Payments payments = new Payments();
     private final X402 x402 = new X402();
+    private final Nft nft = new Nft();
 
     public Map<Long, Chain> getChains() { return chains; }
     public void setChains(Map<Long, Chain> chains) { this.chains = chains; }
@@ -32,6 +35,163 @@ public class Web3Properties {
     public Security getSecurity() { return security; }
     public Payments getPayments() { return payments; }
     public X402 getX402() { return x402; }
+    public Nft getNft() {
+        return nft;
+    }
+
+    public static class Nft {
+        private boolean enabled;
+        private int maxConcurrency = 8;
+        private int maxPageSize = 100;
+        private int batchSize = 100;
+        private int maxTokenIds = 1000;
+        private Integer queueCapacity;
+        private List<NftCollection> collections = new ArrayList<>();
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean value) {
+            enabled = value;
+        }
+
+        public int getMaxConcurrency() {
+            return maxConcurrency;
+        }
+
+        public void setMaxConcurrency(int value) {
+            validate("max-concurrency", value, NftQueryLimits.MAX_CONCURRENCY);
+            maxConcurrency = value;
+        }
+
+        public int getMaxPageSize() {
+            return maxPageSize;
+        }
+
+        public void setMaxPageSize(int value) {
+            validate("max-page-size", value, NftQueryLimits.MAX_PAGE_SIZE);
+            maxPageSize = value;
+        }
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int value) {
+            validate("batch-size", value, NftQueryLimits.MAX_BATCH_SIZE);
+            batchSize = value;
+        }
+
+        public int getMaxTokenIds() {
+            return maxTokenIds;
+        }
+
+        public void setMaxTokenIds(int value) {
+            validate("max-token-ids", value, NftQueryLimits.MAX_TOKEN_IDS);
+            maxTokenIds = value;
+        }
+
+        public Integer getQueueCapacity() {
+            return queueCapacity;
+        }
+
+        public void setQueueCapacity(Integer value) {
+            if (value != null) {
+                validate("queue-capacity", value, NftQueryLimits.MAX_QUEUE_CAPACITY);
+            }
+            queueCapacity = value;
+        }
+
+        private void validate(String name, int value, int maximum) {
+            if (value < 1 || value > maximum) {
+                throw new IllegalArgumentException("web3.nft." + name + " must be between 1 and " + maximum);
+            }
+        }
+
+        public List<NftCollection> getCollections() {
+            return collections;
+        }
+
+        public void setCollections(List<NftCollection> value) {
+            collections = value;
+        }
+    }
+
+    public static class NftCollection {
+        private long chainId;
+        private String contract;
+        private String standard = "ERC721";
+        private boolean enumerable;
+        private List<String> tokenIds = new ArrayList<>();
+        private List<NftTokenIdRange> ranges = new ArrayList<>();
+        public long getChainId() {
+            return chainId;
+        }
+
+        public void setChainId(long value) {
+            chainId = value;
+        }
+
+        public String getContract() {
+            return contract;
+        }
+
+        public void setContract(String value) {
+            contract = value;
+        }
+
+        public String getStandard() {
+            return standard;
+        }
+
+        public void setStandard(String value) {
+            standard = value;
+        }
+
+        public boolean isEnumerable() {
+            return enumerable;
+        }
+
+        public void setEnumerable(boolean value) {
+            enumerable = value;
+        }
+
+        public List<String> getTokenIds() {
+            return tokenIds;
+        }
+
+        public void setTokenIds(List<String> value) {
+            tokenIds = value;
+        }
+
+        public List<NftTokenIdRange> getRanges() {
+            return ranges;
+        }
+
+        public void setRanges(List<NftTokenIdRange> value) {
+            ranges = value;
+        }
+    }
+
+    public static class NftTokenIdRange {
+        private String first;
+        private String last;
+        public String getFirst() {
+            return first;
+        }
+
+        public void setFirst(String value) {
+            first = value;
+        }
+
+        public String getLast() {
+            return last;
+        }
+
+        public void setLast(String value) {
+            last = value;
+        }
+    }
 
     public static class X402 {
         private boolean enabled;

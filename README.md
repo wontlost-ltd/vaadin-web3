@@ -145,6 +145,28 @@ For a guided flow, see [the tutorial](docs/tutorial.md).
 
 The server module includes the x402 v2 `exact` payment core for EVM networks using EIP-3009 `transferWithAuthorization`: strict Base64/JSON codecs, facilitator verification and settlement, and a payment state store. HTTP clients construct their own authorization from `PAYMENT-REQUIRED`, as standard x402 v2 clients do; the Vaadin paywall uses server-generated intents through `prepare`. The Spring Boot integration is opt-in with `web3.x402.enabled=true`; configure a canonical `web3.x402.origin` and an HTTPS facilitator URL. When an RPC is configured for the payment network, authorization time windows use the latest block timestamp. Each `prepare` and READY-state authorization check reads the latest block once. If no RPC is configured for that network (for example, when a remote facilitator settles payments and the application has no local RPC), the server clock is used instead; `web3.x402.valid-after-skew` defaults to 600 seconds before that clock to tolerate timestamp differences. `web3.x402.reconcile-interval` is disabled by default; set a positive duration such as `PT1M` to periodically reconcile pending outcomes. `web3.x402.reconcile-confirmations` defaults to 3 and accepts 0; reconciliation evaluates authorization state and expiry at one confirmed block snapshot and waits for transaction receipts to reach the same confirmation depth. Reconciliation never rebroadcasts settlement. A `SETTLING` record is recovered only after the facilitator request timeout plus a 10-second margin. The default store is in-memory and loses payment state on restart; Vaadin production mode rejects it unless `web3.x402.allow-in-memory-store=true`. Production deployments should provide a persistent `PaidResourceStore` (the Pro edition provides JDBC).
 
+### EVM NFT ownership
+
+The server module exposes `NftOwnershipSource` and a direct RPC implementation for configured ERC-721 and ERC-1155 collections. Enable it with `web3.nft.enabled=true`, then configure each collection under `web3.nft.collections` with its `chain-id`, `contract`, `standard`, optional `enumerable` flag, and explicit `token-ids` or inclusive `ranges`. The source reports balances at a pinned block snapshot, supports cursor pagination, and limits page size, batch size, token count, RPC concurrency, and the executor queue. NFT cursors are opaque continuation values, not tamper-proof tokens. Applications can replace the default source with their own `NftOwnershipSource` bean. Metadata resolution, IPFS fetching, and the Vaadin gallery UI are planned for later stages.
+
+The test kit includes minimal ERC-721 and ERC-1155 fixtures. Their public mint functions are for tests only. Recompile the Solidity artifacts with Foundry 1.5.1 and solc 0.8.28 from the repository root:
+
+```sh
+forge build --root "$PWD/web3-vaadin-test/src/main/resources/contracts" --contracts "$PWD/web3-vaadin-test/src/main/resources/contracts" --use 0.8.28 --out /tmp/nft-forge-out --cache-path /tmp/nft-forge-cache
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+output = Path("/tmp/nft-forge-out")
+contracts = Path("web3-vaadin-test/src/main/resources/contracts")
+for name in ("Nft721Mock", "Nft1155Mock"):
+    artifact = json.loads((output / f"{name}.sol" / f"{name}.json").read_text())
+    result = {"contractName": name, "abi": artifact["abi"], "bytecode": artifact["bytecode"]["object"]}
+    target = contracts / f"{name[0].lower()}{name[1:]}-bytecode.json"
+    target.write_text(json.dumps(result, separators=(",", ":")) + "\n")
+PY
+```
+
 ### HTTP x402 resources
 
 The HTTP payment filter is disabled by default. Enable it with `web3.x402.http.enabled=true`, then register protected routes with `@RequiresPayment(resource="resource-id")` or `web3.x402.http.resources`. The matching `ResourcePolicy` supplies the payment requirement. Only `GET` and `HEAD` routes are accepted by default; other methods require an explicit idempotent declaration. The filter buffers the protected response up to `web3.x402.http.max-response-bytes`, verifies the authorization before calling the handler, settles after the handler succeeds, and releases the response only after settlement. A `PENDING` settlement maps to HTTP 202 with `PAYMENT-RESPONSE.errorReason=settlement_pending`; an `UNKNOWN` result maps to HTTP 503 with `errorReason=settlement_unknown`. These status codes are implementation transport choices, not x402 protocol requirements. Both outcomes discard the protected response body. `PAYMENT-RESPONSE` uses the protocol fields `success`, `errorReason`, `errorMessage`, `payer`, and `transaction`; it does not add a `pending` field. Replaying an already-settled authorization reruns the idempotent protected handler and returns its response with the original successful payment receipt, without settling again. Configure SIWX with `requireSiwx=true` on a route when browser clients need a one-time CAIP-122 identity proof; its signed `resources` list must contain the protected resource URL. SIWX challenges use a single atomic consume store, separate from SIWE login nonce consumption. The in-memory challenge store defaults to a 10,000-entry limit (`web3.x402.http.siwx-challenge-capacity`) and rejects new challenges with HTTP 503 when full, without evicting live challenges. Authenticated SIWE principals can access resources they have already paid for.
