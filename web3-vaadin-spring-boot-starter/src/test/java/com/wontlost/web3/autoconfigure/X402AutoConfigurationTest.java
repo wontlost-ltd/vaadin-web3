@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import com.vaadin.flow.function.DeploymentConfiguration;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinService;
+import com.vaadin.flow.server.VaadinServiceInitListener;
 import com.wontlost.web3.x402.facilitator.HttpFacilitatorClient;
 import com.wontlost.web3.x402.payment.FacilitatorClient;
 import com.wontlost.web3.x402.payment.X402PaymentService;
@@ -27,6 +28,7 @@ class X402AutoConfigurationTest {
         runner.run(context -> {
             assertThat(context).doesNotHaveBean(PaidResourceStore.class);
             assertThat(context).doesNotHaveBean(X402PaymentService.class);
+            assertThat(context).doesNotHaveBean("x402PaymentGate");
         });
     }
 
@@ -44,6 +46,8 @@ class X402AutoConfigurationTest {
                     assertThat(context.getBean(com.wontlost.web3.x402.protocol.X402Codec.class)).isInstanceOf(JacksonX402Codec.class);
                     assertThat(context.getBean(FacilitatorClient.class)).isInstanceOf(HttpFacilitatorClient.class);
                     assertThat(context).hasSingleBean(X402PaymentService.class);
+                    assertThat(context).hasBean("x402PaymentGate");
+                    assertThat(context.getBean("x402PaymentGate")).isInstanceOf(VaadinServiceInitListener.class);
                     Web3Properties.X402 x402 = context.getBean(Web3Properties.class).getX402();
                     assertThat(x402.getFacilitator().getApiKey()).isEqualTo("never-log-this");
                     assertThat(x402.getFacilitator().getRequestTimeout()).isEqualTo(java.time.Duration.ofSeconds(3));

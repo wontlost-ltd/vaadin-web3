@@ -68,6 +68,13 @@ public class X402AutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(name = "x402PaymentGate")
+    VaadinServiceInitListener x402PaymentGate(X402PaymentService payments) {
+        return event -> event.getSource().addUIInitListener(uiEvent ->
+                uiEvent.getUI().addBeforeEnterListener(new com.wontlost.web3.x402.payment.PaymentGate(payments)));
+    }
+
+    @Bean
     @ConditionalOnMissingBean(Clock.class)
     Clock x402Clock() { return Clock.systemUTC(); }
 

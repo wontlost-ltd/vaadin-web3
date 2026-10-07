@@ -62,6 +62,19 @@ class DefaultX402PaymentServiceTest {
         assertEquals(2, facilitator.settles.get());
     }
 
+    @Test void latestOutcomeUsesCurrentPolicyVersionAndReturnsTransactionMetadata() {
+        var store = new InMemoryPaidResourceStore();
+        var facilitator = new FakeFacilitator();
+        var service = service(store, facilitator, policy);
+        var attempt = service.prepare(policy.resourceId(), ADDRESS);
+        facilitator.settlement = new SettlementResult(SettlementState.PENDING, "0xpending", "settlement_pending", null);
+        var pending = service.verifyAndSettle(policy.resourceId(), payload(attempt));
+
+        assertEquals(pending, service.latestOutcome(policy.resourceId(), ADDRESS).orElseThrow());
+        assertTrue(service(store, facilitator, policy("v2"))
+                .latestOutcome(policy.resourceId(), ADDRESS).isEmpty());
+    }
+
     @Test void concurrentCallsWithSameNonceEnterSettleExactlyOnce() throws Exception {
         var facilitator = new FakeFacilitator(); facilitator.settleWait = new CountDownLatch(1);
         var store = new InMemoryPaidResourceStore();

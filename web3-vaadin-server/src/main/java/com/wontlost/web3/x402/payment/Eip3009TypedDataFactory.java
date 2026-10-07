@@ -43,9 +43,13 @@ public final class Eip3009TypedDataFactory {
     }
 
     public GeneratedAuthorization create(ResourcePolicy policy, String walletAddress) {
+        return create(policy, walletAddress, clock.instant());
+    }
+
+    public GeneratedAuthorization create(ResourcePolicy policy, String walletAddress, Instant now) {
         String from = X402Validation.address(walletAddress);
         long chainId = X402Validation.chainId(policy.network(), java.util.Set.of());
-        Instant now = clock.instant();
+        Objects.requireNonNull(now);
         long validAfter;
         long validBefore;
         try {

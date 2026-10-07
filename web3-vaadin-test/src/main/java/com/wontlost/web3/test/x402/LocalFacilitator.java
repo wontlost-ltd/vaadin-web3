@@ -40,7 +40,7 @@ public final class LocalFacilitator implements FacilitatorClient {
     private final Clock clock;
 
     public LocalFacilitator(EthRpcClient rpc, ServerWallet relay, long chainId, String token, String payTo) {
-        this(rpc, relay, chainId, token, payTo, Clock.systemUTC());
+        this(rpc, relay, chainId, token, payTo, null);
     }
     public LocalFacilitator(EthRpcClient rpc, ServerWallet relay, long chainId, String token, String payTo, Clock clock) {
         this.rpc = rpc; this.relay = relay; this.chainId = chainId;
@@ -61,7 +61,7 @@ public final class LocalFacilitator implements FacilitatorClient {
                 return new VerifyResult(false, "payment_mismatch", auth.from());
             BigInteger validAfter = X402Validation.uint(auth.validAfter());
             BigInteger validBefore = X402Validation.uint(auth.validBefore());
-            BigInteger now = BigInteger.valueOf(clock.instant().getEpochSecond());
+            BigInteger now = BigInteger.valueOf(currentTimestamp());
             if (now.compareTo(validAfter) <= 0 || now.compareTo(validBefore) >= 0)
                 return new VerifyResult(false, "authorization_expired", auth.from());
             String typedData = typedData(payload, requirements);
@@ -73,8 +73,11 @@ public final class LocalFacilitator implements FacilitatorClient {
                 return new VerifyResult(false, "authorization_used", auth.from());
             BigInteger balance = new BigInteger(call("balanceOf(address)", wordAddress(auth.from())), 16);
             if (balance.compareTo(new BigInteger(auth.value())) < 0) return new VerifyResult(false, "insufficient_balance", auth.from());
-            try { rpc.call(token, transferCall(auth, payload.payload().signature()), "latest"); }
-            catch (RuntimeException exception) { return new VerifyResult(false, "simulation_failed", auth.from()); }
+            try {
+                rpc.call(token, transferCall(auth, payload.payload().signature()), "latest");
+            } catch (RuntimeException exception) {
+                return new VerifyResult(false, simulationFailureCode(exception), auth.from());
+            }
             return new VerifyResult(true, null, auth.from());
         } catch (RuntimeException exception) {
             return new VerifyResult(false, "invalid_payment", null);
@@ -113,6 +116,11 @@ public final class LocalFacilitator implements FacilitatorClient {
     }
 
     private String call(String signature, String args) { return Numeric.cleanHexPrefix(rpc.call(token, selector(signature) + args, "latest")); }
+    private long currentTimestamp() {
+        if (clock != null) return clock.instant().getEpochSecond();
+        String timestamp = rpc.request("eth_getBlockByNumber", List.of("latest", false)).path("timestamp").asString();
+        return new BigInteger(Numeric.cleanHexPrefix(timestamp), 16).longValueExact();
+    }
     private String transferCall(com.wontlost.web3.x402.protocol.TransferAuthorization auth, String signature) {
         byte[] sig = Numeric.hexStringToByteArray(signature);
         String v = String.format("%02x", Byte.toUnsignedInt(sig[64]));
@@ -133,6 +141,15 @@ public final class LocalFacilitator implements FacilitatorClient {
         } catch (Exception exception) { throw new IllegalArgumentException("invalid typed signature", exception); }
     }
     private boolean readBool(String value) { return new BigInteger(value, 16).signum() != 0; }
+    private static String simulationFailureCode(RuntimeException exception) {
+        String details = (exception.getMessage() == null ? "" : exception.getMessage()).toLowerCase(java.util.Locale.ROOT);
+        if (details.contains("authorization not yet valid")) return "authorization_not_yet_valid";
+        if (details.contains("authorization expired")) return "authorization_expired";
+        if (details.contains("invalid signature")) return "invalid_signature";
+        if (details.contains("insufficient balance")) return "insufficient_balance";
+        if (details.contains("authorization used")) return "authorization_used";
+        return "simulation_failed";
+    }
     private static String selector(String function) { return HexFormat.of().formatHex(Hash.sha3(function.getBytes(StandardCharsets.UTF_8)), 0, 4); }
     private static String wordAddress(String value) { return "0".repeat(24) + Numeric.cleanHexPrefix(value).toLowerCase(java.util.Locale.ROOT); }
     private static String wordBytes32(String value) { return Numeric.cleanHexPrefix(value).toLowerCase(java.util.Locale.ROOT); }
