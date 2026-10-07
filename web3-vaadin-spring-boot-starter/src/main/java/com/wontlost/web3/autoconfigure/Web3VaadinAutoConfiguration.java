@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.UnaryOperator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,8 @@ import com.wontlost.web3.chain.ChainRegistry;
 import com.wontlost.web3.chain.EthRpcClient;
 import com.wontlost.web3.chain.FailoverJsonRpcTransport;
 import com.wontlost.web3.chain.HttpJsonRpcTransport;
+import com.wontlost.web3.chain.JsonRpcTransport;
+import com.wontlost.web3.chain.JsonRpcTransportDecorator;
 import com.wontlost.web3.dev.DevWallet;
 import com.wontlost.web3.monitor.PaymentMonitorClient;
 import com.wontlost.web3.pay.InMemoryPaymentLedger;
@@ -50,7 +53,8 @@ public class Web3VaadinAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     ChainRegistry web3ChainRegistry(Web3Properties properties, Web3RpcProperties rpcProperties,
-            RpcTransportLifecycle lifecycle, Environment environment) {
+            RpcTransportLifecycle lifecycle, Environment environment,
+            ObjectProvider<JsonRpcTransportDecorator> decorators) {
         ChainRegistry registry = new ChainRegistry();
         Map<Long, Web3Properties.Chain> modern = properties.getChains();
         modern.forEach((id, chain) -> {
@@ -75,11 +79,13 @@ public class Web3VaadinAutoConfiguration {
             if (chain == null) return;
             List<String> urls = chain.getRpcUrls() == null ? List.of() : chain.getRpcUrls().stream()
                     .filter(url -> url != null && !url.isBlank()).toList();
-            if (!urls.isEmpty()) addChain(registry, id, urls, rpcProperties, lifecycle);
-            else addChain(registry, id, chain.getRpcUrl() == null ? List.of() : List.of(chain.getRpcUrl()), rpcProperties, lifecycle);
+            if (!urls.isEmpty()) addChain(registry, id, urls, rpcProperties, lifecycle, decorators.orderedStream().toList());
+            else addChain(registry, id, chain.getRpcUrl() == null ? List.of() : List.of(chain.getRpcUrl()),
+                    rpcProperties, lifecycle, decorators.orderedStream().toList());
         });
         legacy.forEach((id, url) -> {
-            if (!modern.containsKey(id)) addChain(registry, id, url == null ? List.of() : List.of(url), rpcProperties, lifecycle);
+            if (!modern.containsKey(id)) addChain(registry, id, url == null ? List.of() : List.of(url), rpcProperties,
+                    lifecycle, decorators.orderedStream().toList());
         });
         return registry;
     }
@@ -92,23 +98,36 @@ public class Web3VaadinAutoConfiguration {
     }
 
     private static void addChain(ChainRegistry registry, long chainId, List<String> urls,
-            Web3RpcProperties config, RpcTransportLifecycle lifecycle) {
+            Web3RpcProperties config, RpcTransportLifecycle lifecycle, List<JsonRpcTransportDecorator> decorators) {
         if (urls.isEmpty()) return;
         lifecycle.endpoints(chainId, urls);
         Duration timeout = positive(config.getRequestTimeout(), Duration.ofSeconds(10));
         List<FailoverJsonRpcTransport.Endpoint> endpoints = urls.stream().map(url ->
                 new FailoverJsonRpcTransport.Endpoint(url, new HttpJsonRpcTransport(url, timeout, lifecycleClient(lifecycle))))
                 .toList();
+        UnaryOperator<JsonRpcTransport> wrapper = transport -> {
+            JsonRpcTransport result = transport;
+            for (int index = decorators.size() - 1; index >= 0; index--) {
+                try {
+                    result = java.util.Objects.requireNonNull(decorators.get(index).decorate(chainId, result));
+                } catch (RuntimeException exception) {
+                    throw new IllegalStateException("Failed to decorate JSON-RPC transport for chain " + chainId
+                            + " (" + exception.getClass().getSimpleName() + ")");
+                }
+            }
+            return result;
+        };
         if (endpoints.size() == 1) {
             // 单端点保持直接 HTTP 传输，避免引入故障切换状态机的额外开销。
-            registry.register(chainId, new EthRpcClient(lifecycle.track(chainId, endpoints.getFirst().transport())));
+            JsonRpcTransport base = lifecycle.track(chainId, endpoints.getFirst().transport());
+            registry.register(chainId, new EthRpcClient(base, wrapper));
             return;
         }
         var failover = new FailoverJsonRpcTransport(endpoints,
                 new FailoverJsonRpcTransport.Config(config.getFailureThreshold(),
                         positive(config.getOpenDuration(), Duration.ofSeconds(15)), config.getLagTolerance()));
         lifecycle.track(chainId, failover);
-        registry.register(chainId, new EthRpcClient(failover));
+        registry.register(chainId, new EthRpcClient(failover, wrapper));
     }
 
     private static HttpClient lifecycleClient(RpcTransportLifecycle lifecycle) { return lifecycle.client(); }

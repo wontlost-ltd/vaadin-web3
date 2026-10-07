@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows
 - Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
 
 ### Added
+- Add the `JsonRpcTransportDecorator` extension point for observing or wrapping RPC sends in Spring Boot applications.
 - Add ordered `SiweAuthoritiesResolver` and request-aware `SiweLoginCustomizer` extension points, with Spring Security authentication, failure and logout events.
 - Add `LogFilter`, `EthLog` and `EthRpcClient.getLogs` for filtered Ethereum log queries.
 - Ordered multi-endpoint JSON-RPC failover with circuit breakers, pinned client views, monotonic head-lag checks, same-byte raw transaction retries, and optional Actuator health aggregation. Overall health is `DOWN` when any configured chain has all monitored endpoints open, `UP` when no configured chain meets that condition, and `UNKNOWN` when no chain is configured; single-endpoint chains are marked `UNMONITORED` in details.

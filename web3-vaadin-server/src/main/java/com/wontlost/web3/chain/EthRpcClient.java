@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.UnaryOperator;
 
 import org.web3j.crypto.Hash;
 import org.web3j.utils.Numeric;
@@ -21,6 +22,9 @@ import tools.jackson.databind.node.ObjectNode;
 public final class EthRpcClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final JsonRpcTransport transport;
+    private final JsonRpcTransport sendTransport;
+    private final JsonRpcTransport rawTxTransport;
+    private final UnaryOperator<JsonRpcTransport> wrapper;
     private final AtomicLong ids = new AtomicLong();
     private final AtomicReference<Long> maxObservedHead;
     private final Integer lagTolerance;
@@ -29,20 +33,22 @@ public final class EthRpcClient {
 
     /** Creates a client using a custom JSON-RPC transport. */
     public EthRpcClient(JsonRpcTransport transport) {
+        this(transport, UnaryOperator.identity());
+    }
+    /** Creates a client whose requests are sent through a wrapper while retaining the original transport identity. */
+    public EthRpcClient(JsonRpcTransport transport, UnaryOperator<JsonRpcTransport> wrapper) {
         this.transport = Objects.requireNonNull(transport);
+        Objects.requireNonNull(wrapper);
+        this.wrapper = wrapper;
+        this.sendTransport = Objects.requireNonNull(wrapper.apply(transport), "wrapper returned null");
+        this.rawTxTransport = transport instanceof FailoverJsonRpcTransport failover
+                ? Objects.requireNonNull(wrapper.apply(failover::sendRawTransactionRequest), "wrapper returned null")
+                : sendTransport;
         this.maxObservedHead = new AtomicReference<>(-1L);
         this.lagTolerance = transport instanceof FailoverJsonRpcTransport failover
                 ? failover.config().lagTolerance() : null;
         this.failoverOwner = transport instanceof FailoverJsonRpcTransport failover ? failover : null;
         this.pinnedView = false;
-    }
-    private EthRpcClient(JsonRpcTransport transport, AtomicReference<Long> maxObservedHead, Integer lagTolerance,
-                         FailoverJsonRpcTransport failoverOwner, boolean pinnedView) {
-        this.transport = Objects.requireNonNull(transport);
-        this.maxObservedHead = maxObservedHead;
-        this.lagTolerance = lagTolerance;
-        this.failoverOwner = failoverOwner;
-        this.pinnedView = pinnedView;
     }
     /** Creates a client backed by the default HTTP transport. */
     public EthRpcClient(String endpoint) { this(new HttpJsonRpcTransport(endpoint)); }
@@ -101,7 +107,22 @@ public final class EthRpcClient {
      */
     public EthRpcClient pinned() {
         if (!(transport instanceof FailoverJsonRpcTransport failover)) return this;
-        return new EthRpcClient(failover.pinned(), maxObservedHead, lagTolerance, failover, true);
+        JsonRpcTransport pinned = failover.pinned();
+        return new EthRpcClient(pinned, Objects.requireNonNull(wrapper.apply(pinned), "wrapper returned null"),
+                maxObservedHead, lagTolerance,
+                failover, true);
+    }
+    private EthRpcClient(JsonRpcTransport transport, JsonRpcTransport sendTransport,
+                         AtomicReference<Long> maxObservedHead, Integer lagTolerance,
+                         FailoverJsonRpcTransport failoverOwner, boolean pinnedView) {
+        this.transport = Objects.requireNonNull(transport);
+        this.wrapper = UnaryOperator.identity();
+        this.sendTransport = Objects.requireNonNull(sendTransport);
+        this.rawTxTransport = sendTransport;
+        this.maxObservedHead = maxObservedHead;
+        this.lagTolerance = lagTolerance;
+        this.failoverOwner = failoverOwner;
+        this.pinnedView = pinnedView;
     }
     /** Executes an {@code eth_call} against the requested block tag; a {@code null} target runs creation code. */
     public String call(String to, String dataHex, String blockTag) {
@@ -194,9 +215,8 @@ public final class EthRpcClient {
         request.set("params", MAPPER.valueToTree(params));
         try {
             String requestJson = request.toString();
-            String responseJson = transport instanceof FailoverJsonRpcTransport failover
-                    && "eth_sendRawTransaction".equals(method)
-                    ? failover.sendRawTransactionRequest(requestJson) : transport.send(requestJson);
+            String responseJson = ("eth_sendRawTransaction".equals(method) ? rawTxTransport : sendTransport)
+                    .send(requestJson);
             JsonNode response = MAPPER.readTree(responseJson);
             JsonNode error = response.path("error");
             if (!error.isMissingNode() && !error.isNull()) {
