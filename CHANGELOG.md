@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows
 - Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
 
 ### Added
+- Add an opt-in x402 v2 EVM payment core with EIP-3009 authorization, facilitator integration, and an in-memory payment store.
 - Add the `JsonRpcTransportDecorator` extension point for observing or wrapping RPC sends in Spring Boot applications.
 - Add ordered `SiweAuthoritiesResolver` and request-aware `SiweLoginCustomizer` extension points, with Spring Security authentication, failure and logout events.
 - Add `LogFilter`, `EthLog` and `EthRpcClient.getLogs` for filtered Ethereum log queries.
