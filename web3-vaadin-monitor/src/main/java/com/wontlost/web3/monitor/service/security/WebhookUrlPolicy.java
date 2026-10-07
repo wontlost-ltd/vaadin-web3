@@ -1,7 +1,5 @@
 package com.wontlost.web3.monitor.service.security;
 
-import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
@@ -10,6 +8,7 @@ import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
 
+import com.wontlost.web3.net.PublicAddressPolicy;
 import com.wontlost.web3.monitor.service.MonitorProperties;
 import com.wontlost.web3.monitor.service.api.ApiException;
 
@@ -66,7 +65,7 @@ public final class WebhookUrlPolicy {
         if (addresses == null || addresses.length == 0) throw new UnknownHostException(bare);
         if (!properties.getWebhooks().isAllowPrivateTargets()) {
             for (InetAddress address : addresses) {
-                if (isReserved(address)) {
+                if (!PublicAddressPolicy.isPublic(address)) {
                     throw new UnknownHostException("Webhook host " + bare + " resolves to a private or reserved address");
                 }
             }
@@ -74,25 +73,4 @@ public final class WebhookUrlPolicy {
         return addresses;
     }
 
-    static boolean isReserved(InetAddress address) {
-        if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
-                || address.isSiteLocalAddress() || address.isMulticastAddress()) return true;
-        byte[] b = address.getAddress();
-        if (address instanceof Inet4Address) {
-            int first = b[0] & 0xff, second = b[1] & 0xff;
-            return first == 0                                   // 0.0.0.0/8 "this network"
-                    || first == 100 && (second & 0xc0) == 64     // 100.64.0.0/10 运营商级 NAT
-                    || first == 169 && second == 254            // 169.254.0.0/16 链路本地（云元数据）
-                    || first == 192 && second == 0 && (b[2] & 0xff) == 0 // 192.0.0.0/24 IETF 协议分配
-                    || first == 198 && (second & 0xfe) == 18     // 198.18.0.0/15 基准测试
-                    || first >= 240;                             // 240.0.0.0/4 保留 + 广播
-        }
-        if (address instanceof Inet6Address) {
-            if ((b[0] & 0xfe) == 0xfc) return true;              // fc00::/7 唯一本地
-            // 64:ff9b::/96 NAT64：可能映射到任意 IPv4（含内网），一律拒绝
-            return b[0] == 0 && b[1] == 0x64 && (b[2] & 0xff) == 0xff && (b[3] & 0xff) == 0x9b
-                    && b[4] == 0 && b[5] == 0 && b[6] == 0 && b[7] == 0 && b[8] == 0 && b[9] == 0 && b[10] == 0 && b[11] == 0;
-        }
-        return true;
-    }
 }

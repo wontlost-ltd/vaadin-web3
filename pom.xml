@@ -16,6 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
         <vaadin.version>25.3.0</vaadin.version>
+        <spring-boot.version>4.1.1</spring-boot.version>
     </properties>
 
     <build>

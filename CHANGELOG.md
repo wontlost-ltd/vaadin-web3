@@ -39,7 +39,9 @@ First public release.
 ### Added — `web3-vaadin-monitor`
 - Optional Spring Boot hosted payment monitor with JDBC/Flyway persistence,
   H2 and PostgreSQL support, merchant/admin APIs, leased payment verification,
-  signed retrying webhooks and webhook URL address checks.
+  signed retrying webhooks and webhook URL address checks. Webhook DNS policy
+  also rejects IANA documentation, benchmarking, and other reserved ranges;
+  this is stricter than blocking private ranges alone.
 - `PaymentMonitorClient` and `WebhookSignatures` in `web3-vaadin-server`;
   `StablecoinCheckout.setPaymentMonitor(true)` can keep tracking after the
   buyer leaves the page.

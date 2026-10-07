@@ -21,6 +21,10 @@ import com.wontlost.web3.nft.NftCollection;
 import com.wontlost.web3.nft.NftHolding;
 import com.wontlost.web3.nft.NftOwnershipPage;
 import com.wontlost.web3.nft.NftStandard;
+import com.wontlost.web3.nft.NftMetadataFetchResponse;
+import com.wontlost.web3.nft.NftMetadataOptions;
+import com.wontlost.web3.nft.NftMetadataResolver;
+import com.wontlost.web3.nft.RpcNftMetadataResolver;
 import com.wontlost.web3.nft.RpcNftOwnershipSource;
 
 import tools.jackson.databind.JsonNode;
@@ -102,6 +106,33 @@ class NftOwnershipAnvilTest {
             assertEquals(List.of(BigInteger.valueOf(3)), afterUpdates.holdings().stream()
                     .filter(holding -> holding.standard() == NftStandard.ERC1155)
                     .map(NftHolding::amount).toList());
+        }
+    }
+
+    @Test
+    void resolvesDataAndIpfsMetadataFromBothStandards() throws Exception {
+        send(explicit721, "mint(address,uint256)", wordAddress(owner) + word(BigInteger.valueOf(55)));
+        send(multi1155, "mint(address,uint256,uint256)",
+                wordAddress(owner) + word(BigInteger.valueOf(66)) + word(BigInteger.valueOf(4)));
+        NftMetadataOptions defaults = NftMetadataOptions.defaults();
+        NftMetadataOptions options = new NftMetadataOptions(List.of("https://8.8.8.8/ipfs/"),
+                defaults.maxResponseBytes(), defaults.maxDataUriBytes(), defaults.maxRedirects(),
+                defaults.requestTimeout(), defaults.cacheCapacity(), defaults.positiveTtl(), defaults.negativeTtl(),
+                defaults.errorTtl(), defaults.maxConcurrency(), defaults.allowedPorts(), defaults.maxAttributes(),
+                defaults.maxTextLength());
+        String expectedPath = "https://8.8.8.8/ipfs/bafybeigdyrzt/" + String.format("%064x", 66) + ".json";
+        try (RpcNftMetadataResolver resolver = new RpcNftMetadataResolver(chains,
+                (uri, timeout, limit) -> {
+                    assertEquals(expectedPath, uri.toString());
+                    return new NftMetadataFetchResponse(200, "application/json", null,
+                            "{\"name\":\"IPFS token\"}".getBytes(StandardCharsets.UTF_8));
+                }, options)) {
+            var results = resolver.resolve(List.of(
+                    new NftHolding(chainId, explicit721, BigInteger.valueOf(55), BigInteger.ONE, NftStandard.ERC721),
+                    new NftHolding(chainId, multi1155, BigInteger.valueOf(66), BigInteger.valueOf(4), NftStandard.ERC1155)));
+            assertTrue(results.stream().allMatch(result -> result.successful()));
+            assertEquals("Test NFT", results.getFirst().metadata().name());
+            assertEquals("IPFS token", results.get(1).metadata().name());
         }
     }
 
