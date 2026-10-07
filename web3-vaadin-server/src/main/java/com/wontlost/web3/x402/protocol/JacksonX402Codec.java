@@ -106,9 +106,8 @@ public final class JacksonX402Codec implements X402Codec {
 
     private SettlementResponse settlement(JsonNode node) {
         boolean success = bool(node, "success");
-        boolean pending = optionalBool(node, "pending", false);
         return new SettlementResponse(success, stringOrNull(node, "errorReason"), stringOrNull(node, "errorMessage"),
-                stringOrNull(node, "payer"), stringOrNull(node, "transaction"), pending);
+                stringOrNull(node, "payer"), stringOrNull(node, "transaction"));
     }
 
     private PaymentRequirements requirements(JsonNode node) {
@@ -184,12 +183,6 @@ public final class JacksonX402Codec implements X402Codec {
     private boolean bool(JsonNode node, String key) {
         JsonNode value = node.get(key);
         if (value == null || !value.isBoolean()) throw new IllegalArgumentException(key + " must be boolean");
-        return value.asBoolean();
-    }
-    private boolean optionalBool(JsonNode node, String key, boolean fallback) {
-        JsonNode value = node.get(key);
-        if (value == null) return fallback;
-        if (!value.isBoolean()) throw new IllegalArgumentException(key + " must be boolean");
         return value.asBoolean();
     }
     private String text(JsonNode node) { return node != null && node.isString() ? node.asString() : ""; }

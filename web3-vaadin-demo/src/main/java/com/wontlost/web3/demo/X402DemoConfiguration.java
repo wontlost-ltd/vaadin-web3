@@ -93,6 +93,18 @@ public class X402DemoConfiguration {
     }
 
     @Bean
+    ResourcePolicy x402DemoQuotePolicy(X402DemoFixture fixture, Web3Properties properties, ServerWallet wallet) {
+        String asset = fixture.available()
+                ? fixture.tokenAddress()
+                : "0x0000000000000000000000000000000000000001";
+        String url = properties.getX402().getOrigin().replaceAll("/$", "") + "/api/x402/quote";
+        return new ResourcePolicy("demo-quote", "1",
+                new X402Resource(url, "A protected demo quote", "application/json"),
+                "eip155:" + CHAIN_ID, BigInteger.valueOf(1_000_000), asset,
+                wallet.accounts().getFirst(), 300, "X402 Test Token", "1");
+    }
+
+    @Bean
     FacilitatorClient x402DemoFacilitator(X402DemoFixture fixture) {
         if (fixture.available()) {
             return new LocalFacilitator(fixture.rpc(), fixture.wallet(), fixture.chainId(),

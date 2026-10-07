@@ -37,6 +37,7 @@ public class MainLayout extends AppLayout implements BeforeEnterObserver {
         navigation.addItem(new SideNavItem("Token holders", "/holders"));
         navigation.addItem(new SideNavItem("Checkout", "/checkout"));
         navigation.addItem(new SideNavItem("Paid article", "/paid-article"));
+        navigation.addItem(new SideNavItem("HTTP x402 API", "/x402-api"));
         navigation.addItem(new SideNavItem("Transactions", "/transactions"));
         navigation.addItem(accountItem);
         addToDrawer(navigation);

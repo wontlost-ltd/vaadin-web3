@@ -29,7 +29,31 @@ class X402AutoConfigurationTest {
             assertThat(context).doesNotHaveBean(PaidResourceStore.class);
             assertThat(context).doesNotHaveBean(X402PaymentService.class);
             assertThat(context).doesNotHaveBean("x402PaymentGate");
+            assertThat(context).doesNotHaveBean(com.wontlost.web3.x402.http.X402PaymentFilter.class);
+            assertThat(context).doesNotHaveBean("x402PaymentFilterRegistration");
         });
+    }
+
+    @Test void httpFilterIsRegisteredOnlyWhenEnabled() {
+        runner.withPropertyValues("web3.x402.enabled=true", "web3.x402.http.enabled=true",
+                "web3.x402.origin=https://merchant.example",
+                "web3.x402.facilitator.base-url=https://facilitator.example")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(com.wontlost.web3.x402.http.X402PaymentFilter.class);
+                    assertThat(context).hasBean("x402PaymentFilterRegistration");
+                    assertThat(context).hasSingleBean(com.wontlost.web3.x402.siwx.SiwxChallengeStore.class);
+                    assertThat(context.getBean(Web3Properties.class).getX402().getHttp()
+                            .getSiwxChallengeCapacity()).isEqualTo(10_000);
+                });
+    }
+
+    @Test void rejectsNonPositiveSiwxChallengeCapacity() {
+        runner.withPropertyValues("web3.x402.enabled=true", "web3.x402.http.enabled=true",
+                "web3.x402.origin=https://merchant.example",
+                "web3.x402.facilitator.base-url=https://facilitator.example",
+                "web3.x402.http.siwx-challenge-capacity=0")
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @Test void enabledRequiresOriginAndFacilitatorAndCreatesDefaultBeans() {

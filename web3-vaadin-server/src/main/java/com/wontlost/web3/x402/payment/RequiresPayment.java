@@ -6,9 +6,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
+@Target({ElementType.TYPE, ElementType.METHOD})
 public @interface RequiresPayment {
-    String resourceId();
+    String resourceId() default "";
+    String resource() default "";
     String description() default "";
     String paywallRoute() default "paywall";
+    boolean idempotent() default false;
+    boolean requireSiwx() default false;
 }

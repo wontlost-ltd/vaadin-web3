@@ -215,9 +215,12 @@ class X402PaywallFlowTest {
         PaymentOutcome latest = settle;
         PaymentStatus accessStatus = PaymentStatus.SETTLED;
         @Override public PaymentAttempt prepare(String resource, String address) { prepares.incrementAndGet(); return attempt(); }
+        @Override public PaymentOutcome verifyPayment(String resource, PaymentPayload payload) { return settle; }
+        @Override public PaymentOutcome settlePayment(String resource, PaymentPayload payload) { return settle; }
         @Override public PaymentOutcome verifyAndSettle(String resource, PaymentPayload payload) { settlements.incrementAndGet(); accessStatus = settle.status(); return settle; }
         @Override public PaymentOutcome reconcile(String id) { reconciles.incrementAndGet(); accessStatus = reconciled.status(); return reconciled; }
         @Override public AccessDecision hasAccess(String resource, String address) { return accessStatus == PaymentStatus.SETTLED ? AccessDecision.ALLOW : AccessDecision.PAYMENT_PENDING; }
+        @Override public PaymentRequired createChallenge(String resource) { throw new UnsupportedOperationException(); }
         @Override public PaymentRequired createChallenge(String resource, URI uri) { throw new UnsupportedOperationException(); }
         @Override public java.util.Optional<PaymentOutcome> latestOutcome(String resource, String address) {
             return java.util.Optional.ofNullable(latest);

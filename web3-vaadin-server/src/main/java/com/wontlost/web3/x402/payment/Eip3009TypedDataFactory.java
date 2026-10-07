@@ -1,6 +1,5 @@
 package com.wontlost.web3.x402.payment;
 
-import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
@@ -71,10 +70,18 @@ public final class Eip3009TypedDataFactory {
         }
     }
 
+    long validAfterSkewSeconds() {
+        try {
+            return Math.addExact(validAfterSkew.getSeconds(), validAfterSkew.getNano() == 0 ? 0 : 1);
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException("validAfterSkew is too large", exception);
+        }
+    }
+
     public static String typedDataJson(ResourcePolicy policy, TransferAuthorization auth, long chainId) {
         Map<String, Object> typedData = new LinkedHashMap<>();
         typedData.put("domain", Map.of("name", policy.tokenName(), "version", policy.tokenVersion(),
-                "chainId", chainId, "verifyingContract", X402Validation.address(policy.asset())));
+                "chainId", Long.toString(chainId), "verifyingContract", X402Validation.address(policy.asset())));
         typedData.put("primaryType", TYPE);
         typedData.put("types", Map.of("EIP712Domain", java.util.List.of(
                         Map.of("name", "name", "type", "string"), Map.of("name", "version", "type", "string"),
@@ -82,8 +89,8 @@ public final class Eip3009TypedDataFactory {
                 TYPE, java.util.List.of(Map.of("name", "from", "type", "address"), Map.of("name", "to", "type", "address"),
                         Map.of("name", "value", "type", "uint256"), Map.of("name", "validAfter", "type", "uint256"),
                         Map.of("name", "validBefore", "type", "uint256"), Map.of("name", "nonce", "type", "bytes32"))));
-        typedData.put("message", Map.of("from", auth.from(), "to", auth.to(), "value", new BigInteger(auth.value()),
-                "validAfter", new BigInteger(auth.validAfter()), "validBefore", new BigInteger(auth.validBefore()), "nonce", auth.nonce()));
+        typedData.put("message", Map.of("from", auth.from(), "to", auth.to(), "value", auth.value(),
+                "validAfter", auth.validAfter(), "validBefore", auth.validBefore(), "nonce", auth.nonce()));
         try { return new ObjectMapper().writeValueAsString(typedData); }
         catch (Exception exception) { throw new IllegalStateException("could not encode typed data", exception); }
     }

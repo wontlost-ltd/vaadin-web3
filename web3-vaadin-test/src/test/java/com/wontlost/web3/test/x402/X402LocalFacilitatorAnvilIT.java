@@ -20,6 +20,11 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.mock.web.MockFilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 import org.web3j.crypto.Hash;
 import org.web3j.utils.Numeric;
 
@@ -32,6 +37,7 @@ import com.wontlost.web3.x402.payment.DefaultX402PaymentService;
 import com.wontlost.web3.x402.payment.FacilitatorClient;
 import com.wontlost.web3.x402.payment.PaymentRecord;
 import com.wontlost.web3.x402.payment.PaymentStatus;
+import com.wontlost.web3.x402.payment.AccessDecision;
 import com.wontlost.web3.x402.payment.ResourcePolicy;
 import com.wontlost.web3.x402.payment.SettlementResult;
 import com.wontlost.web3.x402.payment.SettlementState;
@@ -41,6 +47,13 @@ import com.wontlost.web3.x402.protocol.Eip3009Payload;
 import com.wontlost.web3.x402.protocol.PaymentPayload;
 import com.wontlost.web3.x402.protocol.TransferAuthorization;
 import com.wontlost.web3.x402.protocol.X402Resource;
+import com.wontlost.web3.x402.protocol.JacksonX402Codec;
+import com.wontlost.web3.x402.http.HttpIdentityResolver;
+import com.wontlost.web3.x402.http.HttpResourcePolicy;
+import com.wontlost.web3.x402.http.InMemoryResourcePolicyRegistry;
+import com.wontlost.web3.x402.http.X402PaymentFilter;
+import com.wontlost.web3.x402.siwx.InMemorySiwxChallengeStore;
+import com.wontlost.web3.x402.siwx.SiwxVerifier;
 import com.wontlost.web3.x402.protocol.X402Validation;
 import com.wontlost.web3.x402.store.InMemoryPaidResourceStore;
 
@@ -67,7 +80,7 @@ class X402LocalFacilitatorAnvilIT {
         policy = new ResourcePolicy("article:one", "1", new X402Resource("http://localhost/article", "Article", "text/plain"),
                 "eip155:" + chainId, AMOUNT, token, relay.accounts().getFirst(), 86_400, "X402 Test Token", "1");
         facilitator = new LocalFacilitator(rpc, relay, chainId, token, relay.accounts().getFirst());
-        send(token, "mint(address,uint256)", wordAddress(payer.address()) + wordUint(AMOUNT.multiply(BigInteger.valueOf(3))));
+        send(token, "mint(address,uint256)", wordAddress(payer.address()) + wordUint(AMOUNT.multiply(BigInteger.TEN)));
     }
 
     @Test @Order(1) void settlesOnceAndRejectsReplay() {
@@ -197,7 +210,72 @@ class X402LocalFacilitatorAnvilIT {
                 service.hasAccess(policy.resourceId(), payer.address()));
     }
 
-    @Test @Order(6) void devWalletTypedDataRpcSignaturePaysFromItsOwnAccount() throws Exception {
+    @Test @Order(6) void httpFilterChallengesSignsRetriesAndReleasesOnlySettledContent() throws Exception {
+        var store = new InMemoryPaidResourceStore();
+        ChainRegistry registry = new ChainRegistry();
+        registry.register(rpc.chainId(), rpc);
+        var service = new DefaultX402PaymentService(Map.of(policy.resourceId(), policy), store, facilitator,
+                new Eip3009TypedDataFactory(Clock.systemUTC(), Duration.ofSeconds(600)), Clock.systemUTC(), registry);
+        var codec = new JacksonX402Codec();
+        var filter = new X402PaymentFilter(new InMemoryResourcePolicyRegistry(List.of(
+                new HttpResourcePolicy(policy.resourceId(), "GET", "/article", false, false,
+                        List.of(rpc.chainId())))), service, codec,
+                new SiwxVerifier(new InMemorySiwxChallengeStore(),
+                        Clock.systemUTC(), Duration.ofMinutes(5), registry),
+                request -> java.util.Optional.empty(), java.net.URI.create("http://localhost"), 4096);
+
+        MockHttpServletRequest challengeRequest = new MockHttpServletRequest();
+        challengeRequest.setMethod("GET");
+        challengeRequest.setRequestURI("/article");
+        challengeRequest.setServletPath("/article");
+        MockHttpServletResponse challengeResponse = new MockHttpServletResponse();
+        filter.doFilter(challengeRequest, challengeResponse, (request, response) -> { });
+        assertEquals(402, challengeResponse.getStatus());
+        var challenge = codec.decodePaymentRequired(challengeResponse.getHeader("PAYMENT-REQUIRED"));
+        assertEquals(policy.resource(), challenge.resource());
+        BigInteger payerBalanceBefore = balance(payer.address());
+
+        var requirement = challenge.accepts().getFirst();
+        long chainNow = chainTimestamp();
+        byte[] nonceBytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(nonceBytes);
+        TransferAuthorization authorization = new TransferAuthorization(payer.address(), policy.payTo(),
+                policy.amount().toString(), Long.toString(chainNow - 600),
+                Long.toString(chainNow + requirement.maxTimeoutSeconds()),
+                "0x" + HexFormat.of().formatHex(nonceBytes));
+        String typedData = Eip3009TypedDataFactory.typedDataJson(policy, authorization, rpc.chainId());
+        var payload = new PaymentPayload(2, challenge.resource(), requirement,
+                new Eip3009Payload(payer.signTypedData(typedData), authorization));
+        MockHttpServletRequest paidRequest = new MockHttpServletRequest();
+        paidRequest.setMethod("GET");
+        paidRequest.setRequestURI("/article");
+        paidRequest.setServletPath("/article");
+        paidRequest.addHeader("PAYMENT-SIGNATURE", codec.encodePaymentPayload(payload));
+        MockHttpServletResponse paidResponse = new MockHttpServletResponse();
+        FilterChain handler = (request, response) -> ((HttpServletResponse) response).getWriter().write("protected");
+
+        filter.doFilter(paidRequest, paidResponse, handler);
+
+        assertEquals(200, paidResponse.getStatus(), paidResponse.getHeader("PAYMENT-RESPONSE")
+                + " body=" + paidResponse.getContentAsString());
+        assertEquals("protected", paidResponse.getContentAsString());
+        assertTrue(codec.decodePaymentResponse(paidResponse.getHeader("PAYMENT-RESPONSE")).success());
+        assertEquals(AccessDecision.ALLOW, service.hasAccess(policy.resourceId(), payer.address()));
+
+        MockHttpServletRequest replayRequest = new MockHttpServletRequest();
+        replayRequest.setMethod("GET");
+        replayRequest.setRequestURI("/article");
+        replayRequest.setServletPath("/article");
+        replayRequest.addHeader("PAYMENT-SIGNATURE", codec.encodePaymentPayload(payload));
+        MockHttpServletResponse replayResponse = new MockHttpServletResponse();
+        filter.doFilter(replayRequest, replayResponse, handler);
+        assertEquals(200, replayResponse.getStatus());
+        assertEquals("protected", replayResponse.getContentAsString());
+        assertTrue(codec.decodePaymentResponse(replayResponse.getHeader("PAYMENT-RESPONSE")).success());
+        assertEquals(payerBalanceBefore.subtract(AMOUNT), balance(payer.address()));
+    }
+
+    @Test @Order(7) void devWalletTypedDataRpcSignaturePaysFromItsOwnAccount() throws Exception {
         String devAddress = relay.accounts().getFirst();
         send(token, "mint(address,uint256)", wordAddress(devAddress) + wordUint(AMOUNT));
         ResourcePolicy selfPaymentPolicy = new ResourcePolicy("devwallet-self-payment", "1",

@@ -2,6 +2,7 @@ package com.wontlost.web3.x402.payment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
 import java.time.Clock;
@@ -43,5 +44,21 @@ class Eip3009TypedDataFactoryTest {
     @Test void rejectsNegativeValidAfterSkew() {
         assertThrows(IllegalArgumentException.class,
                 () -> new Eip3009TypedDataFactory(Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofSeconds(-1)));
+    }
+
+    @Test void emitsTypedDataIntegersAsExactDecimalStringsForJsonWalletClients() throws Exception {
+        var factory = new Eip3009TypedDataFactory(Clock.fixed(NOW, ZoneOffset.UTC),
+                () -> java.util.HexFormat.of().parseHex("55".repeat(32)));
+        var generated = factory.create(POLICY, "0x0000000000000000000000000000000000000003");
+        var typedData = new tools.jackson.databind.ObjectMapper().readTree(generated.typedDataJson());
+
+        assertTrue(typedData.path("domain").path("chainId").isTextual());
+        assertEquals("1", typedData.path("domain").path("chainId").asString());
+        assertTrue(typedData.path("message").path("value").isTextual());
+        assertTrue(typedData.path("message").path("validAfter").isTextual());
+        assertTrue(typedData.path("message").path("validBefore").isTextual());
+        assertEquals("100", typedData.path("message").path("value").asString());
+        assertEquals(generated.authorization().validAfter(), typedData.path("message").path("validAfter").asString());
+        assertEquals(generated.authorization().validBefore(), typedData.path("message").path("validBefore").asString());
     }
 }
