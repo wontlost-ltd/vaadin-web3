@@ -95,13 +95,13 @@ public final class RpcNftMetadataResolver implements NftMetadataResolver, AutoCl
         if (baseHit != null) {
             return baseHit;
         }
+        String rawUri = null;
         try {
             EthRpcClient rpc = chains.get(holding.chainId()).orElseThrow(
                     () -> new NftMetadataException(NftMetadataFailureCode.UNAVAILABLE)).pinned();
             long snapshot = rpc.blockNumber();
             String callData = holding.standard() == NftStandard.ERC721
                     ? NftAbi.tokenUriData(holding.tokenId()) : NftAbi.uriData(holding.tokenId());
-            String rawUri;
             try {
                 rawUri = NftAbi.decodeString(rpc.call(holding.contract(), callData, "0x" + Long.toHexString(snapshot)));
             } catch (EthRpcException exception) {
@@ -129,11 +129,12 @@ public final class RpcNftMetadataResolver implements NftMetadataResolver, AutoCl
                 throw new NftMetadataException(NftMetadataFailureCode.INVALID_JSON);
             }
             JsonNode expanded = holding.standard() == NftStandard.ERC1155 ? replaceStringValues(root, holding.tokenId()) : root;
-            NftMetadataResult result = toResult(holding, expanded);
+            NftMetadataResult result = toResult(holding, expanded, rawUri);
             cache(key, result, null);
             return result;
         } catch (NftMetadataException exception) {
-            return cache(base, failure(holding, exception.code()), exception.code());
+            String safeUri = exception.code() == NftMetadataFailureCode.URI_TOO_LONG ? null : rawUri;
+            return cache(base, failure(holding, exception.code(), safeUri), exception.code());
         } catch (Exception exception) {
             return cache(base, failure(holding, NftMetadataFailureCode.UNAVAILABLE), NftMetadataFailureCode.UNAVAILABLE);
         }
@@ -329,7 +330,7 @@ public final class RpcNftMetadataResolver implements NftMetadataResolver, AutoCl
         }
     }
 
-    private NftMetadataResult toResult(NftHolding holding, JsonNode root) {
+    private NftMetadataResult toResult(NftHolding holding, JsonNode root, String sourceUri) {
         String image = text(root.path("image"), options.maxTextLength());
         String display = null;
         String reason = null;
@@ -364,7 +365,7 @@ public final class RpcNftMetadataResolver implements NftMetadataResolver, AutoCl
         NftMetadata metadata = new NftMetadata(text(root.path("name"), options.maxTextLength()),
                 text(root.path("description"), options.maxTextLength()), normalizedImage(image),
                 text(root.path("animation_url"), options.maxTextLength()), httpsOnly(text(root.path("external_url"), options.maxTextLength())), attributes);
-        return new NftMetadataResult(holding, metadata, null, display, reason);
+        return new NftMetadataResult(holding, metadata, null, display, reason, sourceUri);
     }
 
     private String normalizedImage(String image) {
@@ -463,11 +464,15 @@ public final class RpcNftMetadataResolver implements NftMetadataResolver, AutoCl
         return new NftMetadataResult(holding, null, code, null, null);
     }
 
+    private NftMetadataResult failure(NftHolding holding, NftMetadataFailureCode code, String sourceUri) {
+        return new NftMetadataResult(holding, null, code, null, null, sourceUri);
+    }
+
     private NftMetadataResult cache(CacheKey key, NftMetadataResult result, NftMetadataFailureCode code) {
         Duration ttl = code == null ? options.positiveTtl() : code == NftMetadataFailureCode.NOT_FOUND
                 ? options.negativeTtl() : options.errorTtl();
         cache.put(key, new CacheValue(result.metadata(), result.failureCode(), result.displayableImageUrl(),
-                result.imageReasonCode(), System.nanoTime() + ttl.toNanos()));
+                result.imageReasonCode(), result.sourceUri(), System.nanoTime() + ttl.toNanos()));
         return result;
     }
 
@@ -487,9 +492,10 @@ public final class RpcNftMetadataResolver implements NftMetadataResolver, AutoCl
 
     private record CacheKey(long chainId, String contract, BigInteger tokenId, String uri) { }
     private record CacheValue(NftMetadata metadata, NftMetadataFailureCode failureCode, String displayableImageUrl,
-            String imageReasonCode, long expiresAt) {
+            String imageReasonCode, String sourceUri, long expiresAt) {
         private NftMetadataResult toResult(NftHolding holding) {
-            return new NftMetadataResult(holding, metadata, failureCode, displayableImageUrl, imageReasonCode);
+            return new NftMetadataResult(holding, metadata, failureCode, displayableImageUrl, imageReasonCode,
+                    sourceUri);
         }
     }
 }

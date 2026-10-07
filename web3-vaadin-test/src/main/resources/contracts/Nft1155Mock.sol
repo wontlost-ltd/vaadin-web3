@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 contract Nft1155Mock {
     string private baseUri = "ipfs://bafybeigdyrzt/{id}.json";
+    mapping(uint256 => string) private tokenUris;
     mapping(uint256 => mapping(address => uint256)) private balances;
 
     event TransferSingle(address indexed operator, address indexed from, address indexed to,
@@ -14,8 +15,16 @@ contract Nft1155Mock {
         return interfaceId == 0x01ffc9a7 || interfaceId == 0xd9b67a26;
     }
 
-    function uri(uint256) external view returns (string memory) {
+    function uri(uint256 id) external view returns (string memory) {
+        if (bytes(tokenUris[id]).length > 0) {
+            return tokenUris[id];
+        }
         return baseUri;
+    }
+
+    // 仅供测试配置指定 token 的元数据 URI。
+    function setURI(uint256 id, string calldata value) external {
+        tokenUris[id] = value;
     }
 
     function balanceOf(address owner, uint256 id) external view returns (uint256) {

@@ -7,6 +7,7 @@ contract Nft721Mock {
     mapping(address => uint256) private balances;
     mapping(address => uint256[]) private ownedTokens;
     mapping(uint256 => uint256) private ownerTokenIndex;
+    mapping(uint256 => string) private tokenUris;
 
     event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
 
@@ -28,7 +29,16 @@ contract Nft721Mock {
 
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         require(owners[tokenId] != address(0), "missing token");
+        if (bytes(tokenUris[tokenId]).length > 0) {
+            return tokenUris[tokenId];
+        }
         return "data:application/json,%7B%22name%22%3A%22Test%20NFT%22%7D";
+    }
+
+    // 仅供测试配置元数据 URI。
+    function setTokenURI(uint256 tokenId, string calldata value) external {
+        require(owners[tokenId] != address(0), "missing token");
+        tokenUris[tokenId] = value;
     }
 
     function balanceOf(address owner) external view returns (uint256) {

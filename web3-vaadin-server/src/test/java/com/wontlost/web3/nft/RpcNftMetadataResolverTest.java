@@ -46,6 +46,7 @@ class RpcNftMetadataResolverTest {
 
             assertTrue(result.successful(), result.toString());
             assertEquals("title", result.metadata().name());
+            assertEquals(uri, result.sourceUri());
             assertEquals("https://ipfs.io/ipfs/cid/item.png", result.displayableImageUrl());
             assertEquals("javascript:alert(1)", result.metadata().animationUrl());
             assertNull(result.metadata().externalUrl());
@@ -71,8 +72,9 @@ class RpcNftMetadataResolverTest {
     @Test
     void rejectsUnsupportedDataMimeAndMalformedJsonWithStableCodes() {
         try (RpcNftMetadataResolver resolver = resolver("data:text/html,<script>x</script>", unusedFetcher())) {
-            assertEquals(NftMetadataFailureCode.UNSUPPORTED_URI,
-                    resolver.resolve(List.of(holding(NftStandard.ERC721, BigInteger.ONE))).getFirst().failureCode());
+            NftMetadataResult result = resolver.resolve(List.of(holding(NftStandard.ERC721, BigInteger.ONE))).getFirst();
+            assertEquals(NftMetadataFailureCode.UNSUPPORTED_URI, result.failureCode());
+            assertEquals("data:text/html,<script>x</script>", result.sourceUri());
         }
         try (RpcNftMetadataResolver resolver = resolver("data:application/json,%7Bbad", unusedFetcher())) {
             assertEquals(NftMetadataFailureCode.INVALID_JSON,

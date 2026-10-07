@@ -16,6 +16,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.wontlost.web3.test.x402.LocalFacilitator;
+import com.wontlost.web3.autoconfigure.NftCollections;
+import com.wontlost.web3.nft.NftOwnershipSource;
 import com.wontlost.web3.x402.payment.FacilitatorClient;
 import org.web3j.crypto.Hash;
 import org.web3j.utils.Numeric;
@@ -33,6 +35,9 @@ class X402DemoAnvilStartupTest {
 
     @Autowired X402DemoConfiguration.X402DemoFixture fixture;
     @Autowired FacilitatorClient facilitator;
+    @Autowired NftDemoConfiguration.NftDemoFixture nftFixture;
+    @Autowired NftCollections nftCollections;
+    @Autowired NftOwnershipSource nftOwnership;
 
     @Test void deploysAndMintsTheDemoTokenBeforeConfiguringLocalFacilitator() {
         assertTrue(fixture.available(), fixture.error());
@@ -41,6 +46,10 @@ class X402DemoAnvilStartupTest {
                 + wordAddress(fixture.wallet().accounts().getFirst()), "latest");
         assertEquals(new BigInteger("100000000"), new BigInteger(Numeric.cleanHexPrefix(balance), 16));
         assertTrue(facilitator instanceof LocalFacilitator);
+        assertTrue(nftFixture.available(), nftFixture.error());
+        var holdings = nftOwnership.find(31337, fixture.wallet().accounts().getFirst(),
+                nftCollections.collections(), null, 100);
+        assertEquals(8, holdings.holdings().size());
     }
 
     private static String selector(String signature) {
