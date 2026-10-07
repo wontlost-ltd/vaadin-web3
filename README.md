@@ -97,6 +97,26 @@ public class LoginView extends VerticalLayout {
 }
 ```
 
+### Observe JSON-RPC transport calls
+
+The Spring Boot starter exposes `JsonRpcTransportDecorator` for integrations
+that need to observe or wrap RPC sends. Declare one or more Spring beans; they
+are applied in `@Order` order to each configured chain, including pinned reads
+and multi-endpoint failover. Decorators must preserve request and response
+semantics and return a non-null transport. The OSS modules do not depend on
+Micrometer or any Pro module.
+
+```java
+@Bean
+@Order(10)
+JsonRpcTransportDecorator rpcObservation(RpcMetrics metrics) {
+    return (chainId, transport) -> request -> {
+        metrics.recordRequest(chainId);
+        return transport.send(request);
+    };
+}
+```
+
 For a guided flow, see [the tutorial](docs/tutorial.md).
 
 ## What you get

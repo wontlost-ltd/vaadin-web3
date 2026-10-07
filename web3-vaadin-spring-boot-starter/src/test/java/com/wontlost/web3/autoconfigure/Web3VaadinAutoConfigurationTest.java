@@ -6,17 +6,24 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.core.Ordered;
 
 import com.vaadin.flow.function.DeploymentConfiguration;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.VaadinService;
 import com.wontlost.web3.ServerWallet;
 import com.wontlost.web3.chain.ChainRegistry;
+import com.wontlost.web3.chain.JsonRpcTransport;
+import com.wontlost.web3.chain.JsonRpcTransportDecorator;
 import com.wontlost.web3.dev.DevWallet;
 import com.wontlost.web3.pay.InMemoryPaymentLedger;
 import com.wontlost.web3.pay.PaymentLedger;
@@ -29,6 +36,74 @@ class Web3VaadinAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(Web3VaadinAutoConfiguration.class,
                     Web3WalletConnectAutoConfiguration.class,
                     com.wontlost.web3.autoconfigure.security.Web3SecurityAutoConfiguration.class));
+
+    @Test
+    void decoratesSingleAndFailoverChainsInOrderAndDoesNotTrackDecorators() {
+        List<String> observed = new ArrayList<>();
+        AtomicInteger wrapperClose = new AtomicInteger();
+        contextRunner.withBean("outerDecorator", JsonRpcTransportDecorator.class,
+                        () -> new RecordingDecorator("first", 1, observed, wrapperClose))
+                .withBean("innerDecorator", JsonRpcTransportDecorator.class,
+                        () -> new RecordingDecorator("second", 2, observed, wrapperClose))
+                .withPropertyValues("web3.chains.1.rpc-url=http://127.0.0.1:1/rpc",
+                        "web3.chains.2.rpc-urls[0]=http://127.0.0.1:1/primary",
+                        "web3.chains.2.rpc-urls[1]=http://127.0.0.1:1/backup")
+                .run(context -> {
+                    ChainRegistry registry = context.getBean(ChainRegistry.class);
+                    for (long chainId : List.of(1L, 2L)) {
+                        try { registry.get(chainId).orElseThrow().blockNumber(); }
+                        catch (RuntimeException expected) { }
+                    }
+                    assertThat(observed).containsSubsequence("first", "second", "first", "second");
+                    assertThat(observed).hasSize(4);
+                    assertThat(context.getBean(RpcTransportLifecycle.class).failovers()).containsKey(2L);
+                    RpcTransportLifecycle lifecycle = context.getBean(RpcTransportLifecycle.class);
+                    assertThat(field(lifecycle, "transports")).asList().hasSize(2);
+                    try { lifecycle.close(); }
+                    catch (Exception exception) { throw new AssertionError(exception); }
+                    assertThat(wrapperClose).hasValue(0);
+                });
+    }
+
+    @Test
+    void decoratorFailureNamesChainWithoutLeakingRpcUrl() {
+        String rpcUrl = "https://secret.example/v2/token-value";
+        contextRunner.withBean(JsonRpcTransportDecorator.class,
+                        () -> (chainId, transport) -> { throw new IllegalArgumentException(rpcUrl); })
+                .withPropertyValues("web3.chains.42.rpc-url=" + rpcUrl)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    String failure = context.getStartupFailure().toString();
+                    assertThat(failure).contains("chain 42", "IllegalArgumentException")
+                            .doesNotContain(rpcUrl).doesNotContain("token-value");
+                });
+    }
+
+    private static final class RecordingDecorator implements JsonRpcTransportDecorator, Ordered {
+        private final String name;
+        private final int order;
+        private final List<String> observed;
+        private final AtomicInteger closes;
+
+        RecordingDecorator(String name, int order, List<String> observed, AtomicInteger closes) {
+            this.name = name;
+            this.order = order;
+            this.observed = observed;
+            this.closes = closes;
+        }
+
+        @Override public int getOrder() { return order; }
+
+        @Override public JsonRpcTransport decorate(long chainId, JsonRpcTransport transport) {
+            return new JsonRpcTransport() {
+                @Override public String send(String request) throws IOException {
+                    observed.add(name);
+                    return transport.send(request);
+                }
+                @Override public void close() { closes.incrementAndGet(); }
+            };
+        }
+    }
 
     @Test
     void createsDefaultBeans() {
