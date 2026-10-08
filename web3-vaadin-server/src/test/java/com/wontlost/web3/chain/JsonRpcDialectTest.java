@@ -197,6 +197,20 @@ class JsonRpcDialectTest {
         assertEquals("Invalid JSON-RPC response", transport.healthSnapshot().getFirst().lastErrorMessage());
     }
 
+    @Test void brokenCustomClassifierPropagatesWithoutFailingTheEndpoint() {
+        AtomicInteger backupCalls = new AtomicInteger();
+        var transport = failover(request -> error(-1, "busy"), request -> {
+            backupCalls.incrementAndGet();
+            return result();
+        }, JsonRpcDialect.of("getHealth", (code, message, data) -> null));
+
+        assertEquals("classifier returned null",
+                assertThrows(NullPointerException.class, () -> transport.send(request("getBalance"))).getMessage());
+        assertEquals(0, backupCalls.get());
+        assertEquals(0, transport.healthSnapshot().getFirst().consecutiveFailures());
+        assertEquals(FailoverJsonRpcTransport.State.CLOSED, transport.healthSnapshot().getFirst().state());
+    }
+
     // 模拟 Solana 节点：不认识 eth_* 方法；down 时任何请求都超时
     private static JsonRpcTransport solanaNode(List<String> methods, AtomicBoolean down) {
         return request -> {

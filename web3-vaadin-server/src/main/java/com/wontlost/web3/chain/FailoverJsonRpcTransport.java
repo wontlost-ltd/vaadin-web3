@@ -219,15 +219,17 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
     }
 
     private RpcFailure rpcFailure(String response) throws IOException {
+        JsonNode error;
         try {
-            JsonNode error = MAPPER.readTree(response).path("error");
-            if (error.isMissingNode() || error.isNull()) return null;
-            int code = error.path("code").asInt();
-            String message = error.path("message").asString("JSON-RPC error");
-            String data = error.path("data").isMissingNode() || error.path("data").isNull()
-                    ? null : error.path("data").toString();
-            return new RpcFailure(dialect.classify(code, message, data), message);
+            error = MAPPER.readTree(response).path("error");
         } catch (RuntimeException exception) { throw new IOException("Invalid JSON-RPC response", exception); }
+        if (error.isMissingNode() || error.isNull()) return null;
+        int code = error.path("code").asInt();
+        String message = error.path("message").asString("JSON-RPC error");
+        String data = error.path("data").isMissingNode() || error.path("data").isNull()
+                ? null : error.path("data").toString();
+        // 分类在解析之外进行：自定义分类器的异常属于调用方代码缺陷，直接抛出而不计为端点故障
+        return new RpcFailure(dialect.classify(code, message, data), message);
     }
 
     private static String summarize(String message) {
