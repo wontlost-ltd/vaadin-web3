@@ -17,6 +17,7 @@ import tools.jackson.core.StreamReadFeature;
 import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.ObjectMapper;
 
+import com.wontlost.web3.identity.Caip2;
 import com.wontlost.web3.chain.ChainRegistry;
 import com.wontlost.web3.siwe.EvmPersonalSignatureVerifier;
 import com.wontlost.web3.siwe.SiweMessage;
@@ -68,7 +69,7 @@ public final class SiwxVerifier {
                 HexFormat.of().formatHex(nonceBytes), issuedAt, expirationTime,
                 "Sign in to access this resource", "1",
                 allowedChainIds.stream().distinct()
-                        .map(chainId -> new SupportedChain("eip155:" + chainId, "eip191")).toList(),
+                        .map(chainId -> new SupportedChain(Caip2.eip155(chainId), "eip191")).toList(),
                 List.of(resourceUrl));
         challenges.issue(challenge, resourceId);
         return challenge;
@@ -116,7 +117,7 @@ public final class SiwxVerifier {
 
     private SiwxChallenge validateMessage(SiweMessage message, SiwxProof proof,
             URI origin, String resourceId, String resourceUrl) {
-        if (!proof.chainId().equals("eip155:" + message.getChainId())) {
+        if (!proof.chainId().equals(Caip2.eip155(message.getChainId()))) {
             throw new SiwxVerificationException("siwx_chain_mismatch");
         }
         SiwxChallenge challenge = challenges.find(message.getNonce(), resourceId)
