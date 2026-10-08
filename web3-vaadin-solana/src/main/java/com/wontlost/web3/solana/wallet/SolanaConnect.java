@@ -47,6 +47,8 @@ public class SolanaConnect extends Component {
     public static final String DEFAULT_DEVELOPMENT_WALLET_WARNING = "Development wallet — never use with real assets";
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Logger LOGGER = LoggerFactory.getLogger(SolanaConnect.class);
+    private static final java.util.concurrent.atomic.AtomicBoolean PRODUCTION_WALLET_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean();
 
     private String account;
     private String walletName;
@@ -214,7 +216,8 @@ public class SolanaConnect extends Component {
 
     static SolanaServerWallet exposableWallet(SolanaServerWallet wallet, boolean productionMode) {
         if (wallet == null || !productionMode) return wallet;
-        LOGGER.error("A SolanaServerWallet ({}) is registered in Vaadin production mode; it is not offered to browsers",
+        // 每次挂载与请求都会查找：只记录一次，避免刷屏
+        if (PRODUCTION_WALLET_LOGGED.compareAndSet(false, true)) LOGGER.error("A SolanaServerWallet ({}) is registered in Vaadin production mode; it is not offered to browsers",
                 wallet.getClass().getName());
         return null;
     }

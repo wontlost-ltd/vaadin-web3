@@ -31,7 +31,8 @@ public interface SolanaServerWallet {
     /**
      * Registers the server wallet for the application, typically from a {@code VaadinServiceInitListener}. Throws
      * {@link IllegalStateException} in Vaadin production mode, or when a different wallet is already registered.
-     * Registering the same instance again is a no-op.
+     * Registering the same instance again is a no-op. The context must provide Vaadin's
+     * {@code ApplicationConfiguration}, as the context of a running {@code VaadinService} does.
      */
     static void register(VaadinContext context, SolanaServerWallet wallet) {
         Objects.requireNonNull(context, "context");

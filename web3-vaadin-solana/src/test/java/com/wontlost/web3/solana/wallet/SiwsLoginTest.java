@@ -212,7 +212,21 @@ class SiwsLoginTest {
         restored.beginSignIn();
         assertEquals(SiwsLogin.INTERNAL_ERROR, failed.getFirst().getCode());
 
-        restored.setVerifier(verifier());
+        // README 推荐的路径：启动时注册到上下文，恢复后的组件从上下文取回校验器
+        SiwsVerifier registered = verifier();
+        Map<Class<?>, Object> restoredAttributes = new HashMap<>();
+        SiwsLogin.registerVerifier(context(restoredAttributes), registered);
+        restored.setContextLookup(() -> context(restoredAttributes));
+        List<SiwsLogin.SignedInEvent> fromContext = new ArrayList<>();
+        restored.addSignedInListener(fromContext::add);
+        restored.beginSignIn();
+        assertEquals(1, fromContext.size(), "the verifier registered in the context is found after restore");
+        Web3Session.signOut();
+
+        SiwsLogin reattached = deserialize(serialize(original));
+        ((FakeWallet) reattached.getWallet()).signing = this::signHonestly;
+        reattached.setVerifier(verifier());
+        restored = reattached;
         List<SiwsLogin.SignedInEvent> signedIn = new ArrayList<>();
         restored.addSignedInListener(signedIn::add);
         restored.beginSignIn();
@@ -276,6 +290,20 @@ class SiwsLoginTest {
         assertEquals(login.getI18n().getVerificationFailed(), login.getI18n().getMessage("siws_nonce_reused"));
         assertEquals(login.getI18n().getWalletError(),
                 new SiwsLogin.SignInFailedEvent(login, null, -1, false).getLocalizedMessage());
+    }
+
+    private static byte[] serialize(Object value) throws java.io.IOException {
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(bytes)) {
+            out.writeObject(value);
+        }
+        return bytes.toByteArray();
+    }
+
+    private static SiwsLogin deserialize(byte[] bytes) throws Exception {
+        try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes))) {
+            return (SiwsLogin) in.readObject();
+        }
     }
 
     private SiwsLogin.SignInFailedEvent assertFailure(String code,
