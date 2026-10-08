@@ -8,6 +8,7 @@ import java.util.Set;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
@@ -154,103 +155,6 @@ public class X402AutoConfiguration {
         return new SiwxVerifier(challenges, clock, ttl, chains.getIfAvailable());
     }
 
-    @Bean
-    @ConditionalOnProperty(prefix = "web3.x402.http", name = "enabled", havingValue = "true")
-    @ConditionalOnMissingBean(HttpIdentityResolver.class)
-    HttpIdentityResolver x402HttpIdentityResolver() {
-        return request -> {
-            var current = com.wontlost.web3.siwe.Web3Session.current();
-            if (current.isPresent()) {
-                var signIn = current.get();
-                return java.util.Optional.of(new VerifiedWallet(signIn.address(), signIn.chainId(), IdentitySource.SIWE_SESSION));
-            }
-            var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null && authentication.isAuthenticated()
-                    && authentication.getPrincipal() instanceof com.wontlost.web3.autoconfigure.security.Web3Principal principal) {
-                return java.util.Optional.of(new VerifiedWallet(principal.address(), principal.chainId(), IdentitySource.SIWE_SESSION));
-            }
-            return java.util.Optional.empty();
-        };
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "web3.x402.http", name = "enabled", havingValue = "true")
-    @ConditionalOnMissingBean(ResourcePolicyRegistry.class)
-    ResourcePolicyRegistry x402HttpResourcePolicyRegistry(Web3Properties properties,
-            ObjectProvider<ResourcePolicy> paymentPolicies,
-            ObjectProvider<RequestMappingHandlerMapping> mappings) {
-        Map<String, ResourcePolicy> byId = paymentPolicies.orderedStream()
-                .collect(java.util.stream.Collectors.toMap(ResourcePolicy::resourceId, policy -> policy));
-        java.util.List<HttpResourcePolicy> routes = new java.util.ArrayList<>();
-        for (Web3Properties.HttpResource route : properties.getX402().getHttp().getResources()) {
-            routes.add(httpPolicy(route.getResourceId(), route.getMethod(), route.getPath(), route.isIdempotent(),
-                    route.isRequireSiwx(), route.getAllowedChainIds(), byId));
-        }
-        for (RequestMappingHandlerMapping mapping : mappings) {
-            mapping.getHandlerMethods().forEach((requestMapping, handler) -> {
-                RequiresPayment requirement = handler.getMethodAnnotation(RequiresPayment.class);
-                if (requirement == null) {
-                    requirement = handler.getBeanType().getAnnotation(RequiresPayment.class);
-                }
-                if (requirement == null) {
-                    return;
-                }
-                String resourceId = requirement.resource().isBlank()
-                        ? requirement.resourceId() : requirement.resource();
-                if (!requirement.resource().isBlank() && !requirement.resourceId().isBlank()
-                        && !requirement.resource().equals(requirement.resourceId())) {
-                    throw new IllegalStateException("@RequiresPayment resource and resourceId conflict");
-                }
-                var methods = requestMapping.getMethodsCondition().getMethods();
-                if (methods.isEmpty()) {
-                    throw new IllegalStateException("@RequiresPayment HTTP route must declare methods explicitly");
-                }
-                for (String path : requestMapping.getPatternValues()) {
-                    for (RequestMethod method : methods) {
-                        routes.add(httpPolicy(resourceId, method.name(), path, requirement.idempotent(),
-                                requirement.requireSiwx(), java.util.List.of(), byId));
-                    }
-                }
-            });
-        }
-        return new InMemoryResourcePolicyRegistry(routes);
-    }
-
-    private static HttpResourcePolicy httpPolicy(String resourceId, String method, String path,
-            boolean idempotent, boolean requireSiwx, java.util.List<Long> allowedChainIds,
-            Map<String, ResourcePolicy> paymentPolicies) {
-        ResourcePolicy payment = paymentPolicies.get(resourceId);
-        if (payment == null) {
-            throw new IllegalStateException("HTTP payment route has no ResourcePolicy: " + resourceId);
-        }
-        java.util.List<Long> chains = allowedChainIds.isEmpty()
-                ? java.util.List.of(X402Validation.chainId(payment.network(), Set.of())) : allowedChainIds;
-        return new HttpResourcePolicy(resourceId, method, path, idempotent, requireSiwx, chains);
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "web3.x402.http", name = "enabled", havingValue = "true")
-    @ConditionalOnMissingBean(name = "x402PaymentFilter")
-    X402PaymentFilter x402PaymentFilter(ResourcePolicyRegistry registry, X402PaymentService payments,
-            X402Codec codec, SiwxVerifier siwx, HttpIdentityResolver identities, Web3Properties properties) {
-        Web3Properties.Http config = properties.getX402().getHttp();
-        if (config.getMaxResponseBytes() < 1) {
-            throw new IllegalStateException("web3.x402.http.max-response-bytes must be positive");
-        }
-        return new X402PaymentFilter(registry, payments, codec,
-                siwx, identities, URI.create(properties.getX402().getOrigin()), config.getMaxResponseBytes());
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "web3.x402.http", name = "enabled", havingValue = "true")
-    @ConditionalOnMissingBean(name = "x402PaymentFilterRegistration")
-    FilterRegistrationBean<X402PaymentFilter> x402PaymentFilterRegistration(X402PaymentFilter filter) {
-        FilterRegistrationBean<X402PaymentFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setName("x402PaymentFilter");
-        registration.addUrlPatterns("/*");
-        registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER + 1);
-        return registration;
-    }
 
     @Bean
     @ConditionalOnMissingBean(name = "x402ReconciliationLifecycle")
@@ -278,6 +182,133 @@ public class X402AutoConfiguration {
         try { X402Validation.chainId(network, Set.of()); }
         catch (IllegalArgumentException exception) {
             throw new IllegalStateException(property + " entries must be valid CAIP-2 networks such as eip155:1", exception);
+        }
+    }
+
+    /**
+     * HTTP 402 过滤器相关 bean。单独放在嵌套配置中并以类名条件守卫：路由扫描依赖 Spring MVC、过滤器依赖 Servlet API，
+     * 若与主配置放在同一个类里，类内省会加载这些可选类型，导致没有 Spring MVC 的应用启用 x402 时整个自动配置无法解析。
+     */
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = {"jakarta.servlet.Filter",
+            "org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping",
+            "org.springframework.boot.web.servlet.FilterRegistrationBean"})
+    @ConditionalOnProperty(prefix = "web3.x402.http", name = "enabled", havingValue = "true")
+    static class X402HttpFilterConfiguration {
+        // 解析器的 lambda 以 HttpServletRequest 为参数，必须留在受 Servlet 条件守卫的嵌套配置中
+        @Bean
+        @ConditionalOnMissingBean(HttpIdentityResolver.class)
+        HttpIdentityResolver x402HttpIdentityResolver() {
+            return request -> {
+                var current = com.wontlost.web3.siwe.Web3Session.current();
+                if (current.isPresent()) {
+                    var signIn = current.get();
+                    return java.util.Optional.of(new VerifiedWallet(signIn.address(), signIn.chainId(),
+                            IdentitySource.SIWE_SESSION));
+                }
+                return SecurityPrincipals.SPRING_SECURITY_PRESENT
+                        ? SecurityPrincipals.currentWallet() : java.util.Optional.empty();
+            };
+        }
+
+        @Bean
+        @ConditionalOnMissingBean(ResourcePolicyRegistry.class)
+        ResourcePolicyRegistry x402HttpResourcePolicyRegistry(Web3Properties properties,
+                ObjectProvider<ResourcePolicy> paymentPolicies,
+                ObjectProvider<RequestMappingHandlerMapping> mappings) {
+            Map<String, ResourcePolicy> byId = paymentPolicies.orderedStream()
+                    .collect(java.util.stream.Collectors.toMap(ResourcePolicy::resourceId, policy -> policy));
+            java.util.List<HttpResourcePolicy> routes = new java.util.ArrayList<>();
+            for (Web3Properties.HttpResource route : properties.getX402().getHttp().getResources()) {
+                routes.add(httpPolicy(route.getResourceId(), route.getMethod(), route.getPath(), route.isIdempotent(),
+                        route.isRequireSiwx(), route.getAllowedChainIds(), byId));
+            }
+            for (RequestMappingHandlerMapping mapping : mappings) {
+                mapping.getHandlerMethods().forEach((requestMapping, handler) -> {
+                    RequiresPayment requirement = handler.getMethodAnnotation(RequiresPayment.class);
+                    if (requirement == null) {
+                        requirement = handler.getBeanType().getAnnotation(RequiresPayment.class);
+                    }
+                    if (requirement == null) {
+                        return;
+                    }
+                    String resourceId = requirement.resource().isBlank()
+                            ? requirement.resourceId() : requirement.resource();
+                    if (!requirement.resource().isBlank() && !requirement.resourceId().isBlank()
+                            && !requirement.resource().equals(requirement.resourceId())) {
+                        throw new IllegalStateException("@RequiresPayment resource and resourceId conflict");
+                    }
+                    var methods = requestMapping.getMethodsCondition().getMethods();
+                    if (methods.isEmpty()) {
+                        throw new IllegalStateException("@RequiresPayment HTTP route must declare methods explicitly");
+                    }
+                    for (String path : requestMapping.getPatternValues()) {
+                        for (RequestMethod method : methods) {
+                            routes.add(httpPolicy(resourceId, method.name(), path, requirement.idempotent(),
+                                    requirement.requireSiwx(), java.util.List.of(), byId));
+                        }
+                    }
+                });
+            }
+            return new InMemoryResourcePolicyRegistry(routes);
+        }
+
+        private static HttpResourcePolicy httpPolicy(String resourceId, String method, String path,
+                boolean idempotent, boolean requireSiwx, java.util.List<Long> allowedChainIds,
+                Map<String, ResourcePolicy> paymentPolicies) {
+            ResourcePolicy payment = paymentPolicies.get(resourceId);
+            if (payment == null) {
+                throw new IllegalStateException("HTTP payment route has no ResourcePolicy: " + resourceId);
+            }
+            java.util.List<Long> chains = allowedChainIds.isEmpty()
+                    ? java.util.List.of(X402Validation.chainId(payment.network(), Set.of())) : allowedChainIds;
+            return new HttpResourcePolicy(resourceId, method, path, idempotent, requireSiwx, chains);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean(name = "x402PaymentFilter")
+        X402PaymentFilter x402PaymentFilter(ResourcePolicyRegistry registry, X402PaymentService payments,
+                X402Codec codec, SiwxVerifier siwx, HttpIdentityResolver identities, Web3Properties properties) {
+            Web3Properties.Http config = properties.getX402().getHttp();
+            if (config.getMaxResponseBytes() < 1) {
+                throw new IllegalStateException("web3.x402.http.max-response-bytes must be positive");
+            }
+            return new X402PaymentFilter(registry, payments, codec,
+                    siwx, identities, URI.create(properties.getX402().getOrigin()), config.getMaxResponseBytes());
+        }
+
+        @Bean
+        @ConditionalOnMissingBean(name = "x402PaymentFilterRegistration")
+        FilterRegistrationBean<X402PaymentFilter> x402PaymentFilterRegistration(X402PaymentFilter filter) {
+            FilterRegistrationBean<X402PaymentFilter> registration = new FilterRegistrationBean<>(filter);
+            registration.setName("x402PaymentFilter");
+            registration.addUrlPatterns("/*");
+            registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER + 1);
+            return registration;
+        }
+    }
+
+    /**
+     * Spring Security 在 starter 中是可选依赖：其类型只出现在本类方法体中，且仅在类路径上存在时才调用，
+     * 避免无 Spring Security 的应用在匿名请求时抛出 NoClassDefFoundError。
+     */
+    static final class SecurityPrincipals {
+        static final boolean SPRING_SECURITY_PRESENT = org.springframework.util.ClassUtils.isPresent(
+                "org.springframework.security.core.context.SecurityContextHolder",
+                X402AutoConfiguration.class.getClassLoader());
+
+        private SecurityPrincipals() {
+        }
+
+        static java.util.Optional<VerifiedWallet> currentWallet() {
+            var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                    .getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()
+                    && authentication.getPrincipal() instanceof com.wontlost.web3.autoconfigure.security.Web3Principal principal) {
+                return java.util.Optional.of(new VerifiedWallet(principal.address(), principal.chainId(),
+                        IdentitySource.SIWE_SESSION));
+            }
+            return java.util.Optional.empty();
         }
     }
 
