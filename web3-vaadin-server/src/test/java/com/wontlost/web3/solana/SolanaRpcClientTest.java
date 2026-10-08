@@ -25,6 +25,9 @@ class SolanaRpcClientTest {
     private static final String OWNER = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
     private static final String MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
     private static final String OTHER_MINT = "11111111111111111111111111111111";
+    private static final String BLOCKHASH = "5LvHZdKWcQYtpy4JkmyRkyPWkhTEi1sNK1gTWuWvHKRF";
+    private static final String SIGNATURE = "3V6s8EvNrJyE6E3aTTLXHim6UHi1eULj6XjW3QXj4g35NTWnKgraKQAdhc3Fh4jyiDDZ"
+            + "gqGCEPtVKfAk7P8behjU";
 
     @Test void getBalanceSendsCommitmentAndReturnsLamportsAndSlot() {
         List<JsonNode> sent = new ArrayList<>();
@@ -262,6 +265,118 @@ class SolanaRpcClientTest {
         assertEquals(1, sent.get(0).path("id").asLong());
         assertEquals(2, sent.get(1).path("id").asLong());
         assertTrue(closed[0]);
+    }
+
+    @Test void latestBlockhashAndBlockHeight() {
+        List<JsonNode> sent = new ArrayList<>();
+        SolanaRpcClient client = client(sent, request -> switch (request.path("method").asString()) {
+            case "getLatestBlockhash" -> "{\"context\":{\"slot\":77},\"value\":{\"blockhash\":\""
+                    + BLOCKHASH + "\",\"lastValidBlockHeight\":350}}";
+            default -> "200";
+        }, SolanaCommitment.FINALIZED);
+
+        LatestBlockhash latest = client.getLatestBlockhash();
+
+        assertEquals(new LatestBlockhash(BLOCKHASH, 350, 77), latest);
+        assertEquals("finalized", sent.get(0).path("params").get(0).path("commitment").asString());
+        assertEquals(200, client.getBlockHeight());
+        for (String invalid : List.of("{\"context\":{\"slot\":1},\"value\":{\"blockhash\":\"x\",\"lastValidBlockHeight\":1}}",
+                "{\"context\":{\"slot\":1},\"value\":{\"blockhash\":\"" + BLOCKHASH + "\"}}",
+                "{\"value\":{\"blockhash\":\"" + BLOCKHASH + "\",\"lastValidBlockHeight\":1}}")) {
+            SolanaRpcClient bad = client(new ArrayList<>(), request -> invalid, SolanaCommitment.CONFIRMED);
+            assertThrows(SolanaRpcException.class, bad::getLatestBlockhash, invalid);
+        }
+        for (String invalid : List.of("-1", "\"5\"", "1.5")) {
+            SolanaRpcClient bad = client(new ArrayList<>(), request -> invalid, SolanaCommitment.CONFIRMED);
+            assertThrows(SolanaRpcException.class, bad::getBlockHeight, invalid);
+        }
+    }
+
+    @Test void signatureStatusesKeepOrderAndMapCommitmentAndErrors() {
+        List<JsonNode> sent = new ArrayList<>();
+        SolanaRpcClient client = client(sent, request -> "{\"context\":{\"slot\":90},\"value\":["
+                + "{\"slot\":80,\"confirmations\":null,\"err\":null,\"confirmationStatus\":\"finalized\"},"
+                + "null,"
+                + "{\"slot\":88,\"confirmations\":2,\"err\":{\"InstructionError\":[0,{\"Custom\":1}]},"
+                + "\"confirmationStatus\":\"confirmed\"},"
+                + "{\"slot\":89,\"confirmations\":0,\"err\":null,\"confirmationStatus\":\"processed\"}]}",
+                SolanaCommitment.CONFIRMED);
+
+        var statuses = client.getSignatureStatuses(List.of(SIGNATURE, SIGNATURE, SIGNATURE, SIGNATURE), true);
+
+        assertEquals(new SignatureStatus(80, null, SolanaCommitment.FINALIZED, null), statuses.get(0).orElseThrow());
+        assertTrue(statuses.get(1).isEmpty());
+        SignatureStatus failed = statuses.get(2).orElseThrow();
+        assertTrue(failed.failed());
+        assertEquals("{\"InstructionError\":[0,{\"Custom\":1}]}", failed.error());
+        assertFalse(failed.succeededAt(SolanaCommitment.PROCESSED));
+        SignatureStatus processed = statuses.get(3).orElseThrow();
+        assertTrue(processed.succeededAt(SolanaCommitment.PROCESSED));
+        assertFalse(processed.succeededAt(SolanaCommitment.CONFIRMED));
+        assertTrue(statuses.get(0).orElseThrow().succeededAt(SolanaCommitment.FINALIZED));
+        assertEquals(true, sent.get(0).path("params").get(1).path("searchTransactionHistory").asBoolean());
+        assertEquals(4, sent.get(0).path("params").get(0).size());
+    }
+
+    @Test void signatureStatusesValidateInputAndResponse() {
+        SolanaRpcClient client = client(new ArrayList<>(), request -> "{\"value\":[]}", SolanaCommitment.CONFIRMED);
+        assertThrows(IllegalArgumentException.class, () -> client.getSignatureStatuses(List.of(), false));
+        assertThrows(IllegalArgumentException.class,
+                () -> client.getSignatureStatuses(java.util.Collections.nCopies(257, SIGNATURE), false));
+        assertThrows(IllegalArgumentException.class, () -> client.getSignatureStatuses(List.of(OWNER), false));
+        assertThrows(SolanaRpcException.class, () -> client.getSignatureStatuses(List.of(SIGNATURE), false),
+                "length mismatch");
+        for (String status : List.of("{\"slot\":1,\"confirmations\":1,\"err\":null,\"confirmationStatus\":\"rooted\"}",
+                "{\"confirmations\":1,\"err\":null,\"confirmationStatus\":\"confirmed\"}",
+                "{\"slot\":1,\"confirmations\":\"1\",\"err\":null,\"confirmationStatus\":\"confirmed\"}")) {
+            SolanaRpcClient bad = client(new ArrayList<>(), request -> "{\"value\":[" + status + "]}",
+                    SolanaCommitment.CONFIRMED);
+            assertThrows(SolanaRpcException.class, () -> bad.getSignatureStatuses(List.of(SIGNATURE), false), status);
+        }
+    }
+
+    @Test void sendTransactionSubmitsBase64AndChecksTheReturnedSignature() {
+        byte[] wire = signedWire();
+        String expected = SolanaTransaction.signatureOf(wire);
+        List<JsonNode> sent = new ArrayList<>();
+        SolanaRpcClient client = client(sent, request -> "\"" + expected + "\"", SolanaCommitment.CONFIRMED);
+
+        assertEquals(expected, client.sendTransaction(wire));
+        JsonNode params = sent.get(0).path("params");
+        assertEquals(java.util.Base64.getEncoder().encodeToString(wire), params.get(0).asString());
+        assertEquals("base64", params.get(1).path("encoding").asString());
+        assertEquals("confirmed", params.get(1).path("preflightCommitment").asString());
+
+        SolanaRpcClient lying = client(new ArrayList<>(), request -> "\"" + SIGNATURE + "\"", SolanaCommitment.CONFIRMED);
+        assertEquals("sendTransaction returned an unexpected signature",
+                assertThrows(SolanaRpcException.class, () -> lying.sendTransaction(wire)).getMessage());
+        SolanaRpcClient preflight = new SolanaRpcClient(request -> "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":"
+                + "{\"code\":-32002,\"message\":\"Transaction simulation failed\"}}", SolanaCommitment.CONFIRMED);
+        assertEquals(-32002, assertThrows(SolanaRpcException.class, () -> preflight.sendTransaction(wire)).getCode());
+    }
+
+    @Test void accountOwnerIsEmptyForMissingAccounts() {
+        List<JsonNode> sent = new ArrayList<>();
+        SolanaRpcClient client = client(sent, request -> sent.size() == 1
+                ? "{\"context\":{\"slot\":1},\"value\":{\"owner\":\"" + SolanaPrograms.TOKEN_2022
+                        + "\",\"lamports\":1,\"data\":[\"\",\"base64\"]}}"
+                : "{\"context\":{\"slot\":1},\"value\":null}", SolanaCommitment.CONFIRMED);
+
+        assertEquals(java.util.Optional.of(SolanaPrograms.TOKEN_2022), client.getAccountOwner(MINT));
+        assertTrue(client.getAccountOwner(MINT).isEmpty());
+        JsonNode config = sent.get(0).path("params").get(1);
+        assertEquals(0, config.path("dataSlice").path("length").asInt(), "no account data is downloaded");
+        assertThrows(IllegalArgumentException.class, () -> client.getAccountOwner("bad"));
+        SolanaRpcClient bad = client(new ArrayList<>(), request -> "{\"context\":{\"slot\":1},\"value\":{\"owner\":\"x\"}}",
+                SolanaCommitment.CONFIRMED);
+        assertThrows(SolanaRpcException.class, () -> bad.getAccountOwner(MINT));
+    }
+
+    private static byte[] signedWire() {
+        SolanaTransaction transaction = SolanaTransfers.sol(OWNER, MINT, java.math.BigInteger.ONE, BLOCKHASH);
+        byte[] signature = new byte[64];
+        signature[0] = 7;
+        return transaction.wire(java.util.Map.of(OWNER, signature));
     }
 
     private static SolanaRpcClient client(List<JsonNode> sent, Function<JsonNode, String> result,

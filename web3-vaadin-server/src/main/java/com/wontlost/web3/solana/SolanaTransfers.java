@@ -1,0 +1,73 @@
+package com.wontlost.web3.solana;
+
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.wontlost.web3.solana.SolanaInstruction.AccountMeta;
+
+/**
+ * Builds unsigned SOL and SPL token transfers. The sender signs them, for example with a browser wallet's
+ * {@code solana:signAndSendTransaction}, so the server never holds the sender's key.
+ */
+public final class SolanaTransfers {
+    private static final BigInteger U64_MAX = BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
+    /** System Program {@code Transfer} 指令序号（u32 小端）。 */
+    private static final int SYSTEM_TRANSFER = 2;
+    /** SPL Token {@code TransferChecked} 指令序号：校验 mint 与小数位，Token 与 Token-2022 通用。 */
+    private static final byte TRANSFER_CHECKED = 12;
+    /** Associated Token Account 程序 {@code CreateIdempotent}：账户已存在时不报错。 */
+    private static final byte CREATE_IDEMPOTENT = 1;
+
+    private SolanaTransfers() {
+    }
+
+    /** A SOL transfer of {@code lamports} from {@code from} (the fee payer and signer) to {@code to}. */
+    public static SolanaTransaction sol(String from, String to, BigInteger lamports, String recentBlockhash) {
+        ByteBuffer data = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
+        data.putInt(SYSTEM_TRANSFER).putLong(u64(lamports));
+        SolanaInstruction transfer = new SolanaInstruction(SolanaPrograms.SYSTEM,
+                List.of(new AccountMeta(from, true, true), new AccountMeta(to, false, true)), data.array());
+        return SolanaTransaction.compile(from, recentBlockhash, List.of(transfer));
+    }
+
+    /**
+     * An SPL token transfer of {@code amount} base units between the associated token accounts of {@code owner}
+     * (the fee payer and signer) and {@code recipient}. {@code decimals} must match the mint, which the token program
+     * checks. With {@code createRecipientAccount}, the transaction first creates the recipient's associated token
+     * account if it does not exist yet; the sender pays its rent (about 0.002 SOL).
+     */
+    public static SolanaTransaction spl(String owner, String mint, String recipient, BigInteger amount, int decimals,
+            String tokenProgram, String recentBlockhash, boolean createRecipientAccount) {
+        if (decimals < 0 || decimals > 255) throw new IllegalArgumentException("decimals must be 0-255");
+        String source = SolanaAddresses.associatedTokenAddress(owner, mint, tokenProgram);
+        String destination = SolanaAddresses.associatedTokenAddress(recipient, mint, tokenProgram);
+        List<SolanaInstruction> instructions = new ArrayList<>();
+        if (createRecipientAccount) {
+            instructions.add(new SolanaInstruction(SolanaPrograms.ASSOCIATED_TOKEN, List.of(
+                    new AccountMeta(owner, true, true),
+                    new AccountMeta(destination, false, true),
+                    new AccountMeta(recipient, false, false),
+                    new AccountMeta(mint, false, false),
+                    new AccountMeta(SolanaPrograms.SYSTEM, false, false),
+                    new AccountMeta(tokenProgram, false, false)), new byte[] {CREATE_IDEMPOTENT}));
+        }
+        ByteBuffer data = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN);
+        data.put(TRANSFER_CHECKED).putLong(u64(amount)).put((byte) decimals);
+        instructions.add(new SolanaInstruction(tokenProgram, List.of(
+                new AccountMeta(source, false, true),
+                new AccountMeta(mint, false, false),
+                new AccountMeta(destination, false, true),
+                new AccountMeta(owner, true, false)), data.array()));
+        return SolanaTransaction.compile(owner, recentBlockhash, instructions);
+    }
+
+    private static long u64(BigInteger value) {
+        if (value.signum() <= 0 || value.compareTo(U64_MAX) > 0) {
+            throw new IllegalArgumentException("amount must be between 1 and 2^64-1 base units");
+        }
+        return value.longValue();
+    }
+}

@@ -632,6 +632,51 @@ with another probe method, for example
 `JsonRpcDialect.of("getSlot", JsonRpcDialect.SOLANA::classify)`. The Spring
 Boot starter and the monitor still build Ethereum transports only.
 
+### Solana transfers and transaction status (server)
+
+`SolanaTransfers` builds unsigned SOL and SPL token transfers. Let the sender's
+wallet sign and send them, so the server never holds the sender's key.
+`SolanaRpcClient` reads the blockhash a transaction must reference, submits
+signed transactions, and tracks their status.
+
+```java
+LatestBlockhash latest = solana.getLatestBlockhash();
+
+// 0.5 SOL
+SolanaTransaction sol = SolanaTransfers.sol(sender, recipient,
+        new BigInteger("500000000"), latest.blockhash());
+
+// 12.5 USDC (6 decimals); creates the recipient's token account if needed
+String tokenProgram = solana.getAccountOwner(mint).orElseThrow();   // Token or Token-2022
+SolanaTransaction usdc = SolanaTransfers.spl(sender, mint, recipient,
+        new BigInteger("12500000"), 6, tokenProgram, latest.blockhash(), true);
+
+byte[] forWallet = usdc.unsignedWire();      // pass to solana:signAndSendTransaction
+```
+
+- **Byte-for-byte with the official tools.** Messages use the legacy format.
+  Accounts are ordered the way Agave orders them, so the bytes match what the
+  `solana` and `spl-token` command-line tools produce. The tests compare against
+  messages and signatures dumped from those tools.
+- **Recipient account creation.** `spl(..., true)` adds the Associated Token
+  Account program's `CreateIdempotent` instruction. If the recipient's token
+  account already exists, it does nothing. If not, the sender pays its rent,
+  about 0.002 SOL. The transfer itself is `TransferChecked`, so the token
+  program rejects a wrong mint or wrong decimals.
+- **Signing on the server.** When the server does hold a key, sign
+  `transaction.message()` with Ed25519. Then pass
+  `transaction.wire(Map.of(signer, signature))` to `solana.sendTransaction(...)`.
+  The node simulates the transaction first, so most failures come back as a
+  `SolanaRpcException` with code -32002 before anything is charged.
+- **Tracking status.** `getSignatureStatuses(signatures, searchHistory)`
+  returns each transaction's commitment (`PROCESSED`, `CONFIRMED`, `FINALIZED`)
+  and its on-chain error. `status.succeededAt(SolanaCommitment.CONFIRMED)` is
+  usually enough for payments. Wait for `FINALIZED` when the transaction must
+  never roll back.
+- **Expiry.** A transaction whose blockhash is older than
+  `lastValidBlockHeight` (compare with `getBlockHeight()`) can never land.
+  Rebuild it with a new blockhash and send it again.
+
 ### On-chain reads
 
 The server module provides an `EthRpcClient` that works over either a JSON-RPC
@@ -835,6 +880,27 @@ priority over the built-in ones.
 
 Balances are cached per browser tab for 30 seconds. A holder who moves their
 tokens away therefore keeps access for at most that long.
+
+#### SPL token gates (Solana)
+
+`@RequiresSplToken` does the same for Solana sign-ins. It works with Token and
+Token-2022 mints. Register the RPC clients the gate should use at startup:
+
+```java
+context.setAttribute(SolanaClusters.class, new SolanaClusters()
+        .register(SolanaCluster.MAINNET, new SolanaRpcClient("https://api.mainnet-beta.solana.com")));
+
+@Route("members")
+@RequiresSplToken(mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", minBalance = "1",
+        cluster = SolanaCluster.MAINNET, symbol = "USDC")
+public class MembersView extends VerticalLayout { }
+```
+
+`minBalance` is in whole tokens; the mint's decimals are read from the chain.
+The visitor must be signed in with Sign-In With Solana on the gate's cluster.
+EVM sign-ins and Solana sign-ins on another cluster are denied without an RPC
+call. Without a registered client for the cluster, the gate fails closed with
+the 503 page. Uses the same pages and 30-second cache as `@RequiresToken`.
 
 ### Fiat on-ramp (buy with card)
 
