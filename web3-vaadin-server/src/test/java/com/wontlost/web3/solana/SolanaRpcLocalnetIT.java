@@ -1,18 +1,29 @@
 package com.wontlost.web3.solana;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.List;
+import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import com.wontlost.web3.chain.FailoverJsonRpcTransport;
+import com.wontlost.web3.chain.HttpJsonRpcTransport;
+import com.wontlost.web3.chain.JsonRpcDialect;
+import com.wontlost.web3.chain.JsonRpcTransport;
 import com.wontlost.web3.siws.Base58;
+
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 针对真实 {@code solana-test-validator} 的集成测试（{@code SOLANA_RPC=http://127.0.0.1:8899}）。
@@ -28,6 +39,7 @@ import com.wontlost.web3.siws.Base58;
  */
 @EnabledIfEnvironmentVariable(named = "SOLANA_RPC", matches = ".+")
 class SolanaRpcLocalnetIT {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final BigInteger AIRDROP = BigInteger.valueOf(2_000_000_000L);
 
     @Test void airdroppedLamportsAreVisibleThroughGetBalance() throws InterruptedException {
@@ -75,6 +87,38 @@ class SolanaRpcLocalnetIT {
                     System.getenv("SOLANA_SPL_2022_MINT"));
             assertEquals(new BigInteger(System.getenv("SOLANA_SPL_AMOUNT")), held.amount());
             assertEquals(6, held.decimals());
+        }
+    }
+
+    @Test void failoverWithSolanaDialectSkipsADeadPrimaryAndReturnsAfterARealGetHealthProbe() throws Exception {
+        String rpc = System.getenv("SOLANA_RPC");
+        AtomicInteger primaryFailures = new AtomicInteger(1);
+        List<String> primaryMethods = new CopyOnWriteArrayList<>();
+        HttpJsonRpcTransport primaryNode = new HttpJsonRpcTransport(rpc);
+        // 主端点：真实节点，首个请求模拟超时；之后的恢复探测与请求都打到真实验证器
+        JsonRpcTransport primary = new JsonRpcTransport() {
+            @Override public String send(String request) throws IOException {
+                primaryMethods.add(MAPPER.readTree(request).path("method").asString());
+                if (primaryFailures.getAndDecrement() > 0) throw new IOException("timeout");
+                return primaryNode.send(request);
+            }
+
+            @Override public void close() {
+                primaryNode.close();
+            }
+        };
+        FailoverJsonRpcTransport failover = new FailoverJsonRpcTransport(List.of(
+                new FailoverJsonRpcTransport.Endpoint("primary", primary),
+                new FailoverJsonRpcTransport.Endpoint("backup", new HttpJsonRpcTransport(rpc))),
+                new FailoverJsonRpcTransport.Config(1, Duration.ZERO, 3), JsonRpcDialect.SOLANA);
+        try (SolanaRpcClient client = new SolanaRpcClient(failover, SolanaCommitment.CONFIRMED)) {
+            String genesis = client.getGenesisHash();
+            assertEquals(List.of("getGenesisHash", "getHealth"), primaryMethods);
+            assertNotNull(failover.healthSnapshot().get(1).lastSuccessAt());
+            assertEquals(FailoverJsonRpcTransport.State.CLOSED, failover.healthSnapshot().getFirst().state());
+
+            assertEquals(genesis, client.getGenesisHash());
+            assertEquals("getGenesisHash", primaryMethods.getLast(), "the recovered primary serves the next request");
         }
     }
 
