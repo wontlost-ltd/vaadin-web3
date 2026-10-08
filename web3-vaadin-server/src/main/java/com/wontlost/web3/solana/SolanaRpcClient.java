@@ -81,6 +81,82 @@ public final class SolanaRpcClient implements AutoCloseable {
         return new SplTokenBalance(mint, total, decimals, slot(result, "getTokenAccountsByOwner"));
     }
 
+    /** The most recent blockhash at this client's commitment, for binding a new transaction. */
+    public LatestBlockhash getLatestBlockhash() {
+        JsonNode result = request("getLatestBlockhash", List.of(Map.of("commitment", commitment.value())));
+        JsonNode value = result.path("value");
+        String blockhash = value.path("blockhash").asString("");
+        long lastValid = value.path("lastValidBlockHeight").asLong(-1);
+        if (lastValid < 0) throw new SolanaRpcException(0, "getLatestBlockhash returned an invalid response");
+        try {
+            SolanaAddresses.key(blockhash);
+        } catch (IllegalArgumentException exception) {
+            throw new SolanaRpcException(0, "getLatestBlockhash returned an invalid response");
+        }
+        return new LatestBlockhash(blockhash, lastValid, slot(result, "getLatestBlockhash"));
+    }
+
+    /** The current block height at this client's commitment, to compare with {@link LatestBlockhash#lastValidBlockHeight()}. */
+    public long getBlockHeight() {
+        JsonNode result = request("getBlockHeight", List.of(Map.of("commitment", commitment.value())));
+        if (!result.isIntegralNumber() || result.asLong() < 0) {
+            throw new SolanaRpcException(0, "getBlockHeight returned an invalid response");
+        }
+        return result.asLong();
+    }
+
+    /**
+     * Statuses for up to 256 transaction signatures, in the same order; an empty entry means the cluster does not
+     * know the signature (not processed yet, or older than the status cache when {@code searchHistory} is false).
+     */
+    public List<java.util.Optional<SignatureStatus>> getSignatureStatuses(List<String> signatures, boolean searchHistory) {
+        if (signatures.isEmpty() || signatures.size() > 256) {
+            throw new IllegalArgumentException("between 1 and 256 signatures are required");
+        }
+        signatures.forEach(signature -> requireSignature(signature));
+        JsonNode result = request("getSignatureStatuses",
+                List.of(signatures, Map.of("searchTransactionHistory", searchHistory)));
+        JsonNode values = result.path("value");
+        if (!values.isArray() || values.size() != signatures.size()) {
+            throw new SolanaRpcException(0, "getSignatureStatuses returned an invalid response");
+        }
+        List<java.util.Optional<SignatureStatus>> statuses = new java.util.ArrayList<>();
+        for (JsonNode value : values) {
+            statuses.add(value.isNull() ? java.util.Optional.empty() : java.util.Optional.of(signatureStatus(value)));
+        }
+        return statuses;
+    }
+
+    /**
+     * Submits a signed wire transaction and returns its signature. The node first simulates it (preflight) at this
+     * client's commitment, so most failures are reported here as an RPC error instead of a failed transaction.
+     */
+    public String sendTransaction(byte[] signedTransaction) {
+        String expected = SolanaTransaction.signatureOf(signedTransaction);
+        JsonNode result = request("sendTransaction", List.of(java.util.Base64.getEncoder().encodeToString(signedTransaction),
+                Map.of("encoding", "base64", "preflightCommitment", commitment.value())));
+        if (!result.isString() || !expected.equals(result.asString())) {
+            throw new SolanaRpcException(0, "sendTransaction returned an unexpected signature");
+        }
+        return expected;
+    }
+
+    /** The program that owns {@code address} (for a mint: Token or Token-2022), or empty when the account does not exist. */
+    public java.util.Optional<String> getAccountOwner(String address) {
+        requireAddress(address, "address");
+        JsonNode result = request("getAccountInfo", List.of(address, Map.of("encoding", "base64",
+                "dataSlice", Map.of("offset", 0, "length", 0), "commitment", commitment.value())));
+        JsonNode value = result.path("value");
+        if (value.isNull()) return java.util.Optional.empty();
+        String owner = value.path("owner").asString("");
+        try {
+            SolanaAddresses.key(owner);
+        } catch (IllegalArgumentException exception) {
+            throw new SolanaRpcException(0, "getAccountInfo returned an invalid response");
+        }
+        return java.util.Optional.of(owner);
+    }
+
     /** 创世哈希（base58）。 */
     public String getGenesisHash() {
         JsonNode result = request("getGenesisHash", List.of());
@@ -193,6 +269,36 @@ public final class SolanaRpcClient implements AutoCloseable {
             return value;
         } catch (NumberFormatException exception) {
             throw new SolanaRpcException(0, method + " returned an invalid amount");
+        }
+    }
+
+    private static SignatureStatus signatureStatus(JsonNode value) {
+        long slot = value.path("slot").asLong(-1);
+        JsonNode confirmations = value.path("confirmations");
+        JsonNode statusNode = value.path("confirmationStatus");
+        // Agave 对 None 输出显式 null；缺失与 null 同等处理
+        String statusText = statusNode.isNull() || statusNode.isMissingNode() ? "" : statusNode.asString("?");
+        SolanaCommitment status = switch (statusText) {
+            case "processed" -> SolanaCommitment.PROCESSED;
+            case "confirmed" -> SolanaCommitment.CONFIRMED;
+            case "finalized" -> SolanaCommitment.FINALIZED;
+            // 旧节点可能不返回 confirmationStatus：confirmations 为 null 表示已 rooted，即 finalized
+            case "" -> confirmations.isNull() ? SolanaCommitment.FINALIZED : null;
+            default -> null;
+        };
+        if (slot < 0 || status == null || !(confirmations.isNull() || confirmations.isIntegralNumber())) {
+            throw new SolanaRpcException(0, "getSignatureStatuses returned an invalid response");
+        }
+        JsonNode error = value.path("err");
+        return new SignatureStatus(slot, confirmations.isNull() ? null : confirmations.asLong(), status,
+                error.isNull() || error.isMissingNode() ? null : error.toString());
+    }
+
+    private static void requireSignature(String signature) {
+        try {
+            com.wontlost.web3.siws.Base58.decode(signature, 64);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new IllegalArgumentException("Solana signatures must be base58 64-byte values", exception);
         }
     }
 
