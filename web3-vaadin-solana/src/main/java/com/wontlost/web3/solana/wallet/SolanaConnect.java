@@ -16,6 +16,8 @@ import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.Tag;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.vaadin.flow.server.VaadinService;
 import com.vaadin.flow.shared.Registration;
 import com.wontlost.web3.siws.Base58;
@@ -44,11 +46,11 @@ public class SolanaConnect extends Component {
     /** Warning shown next to a server wallet in the picker unless replaced. */
     public static final String DEFAULT_DEVELOPMENT_WALLET_WARNING = "Development wallet — never use with real assets";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger LOGGER = LoggerFactory.getLogger(SolanaConnect.class);
 
     private String account;
     private String walletName;
     private SolanaCluster cluster;
-    private transient SolanaServerWallet serverWallet;
     private transient List<CompletableFuture<String>> pendingFutures;
 
     /** Creates a connector rendered as a connect/disconnect button. */
@@ -129,10 +131,7 @@ public class SolanaConnect extends Component {
 
     /** Opens the wallet picker (or the preferred wallet) and completes with the connected base58 address. */
     public CompletableFuture<String> connect() {
-        return call("this.connect()").thenApply(address -> {
-            applyAccount(address, getElement().getProperty("walletName"));
-            return address;
-        });
+        return call("this.connect()").thenApply(this::applyConnected);
     }
 
     /** Forgets the connected account and asks the wallet to disconnect when it supports it. */
@@ -162,12 +161,12 @@ public class SolanaConnect extends Component {
     @ClientCallable
     public void solanaServerWalletRequest(String requestId, String method, String payloadJson) {
         if (requestId == null || requestId.isBlank() || requestId.length() > 128) return;
-        try {
-            String result = handleServerWalletRequest(serverWallet, method, payloadJson);
-            getElement().executeJs("this._resolveServerWalletRequest($0, $1)", requestId, result);
-        } catch (SolanaWalletException exception) {
-            getElement().executeJs("this._rejectServerWalletRequest($0, $1, $2)", requestId, exception.getCode(),
-                    exception.getMessage());
+        ServerWalletResponse response = respond(currentServerWallet(), method, payloadJson);
+        if (response.result() != null) {
+            getElement().executeJs("this._resolveServerWalletRequest($0, $1)", requestId, response.result());
+        } else {
+            getElement().executeJs("this._rejectServerWalletRequest($0, $1, $2)", requestId, response.code(),
+                    response.message());
         }
     }
 
@@ -184,16 +183,12 @@ public class SolanaConnect extends Component {
     @Override
     protected void onAttach(AttachEvent attachEvent) {
         super.onAttach(attachEvent);
-        VaadinService service = VaadinService.getCurrent();
-        SolanaServerWallet wallet = SolanaServerWallet.find(service == null ? null : service.getContext());
-        requireDevelopmentMode(wallet, service != null && service.getDeploymentConfiguration().isProductionMode());
-        serverWallet = wallet;
+        SolanaServerWallet wallet = currentServerWallet();
         getElement().setProperty("serverWallet", wallet == null ? "" : serverWalletInfo(wallet).toString());
     }
 
     @Override
     protected void onDetach(DetachEvent detachEvent) {
-        serverWallet = null;
         List<CompletableFuture<String>> pending;
         synchronized (this) {
             pending = pendingFutures;
@@ -207,12 +202,21 @@ public class SolanaConnect extends Component {
         super.onDetach(detachEvent);
     }
 
-    /** 服务端钱包按契约仅用于开发/测试：生产模式下注册了服务端钱包即拒绝渲染。 */
-    static void requireDevelopmentMode(SolanaServerWallet wallet, boolean productionMode) {
-        if (wallet != null && productionMode) {
-            throw new IllegalStateException("A SolanaServerWallet (" + wallet.getClass().getName()
-                    + ") must not be registered in Vaadin production mode; server wallets are for development only");
-        }
+    /**
+     * 每次按当前服务查找服务端钱包（反序列化后无需重新挂载）。生产模式下即使绕过注册检查放入了钱包，
+     * 也不向浏览器暴露，只记录错误。
+     */
+    private static SolanaServerWallet currentServerWallet() {
+        VaadinService service = VaadinService.getCurrent();
+        SolanaServerWallet wallet = SolanaServerWallet.find(service == null ? null : service.getContext());
+        return exposableWallet(wallet, service != null && service.getDeploymentConfiguration().isProductionMode());
+    }
+
+    static SolanaServerWallet exposableWallet(SolanaServerWallet wallet, boolean productionMode) {
+        if (wallet == null || !productionMode) return wallet;
+        LOGGER.error("A SolanaServerWallet ({}) is registered in Vaadin production mode; it is not offered to browsers",
+                wallet.getClass().getName());
+        return null;
     }
 
     static String chain(SolanaCluster cluster) {
@@ -257,6 +261,22 @@ public class SolanaConnect extends Component {
             return new SignedSignIn(Base58.encode(publicKey), signedMessage, signature);
         } catch (RuntimeException exception) {
             throw new SolanaWalletException(-32603, "The wallet returned an invalid sign-in result", false);
+        }
+    }
+
+    /** 对浏览器的答复：成功时 result 为 JSON，失败时为 Wallet Standard 错误码与消息。 */
+    record ServerWalletResponse(String result, int code, String message) {
+    }
+
+    /** 总是给出答复：自定义钱包的意外异常也映射为 -32603，否则浏览器端的钱包请求永远不结束。 */
+    static ServerWalletResponse respond(SolanaServerWallet wallet, String method, String payloadJson) {
+        try {
+            return new ServerWalletResponse(handleServerWalletRequest(wallet, method, payloadJson), 0, null);
+        } catch (SolanaWalletException exception) {
+            return new ServerWalletResponse(null, exception.getCode(), exception.getMessage());
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Solana server wallet request failed", exception);
+            return new ServerWalletResponse(null, -32603, "Server wallet request failed");
         }
     }
 
@@ -325,7 +345,15 @@ public class SolanaConnect extends Component {
         }
     }
 
-    private void applyAccount(String nextAccount, String nextWallet) {
+    /** 应用 JS connect() 的结果 {address, wallet}；与此前到达的账户变化事件一致时不重复触发事件。 */
+    String applyConnected(String json) {
+        JsonNode result = MAPPER.readTree(json);
+        String address = result.path("address").asString();
+        applyAccount(address, result.path("wallet").asString(null));
+        return address;
+    }
+
+    void applyAccount(String nextAccount, String nextWallet) {
         if (Objects.equals(account, nextAccount) && Objects.equals(walletName, nextWallet)) return;
         account = nextAccount;
         walletName = nextWallet;

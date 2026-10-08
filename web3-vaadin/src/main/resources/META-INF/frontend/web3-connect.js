@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { renderWalletPicker, walletPickerStyles, showWalletPicker, chooseWallet, closeWalletPicker,
+import { renderWalletPicker, walletPickerStyles, showWalletPicker, chooseWallet, closeWalletPicker, focusWalletPicker,
   handlePickerKeydown, registerDiscoveredWallet, waitForWallet, resolveWalletWaiters,
   attachWalletProvider, detachWalletProvider, setProviderAvailable } from './web3-wallet-picker.js';
 import { installServerWallet, uninstallServerWallet, isServerWallet } from './web3-server-wallet.js';
@@ -164,11 +164,7 @@ export class Web3Connect extends LitElement {
   }
 
   updated(changed) {
-    if (changed.has('_pickerOpen') && this._pickerOpen) {
-      const target = this.shadowRoot.querySelector('.wallet-option') || this.shadowRoot.querySelector('.wallet-picker-close')
-        || this.shadowRoot.querySelector('[role="dialog"]');
-      target?.focus();
-    }
+    if (changed.has('_pickerOpen') && this._pickerOpen) focusWalletPicker(this);
   }
 
   _short(addr) {

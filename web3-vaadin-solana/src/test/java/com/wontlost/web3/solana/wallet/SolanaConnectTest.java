@@ -105,6 +105,26 @@ class SolanaConnectTest {
         assertCode(4100, wallet, "signIn", "{\"domain\":\"example.com\",\"address\":\"" + other + "\"}");
     }
 
+    @Test void everyServerWalletRequestGetsAnAnswer() {
+        SolanaConnect.ServerWalletResponse ok = SolanaConnect.respond(wallet, "signMessage", "{\"message\":\"AQID\"}");
+        assertTrue(ok.result().contains("signature"));
+
+        SolanaConnect.ServerWalletResponse refused = SolanaConnect.respond(wallet, "signTransaction", "{}");
+        assertNull(refused.result());
+        assertEquals(4200, refused.code());
+
+        SolanaServerWallet broken = new SolanaServerWallet() {
+            @Override public String name() { return "Broken"; }
+            @Override public String address() { return wallet.address(); }
+            @Override public SolanaCluster cluster() { return SolanaCluster.LOCALNET; }
+            @Override public byte[] signMessage(byte[] message) { throw new IllegalStateException("hsm offline"); }
+        };
+        SolanaConnect.ServerWalletResponse failed = SolanaConnect.respond(broken, "signMessage", "{\"message\":\"AQID\"}");
+        assertNull(failed.result());
+        assertEquals(-32603, failed.code());
+        assertEquals("Server wallet request failed", failed.message());
+    }
+
     @Test void serverWalletInfoCarriesThePublicKeyAndChain() {
         JsonNode info = SolanaConnect.serverWalletInfo(wallet);
 
@@ -157,22 +177,27 @@ class SolanaConnectTest {
     }
 
     @Test void serverWalletsAreRefusedInProductionMode() {
-        SolanaConnect.requireDevelopmentMode(wallet, false);
-        SolanaConnect.requireDevelopmentMode(null, true);
+        SolanaServerWallet.requireDevelopmentMode(wallet, false);
+        SolanaServerWallet.requireDevelopmentMode(null, true);
         IllegalStateException refused = assertThrows(IllegalStateException.class,
-                () -> SolanaConnect.requireDevelopmentMode(wallet, true));
+                () -> SolanaServerWallet.requireDevelopmentMode(wallet, true));
         assertTrue(refused.getMessage().contains("production mode"));
+
+        java.util.Map<Class<?>, Object> attributes = new java.util.HashMap<>();
+        attributes.put(com.vaadin.flow.server.startup.ApplicationConfiguration.class, configuration(true));
+        com.vaadin.flow.server.VaadinContext production = context(attributes);
+        assertThrows(IllegalStateException.class, () -> SolanaServerWallet.register(production, wallet));
+        assertNull(SolanaServerWallet.find(production), "nothing is registered in production mode");
+
+        assertEquals(wallet, SolanaConnect.exposableWallet(wallet, false));
+        assertNull(SolanaConnect.exposableWallet(wallet, true), "a wallet slipped into production is not offered");
+        assertNull(SolanaConnect.exposableWallet(null, true));
     }
 
     @Test void serverWalletRegistrationIsSingleInstance() {
         java.util.Map<Class<?>, Object> attributes = new java.util.HashMap<>();
-        com.vaadin.flow.server.VaadinContext context = (com.vaadin.flow.server.VaadinContext) java.lang.reflect.Proxy
-                .newProxyInstance(getClass().getClassLoader(), new Class<?>[] {com.vaadin.flow.server.VaadinContext.class},
-                        (proxy, method, args) -> switch (method.getName()) {
-                            case "setAttribute" -> { attributes.put((Class<?>) args[0], args[1]); yield null; }
-                            case "getAttribute" -> attributes.get(args[0]);
-                            default -> null;
-                        });
+        attributes.put(com.vaadin.flow.server.startup.ApplicationConfiguration.class, configuration(false));
+        com.vaadin.flow.server.VaadinContext context = context(attributes);
         assertNull(SolanaServerWallet.find(null));
         assertNull(SolanaServerWallet.find(context));
         SolanaServerWallet.register(context, wallet);
@@ -180,6 +205,42 @@ class SolanaConnectTest {
         assertEquals(wallet, SolanaServerWallet.find(context));
         assertThrows(IllegalStateException.class,
                 () -> SolanaServerWallet.register(context, SolanaDevWallet.random(SolanaCluster.LOCALNET)));
+    }
+
+    @Test void connectResultSetsTheWalletNameWithoutADuplicateEvent() {
+        SolanaConnect connect = new SolanaConnect(true);
+        List<SolanaConnect.AccountChangedEvent> events = new java.util.ArrayList<>();
+        connect.addAccountChangedListener(events::add);
+
+        // 浏览器先派发账户变化事件，随后 connect() 的结果到达
+        connect.applyAccount(wallet.address(), "Phantom");
+        assertEquals(wallet.address(),
+                connect.applyConnected("{\"address\":\"" + wallet.address() + "\",\"wallet\":\"Phantom\"}"));
+
+        assertEquals(1, events.size());
+        assertEquals("Phantom", connect.getWalletName());
+        assertEquals("Phantom", events.getFirst().getWalletName());
+        assertTrue(connect.isConnected());
+        connect.applyAccount(null, null);
+        assertNull(connect.getAccount());
+        assertNull(events.getLast().getAccount());
+    }
+
+    private static com.vaadin.flow.server.VaadinContext context(java.util.Map<Class<?>, Object> attributes) {
+        return (com.vaadin.flow.server.VaadinContext) java.lang.reflect.Proxy.newProxyInstance(
+                SolanaConnectTest.class.getClassLoader(), new Class<?>[] {com.vaadin.flow.server.VaadinContext.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "setAttribute" -> { attributes.put((Class<?>) args[0], args[1]); yield null; }
+                    case "getAttribute" -> attributes.get(args[0]);
+                    default -> null;
+                });
+    }
+
+    private static com.vaadin.flow.server.startup.ApplicationConfiguration configuration(boolean production) {
+        return (com.vaadin.flow.server.startup.ApplicationConfiguration) java.lang.reflect.Proxy.newProxyInstance(
+                SolanaConnectTest.class.getClassLoader(),
+                new Class<?>[] {com.vaadin.flow.server.startup.ApplicationConfiguration.class},
+                (proxy, method, args) -> "isProductionMode".equals(method.getName()) ? production : null);
     }
 
     @Test void clusterSetsTheWalletStandardChain() {

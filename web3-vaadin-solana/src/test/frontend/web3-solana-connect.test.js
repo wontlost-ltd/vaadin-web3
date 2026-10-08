@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWallets } from '@wallet-standard/app';
 import { Web3SolanaConnect, isSolanaWallet } from '../../main/resources/META-INF/frontend/web3-solana-connect.js';
-import { toBase64, fromBase64 } from '../../main/resources/META-INF/frontend/web3-solana-server-wallet.js';
+import { toBase64, fromBase64, SERVER_WALLET_TIMEOUT_MS } from '../../main/resources/META-INF/frontend/web3-solana-server-wallet.js';
 
 const unregisters = [];
 const bytes = (length, fill) => new Uint8Array(length).fill(fill);
@@ -88,7 +88,7 @@ describe('connect', () => {
     const element = mount({ preferredWallet: 'Phantom' });
     const changes = events(element, 'solana-account-changed');
 
-    await expect(element.connect()).resolves.toBe('Addr1111');
+    await expect(element.connect()).resolves.toEqual({ address: 'Addr1111', wallet: 'Phantom' });
 
     expect(wallet.features['standard:connect'].connect).toHaveBeenCalledOnce();
     expect(element.account).toBe('Addr1111');
@@ -106,27 +106,39 @@ describe('connect', () => {
 
     option.click();
 
-    await expect(connecting).resolves.toBe('Addr1111');
+    await expect(connecting).resolves.toEqual({ address: 'Addr1111', wallet: 'Phantom' });
     expect(element._pickerOpen).toBe(false);
   });
 
-  it('closing the picker rejects as a user rejection', async () => {
+  it('closing the picker rejects as a user rejection and reports it once', async () => {
     fakeWallet();
     const element = mount();
     const errors = events(element, 'solana-wallet-error');
     const connecting = element.connect();
     await element.updateComplete;
 
-    element.shadowRoot.querySelector('.wallet-picker-close').click();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
     await expect(connecting).rejects.toMatchObject({ code: 4001 });
-    expect(errors.at(-1).userRejected).toBe(true);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].userRejected).toBe(true);
+  });
+
+  it('moves focus into the picker when it opens', async () => {
+    fakeWallet();
+    const element = mount();
+    const connecting = element.connect();
+    await element.updateComplete;
+
+    expect(element.shadowRoot.activeElement).toBe(element.shadowRoot.querySelector('.wallet-option'));
+    element.shadowRoot.querySelector('.wallet-option').click();
+    await connecting;
   });
 
   it('picks the first account on the configured chain', async () => {
     fakeWallet({ accounts: [account('MainnetAcct', ['solana:mainnet']), account('DevnetAcct')] , chains: ['solana:devnet', 'solana:mainnet'] });
     const element = mount({ preferredWallet: 'Phantom' });
-    await expect(element.connect()).resolves.toBe('DevnetAcct');
+    await expect(element.connect()).resolves.toMatchObject({ address: 'DevnetAcct' });
   });
 
   it('fails when the wallet returns no usable account', async () => {
@@ -193,6 +205,35 @@ describe('signing', () => {
     expect(wallet.features['solana:signMessage'].signMessage).not.toHaveBeenCalled();
   });
 
+  it('follows the account the wallet actually signed with', async () => {
+    const other = account('OtherAcct', ['solana:devnet'], 8);
+    const wallet = fakeWallet({ accounts: [account('Addr1111'), other] });
+    wallet.features['solana:signIn'].signIn.mockResolvedValueOnce([{ account: other,
+      signedMessage: new Uint8Array([1]), signature: bytes(64, 9) }]);
+    const element = mount({ preferredWallet: 'Phantom' });
+    await element.connect();
+    const changes = events(element, 'solana-account-changed');
+
+    const result = await element.signIn('{}', '');
+
+    expect(fromBase64(result.publicKey)).toEqual(bytes(32, 8));
+    expect(element.account).toBe('OtherAcct');
+    expect(changes).toEqual([{ account: 'OtherAcct', wallet: 'Phantom' }]);
+  });
+
+  it('rejects off-chain message envelopes and non-Ed25519 signatures', async () => {
+    const wallet = fakeWallet();
+    const element = mount({ preferredWallet: 'Phantom' });
+    await element.connect();
+    const signIn = wallet.features['solana:signIn'].signIn;
+    signIn.mockResolvedValueOnce([{ account: wallet.accounts[0], signedMessage: new Uint8Array([1]),
+      signature: bytes(64, 9), signedMessageFormat: { kind: 'offchainMessage', messageVersion: 1 } }]);
+    await expect(element.signIn('{}', '')).rejects.toMatchObject({ code: -32603 });
+    signIn.mockResolvedValueOnce([{ account: wallet.accounts[0], signedMessage: new Uint8Array([1]),
+      signature: bytes(64, 9), signatureType: 'secp256k1' }]);
+    await expect(element.signIn('{}', '')).rejects.toMatchObject({ code: -32603 });
+  });
+
   it('falls back to solana:signMessage with the server-rendered text', async () => {
     const wallet = fakeWallet({ signIn: false });
     const element = mount({ preferredWallet: 'Phantom' });
@@ -254,7 +295,7 @@ describe('server wallet', () => {
     const element = mount({ serverWallet: JSON.stringify(info), developmentWalletWarning: 'Never use real assets',
       preferredWallet: info.name });
     expect(element.wallets).toEqual([expect.objectContaining({ name: info.name, warning: 'Never use real assets' })]);
-    await expect(element.connect()).resolves.toBe('DevAddr');
+    await expect(element.connect()).resolves.toMatchObject({ address: 'DevAddr' });
 
     const signing = element.signIn('{"nonce":"n1"}', '');
     expect(element.lastRequest.method).toBe('signIn');
@@ -277,6 +318,46 @@ describe('server wallet', () => {
 
     await expect(signing).rejects.toMatchObject({ code: 4200, message: 'Server wallet method is not allowed' });
     element._resolveServerWalletRequest('unknown', '{}');
+  });
+
+  it('times out a request the server never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const element = mount({ serverWallet: JSON.stringify(info), preferredWallet: info.name });
+      await element.connect();
+      const signing = element.signMessage(toBase64(new Uint8Array([7])));
+      const assertion = expect(signing).rejects.toMatchObject({ code: -32603, message: 'Server wallet request timed out' });
+
+      await vi.advanceTimersByTimeAsync(SERVER_WALLET_TIMEOUT_MS);
+
+      await assertion;
+      expect(element._serverWalletPending.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('registers one wallet for several components and forwards through a live one', async () => {
+    const first = mount({ serverWallet: JSON.stringify(info), preferredWallet: info.name });
+    const second = mount({ serverWallet: JSON.stringify(info), preferredWallet: info.name });
+    expect(getWallets().get().filter((wallet) => wallet.name === info.name)).toHaveLength(1);
+    expect(first.wallets).toHaveLength(1);
+
+    second.remove();
+    expect(getWallets().get().filter((wallet) => wallet.name === info.name)).toHaveLength(1);
+    await first.connect();
+    const signing = first.signMessage(toBase64(new Uint8Array([7])));
+    expect(first.lastRequest.method).toBe('signMessage');
+    first._resolveServerWalletRequest(first.lastRequest.id, JSON.stringify({ signature: toBase64(bytes(64, 1)) }));
+    await expect(signing).resolves.toBe(toBase64(bytes(64, 1)));
+
+    first.remove();
+    expect(getWallets().get().some((wallet) => wallet.name === info.name)).toBe(false);
+  });
+
+  it('encodes large messages without overflowing the call stack', () => {
+    const large = new Uint8Array(300_000).map((_, index) => index % 251);
+    expect(fromBase64(toBase64(large))).toEqual(large);
   });
 
   it('unregisters and rejects pending requests when removed or replaced', async () => {

@@ -54,7 +54,7 @@ class SiwsLoginTest {
     }
 
     @Test void successfulSignInVerifiesTheWalletSignatureAndStoresTheIdentity() {
-        FakeWallet wallet = new FakeWallet(this::signHonestly);
+        FakeWallet wallet = new FakeWallet(signer.address(), this::signHonestly);
         SiwsLogin login = login(wallet);
         List<SiwsLogin.SignedInEvent> signedIn = new ArrayList<>();
         login.addSignedInListener(signedIn::add);
@@ -73,7 +73,7 @@ class SiwsLoginTest {
     }
 
     @Test void walletRejectionIsReportedWithoutAnIdentity() {
-        SiwsLogin login = login(new FakeWallet(challenge -> CompletableFuture.failedFuture(
+        SiwsLogin login = login(new FakeWallet(signer.address(), challenge -> CompletableFuture.failedFuture(
                 new SolanaConnect.SolanaWalletException(4001, "User rejected the request", true))));
         List<SiwsLogin.SignInFailedEvent> failed = new ArrayList<>();
         login.addSignInFailedListener(failed::add);
@@ -124,13 +124,13 @@ class SiwsLoginTest {
             screened.add(address);
             return AddressScreening.ScreeningDecision.allow();
         });
-        login(new FakeWallet(this::signHonestly)).beginSignIn();
+        login(new FakeWallet(signer.address(), this::signHonestly)).beginSignIn();
         assertEquals(List.of(signer.address()), screened);
         assertTrue(Web3Session.currentIdentity().isPresent());
     }
 
     @Test void missingOriginAndServerErrorsHaveTheirOwnCodes() {
-        SiwsLogin noOrigin = new SiwsLogin(verifier(), SolanaCluster.DEVNET, new FakeWallet(this::signHonestly));
+        SiwsLogin noOrigin = new SiwsLogin(verifier(), SolanaCluster.DEVNET, new FakeWallet(signer.address(), this::signHonestly));
         noOrigin.setContextLookup(() -> context(attributes));
         noOrigin.setRequestLookup(() -> null);
         List<SiwsLogin.SignInFailedEvent> failed = new ArrayList<>();
@@ -140,7 +140,7 @@ class SiwsLoginTest {
 
         SiwsVerifier full = new SiwsVerifier(new InMemorySiwsChallengeStore(1, clock), clock);
         full.issue("app.example.com", "https://app.example.com", null, SolanaCluster.DEVNET, SiwsLogin.CHALLENGE_TTL, List.of());
-        SiwsLogin login = new SiwsLogin(full, SolanaCluster.DEVNET, new FakeWallet(this::signHonestly))
+        SiwsLogin login = new SiwsLogin(full, SolanaCluster.DEVNET, new FakeWallet(signer.address(), this::signHonestly))
                 .setDomain("app.example.com").setUri("https://app.example.com");
         login.setContextLookup(() -> context(attributes));
         List<SiwsLogin.SignInFailedEvent> internal = new ArrayList<>();
@@ -152,7 +152,7 @@ class SiwsLoginTest {
 
     @Test void aSecondClickWhileSigningIsIgnored() {
         CompletableFuture<SolanaConnect.SignedSignIn> pending = new CompletableFuture<>();
-        FakeWallet wallet = new FakeWallet(challenge -> pending);
+        FakeWallet wallet = new FakeWallet(signer.address(), challenge -> pending);
         SiwsLogin login = login(wallet);
 
         login.beginSignIn();
@@ -165,7 +165,7 @@ class SiwsLoginTest {
     }
 
     @Test void connectsFirstWhenNoAccountIsConnected() {
-        FakeWallet wallet = new FakeWallet(this::signHonestly);
+        FakeWallet wallet = new FakeWallet(signer.address(), this::signHonestly);
         wallet.connected = false;
         SiwsLogin login = login(wallet);
 
@@ -176,7 +176,7 @@ class SiwsLoginTest {
     }
 
     @Test void signOutClearsTheIdentityAndDisconnectsByDefault() {
-        FakeWallet wallet = new FakeWallet(this::signHonestly);
+        FakeWallet wallet = new FakeWallet(signer.address(), this::signHonestly);
         SiwsLogin login = login(wallet);
         login.beginSignIn();
         List<SiwsLogin.SignedOutEvent> signedOut = new ArrayList<>();
@@ -192,8 +192,83 @@ class SiwsLoginTest {
         assertEquals(1, wallet.disconnects);
     }
 
+    @Test void signInWorksAfterTheComponentIsDeserialized() throws Exception {
+        SiwsLogin original = new SiwsLogin(verifier(), SolanaCluster.DEVNET, new FakeWallet(signer.address(), this::signHonestly))
+                .setDomain("app.example.com").setUri("https://app.example.com");
+        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+        try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(bytes)) {
+            out.writeObject(original);
+        }
+        SiwsLogin restored;
+        try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(
+                new java.io.ByteArrayInputStream(bytes.toByteArray()))) {
+            restored = (SiwsLogin) in.readObject();
+        }
+        ((FakeWallet) restored.getWallet()).signing = this::signHonestly;
+        List<SiwsLogin.SignInFailedEvent> failed = new ArrayList<>();
+        restored.addSignInFailedListener(failed::add);
+
+        // 反序列化后没有可用的应用校验器：流程以 INTERNAL_ERROR 结束，而不是卡住或空指针
+        restored.beginSignIn();
+        assertEquals(SiwsLogin.INTERNAL_ERROR, failed.getFirst().getCode());
+
+        restored.setVerifier(verifier());
+        List<SiwsLogin.SignedInEvent> signedIn = new ArrayList<>();
+        restored.addSignedInListener(signedIn::add);
+        restored.beginSignIn();
+        assertEquals(1, signedIn.size(), "the documented setVerifier reattach path signs in");
+        assertEquals(signer.address(), Web3Session.currentIdentity().orElseThrow().account().address());
+    }
+
+    @Test void rotatesTheSessionIdOnceAfterVerificationBeforeStoringTheIdentity() {
+        List<Boolean> rotations = new ArrayList<>();
+        jakarta.servlet.http.HttpServletRequest http = (jakarta.servlet.http.HttpServletRequest) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[] {jakarta.servlet.http.HttpServletRequest.class},
+                (proxy, method, args) -> {
+                    if ("changeSessionId".equals(method.getName())) {
+                        rotations.add(Web3Session.currentIdentity().isPresent());
+                        return "rotated";
+                    }
+                    return null;
+                });
+        SiwsLogin login = login(new FakeWallet(signer.address(), this::signHonestly));
+        login.setRequestLookup(() -> new com.vaadin.flow.server.VaadinServletRequest(http, null));
+
+        login.beginSignIn();
+
+        assertEquals(List.of(false), rotations, "rotated exactly once, before the identity was stored");
+        assertTrue(Web3Session.currentIdentity().isPresent());
+
+        rotations.clear();
+        Web3Session.signOut();
+        SiwsLogin noRotation = login(new FakeWallet(signer.address(), this::signHonestly)).setSessionIdRotation(false);
+        noRotation.setRequestLookup(() -> new com.vaadin.flow.server.VaadinServletRequest(http, null));
+        noRotation.beginSignIn();
+        assertEquals(List.of(), rotations);
+
+        Web3Session.signOut();
+        assertFailure("siws_invalid_signature", challenge -> {
+            byte[] message = message(challenge);
+            return CompletableFuture.completedFuture(new SolanaConnect.SignedSignIn(signer.address(), message, new byte[64]));
+        });
+        assertEquals(List.of(), rotations, "failed sign-ins never rotate");
+    }
+
+    @Test void unexpectedErrorsAfterVerificationEndTheFlow() {
+        VaadinSession.setCurrent(null);
+        SiwsLogin login = login(new FakeWallet(signer.address(), this::signHonestly));
+        List<SiwsLogin.SignInFailedEvent> failed = new ArrayList<>();
+        login.addSignInFailedListener(failed::add);
+
+        login.beginSignIn();
+
+        assertEquals(SiwsLogin.INTERNAL_ERROR, failed.getFirst().getCode());
+        login.beginSignIn();
+        assertEquals(2, failed.size(), "the button is usable again");
+    }
+
     @Test void i18nMessagesAndButton() {
-        SiwsLogin login = login(new FakeWallet(this::signHonestly));
+        SiwsLogin login = login(new FakeWallet(signer.address(), this::signHonestly));
         login.setI18n(new SiwsLoginI18n().setButton("Mit Solana anmelden").setMessage("siws_expired", "Abgelaufen"));
 
         assertEquals("Mit Solana anmelden", login.getI18n().getButton());
@@ -206,7 +281,7 @@ class SiwsLoginTest {
     private SiwsLogin.SignInFailedEvent assertFailure(String code,
             Function<SiwsChallenge, CompletableFuture<SolanaConnect.SignedSignIn>> signing) {
         Web3Session.signOut();
-        SiwsLogin login = login(new FakeWallet(signing));
+        SiwsLogin login = login(new FakeWallet(signer.address(), signing));
         List<SiwsLogin.SignInFailedEvent> failed = new ArrayList<>();
         login.addSignInFailedListener(failed::add);
         login.beginSignIn();
@@ -249,27 +324,30 @@ class SiwsLoginTest {
                 new Class<?>[] {VaadinContext.class}, handler);
     }
 
-    /** 不经浏览器的钱包替身：记录收到的挑战，按给定策略签名。 */
-    private final class FakeWallet extends SolanaConnect {
-        private final Function<SiwsChallenge, CompletableFuture<SignedSignIn>> signing;
-        private final List<SiwsChallenge> challenges = new ArrayList<>();
+    /** 不经浏览器的钱包替身：记录收到的挑战，按给定策略签名；可序列化以测试会话恢复。 */
+    private static final class FakeWallet extends SolanaConnect {
+        private transient Function<SiwsChallenge, CompletableFuture<SignedSignIn>> signing;
+        private final String address;
+        // 序列化时为空列表；SiwsChallenge 本身不需要可序列化
+        private final ArrayList<SiwsChallenge> challenges = new ArrayList<>();
         private boolean connected = true;
         private int connects;
         private int disconnects;
 
-        private FakeWallet(Function<SiwsChallenge, CompletableFuture<SignedSignIn>> signing) {
+        private FakeWallet(String address, Function<SiwsChallenge, CompletableFuture<SignedSignIn>> signing) {
             super(true);
+            this.address = address;
             this.signing = signing;
         }
 
         @Override public boolean isConnected() { return connected; }
-        @Override public String getAccount() { return connected ? signer.address() : null; }
+        @Override public String getAccount() { return connected ? address : null; }
 
         @Override
         public CompletableFuture<String> connect() {
             connects++;
             connected = true;
-            return CompletableFuture.completedFuture(signer.address());
+            return CompletableFuture.completedFuture(address);
         }
 
         @Override

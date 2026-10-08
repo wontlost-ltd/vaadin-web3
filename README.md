@@ -541,7 +541,15 @@ The domain, URI, `continue` navigation and serialization work as they do for
   the request.
 - **Serialization:** when the component can be deserialized outside the
   request that created it, call
-  `SiwsLogin.registerVerifier(VaadinContext, verifier)`.
+  `SiwsLogin.registerVerifier(VaadinContext, verifier)` at startup, for
+  example from a `VaadinServiceInitListener`. A restored component finds the
+  verifier there, or you can pass it again with `setVerifier`.
+
+The user approves twice: once to connect the wallet, then once to sign. If the
+user switches accounts in the wallet afterwards, `SolanaConnect` fires an
+`AccountChangedEvent`, but the signed-in identity stays until `signOut()`.
+Listen for that event if your application should sign the user out when the
+account changes.
 
 `SolanaConnect` is the underlying component, for flows of your own:
 
@@ -554,8 +562,9 @@ For local development without a browser wallet, register a
 `SolanaDevWallet` with `SolanaServerWallet.register(VaadinContext, wallet)`.
 It appears in the picker as "Solana development wallet", next to a warning.
 Its Ed25519 key lives only on the server and it signs without asking.
-`SolanaConnect` refuses to render in Vaadin production mode while a server
-wallet is registered. The demo enables one for `solana-test-validator` in the
+`SolanaServerWallet.register` throws in Vaadin production mode, so a
+misconfigured application fails at startup. If a wallet is placed in the
+context some other way, `SolanaConnect` doesn't offer it in production mode. The demo enables one for `solana-test-validator` in the
 `demo` profile; see `/solana`.
 
 ### Solana balances (server)

@@ -1,7 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { getWallets } from '@wallet-standard/app';
 import { renderWalletPicker, walletPickerStyles, showWalletPicker, chooseWallet, closeWalletPicker,
-  handlePickerKeydown } from './web3-wallet-picker.js';
+  focusWalletPicker, handlePickerKeydown } from './web3-wallet-picker.js';
 import { registerSolanaServerWallet, resolveServerWalletRequest, rejectServerWalletRequest,
   toBase64, fromBase64 } from './web3-solana-server-wallet.js';
 
@@ -17,6 +17,13 @@ export function isSolanaWallet(wallet, chain) {
   const features = wallet?.features || {};
   const supportsChain = chain ? chains.includes(chain) : chains.some((item) => item.startsWith('solana:'));
   return supportsChain && CONNECT in features && (SIGN_IN in features || SIGN_MESSAGE in features);
+}
+
+/** 只接受对原始消息字节的 Ed25519 签名；离链消息封装（signedMessageFormat）的字节与挑战不同，明确拒绝。 */
+function requirePlainEd25519(output) {
+  if (output.signedMessageFormat || (output.signatureType && output.signatureType !== 'ed25519')) {
+    throw Object.assign(new Error('The wallet returned an unsupported signature format'), { code: -32603 });
+  }
 }
 
 export class Web3SolanaConnect extends LitElement {
@@ -109,6 +116,10 @@ export class Web3SolanaConnect extends LitElement {
     if (changed.has('chain') || changed.has('developmentWalletWarning')) this._updateWallets();
   }
 
+  updated(changed) {
+    if (changed.has('_pickerOpen') && this._pickerOpen) focusWalletPicker(this);
+  }
+
   render() {
     const label = this.account ? this.disconnectText : this.connectText;
     return html`
@@ -120,7 +131,7 @@ export class Web3SolanaConnect extends LitElement {
     `;
   }
 
-  /** 连接钱包并返回 base58 地址；有首选且可用的钱包时直接连接，否则弹出选择器。 */
+  /** 连接钱包并返回 {address, wallet}；有首选且可用的钱包时直接连接，否则弹出选择器。 */
   async connect() {
     this._busy = true;
     try {
@@ -132,7 +143,7 @@ export class Web3SolanaConnect extends LitElement {
       const account = this._pickAccount(accounts || wallet.accounts);
       if (!account) throw Object.assign(new Error('The wallet returned no Solana account'), { code: 4100 });
       this._useWallet(wallet, account);
-      return account.address;
+      return { address: account.address, wallet: wallet.name };
     } catch (error) {
       this._error(error);
       throw error;
@@ -157,12 +168,17 @@ export class Web3SolanaConnect extends LitElement {
       const input = JSON.parse(inputJson);
       const signIn = this._wallet.features[SIGN_IN];
       if (signIn) {
+        const wallet = this._wallet;
         const [output] = await signIn.signIn({ ...input, address: this.account });
+        requirePlainEd25519(output);
+        // 钱包可能改用另一账户签名：服务端按实际签名者登录，组件状态也随之同步
+        if (output.account.address !== this.account) this._useWallet(wallet, output.account);
         return { publicKey: toBase64(output.account.publicKey), signedMessage: toBase64(output.signedMessage),
           signature: toBase64(output.signature) };
       }
       const [output] = await this._wallet.features[SIGN_MESSAGE].signMessage(
         { account: this._walletAccount, message: new TextEncoder().encode(messageText) });
+      requirePlainEd25519(output);
       return { publicKey: toBase64(this._walletAccount.publicKey), signedMessage: toBase64(output.signedMessage),
         signature: toBase64(output.signature) };
     } catch (error) {
@@ -195,7 +211,12 @@ export class Web3SolanaConnect extends LitElement {
     return { code, message, userRejected };
   }
 
+  // 选择器关闭时已报告过同一错误对象，connect() 的 catch 不再重复派发
   _error(error) {
+    if (error && typeof error === 'object') {
+      if (this._reportedErrors?.has(error)) return;
+      (this._reportedErrors ||= new WeakSet()).add(error);
+    }
     this._notify('solana-wallet-error', this._errorInfo(error));
   }
 

@@ -8,6 +8,9 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.Composite;
@@ -48,12 +51,14 @@ public class SiwsLogin extends Composite<HorizontalLayout> {
     /** How long an issued challenge stays valid. */
     public static final Duration CHALLENGE_TTL = Duration.ofMinutes(10);
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SiwsLogin.class);
     private final SolanaConnect wallet;
     private final Button signInButton = new Button();
     private final SolanaCluster cluster;
     private transient SiwsVerifier verifier;
-    private transient Supplier<VaadinContext> contextLookup = SiwsLogin::currentContext;
-    private transient Supplier<VaadinRequest> requestLookup = VaadinRequest::getCurrent;
+    /** 测试用替身；transient 字段反序列化后为 null，届时回退到当前 Vaadin 上下文与请求。 */
+    private transient Supplier<VaadinContext> contextLookup;
+    private transient Supplier<VaadinRequest> requestLookup;
     private String domain;
     private String uri;
     private String statement;
@@ -134,7 +139,7 @@ public class SiwsLogin extends Composite<HorizontalLayout> {
         String expectedDomain;
         String expectedUri;
         try {
-            VaadinRequest request = requestLookup.get();
+            VaadinRequest request = request();
             expectedDomain = domain == null ? RequestOrigins.domain(request) : domain;
             expectedUri = uri == null ? RequestOrigins.uri(request) : uri;
         } catch (RuntimeException exception) {
@@ -155,12 +160,16 @@ public class SiwsLogin extends Composite<HorizontalLayout> {
             try {
                 VerifiedSolanaSignIn verified = requireVerifier().verify(signed.signedMessage(), signed.signature(),
                         signed.publicKey());
-                screen(verified.address(), AddressScreening.find(contextLookup.get()));
-                if (sessionIdRotation) SessionIds.rotate(requestLookup.get());
+                screen(verified.address(), AddressScreening.find(context()));
+                if (sessionIdRotation) SessionIds.rotate(request());
                 Web3Session.signIn(verified);
                 finishSuccess(verified);
             } catch (SiwsException exception) {
                 finishFailure(exception.code(), -1, false);
+            } catch (RuntimeException exception) {
+                // 例如没有当前会话或监听器抛错：必须结束流程，否则按钮保持禁用且不会再触发事件
+                LOGGER.error("Sign-In With Solana failed unexpectedly", exception);
+                finishFailure(INTERNAL_ERROR, -1, false);
             }
         });
     }
@@ -188,7 +197,7 @@ public class SiwsLogin extends Composite<HorizontalLayout> {
 
     private SiwsVerifier requireVerifier() {
         if (verifier == null) {
-            VaadinContext context = contextLookup.get();
+            VaadinContext context = context();
             SiwsVerifier restored = context == null ? null : context.getAttribute(SiwsVerifier.class);
             if (restored == null) {
                 throw new IllegalStateException("No application SiwsVerifier is registered; call "
@@ -205,7 +214,8 @@ public class SiwsLogin extends Composite<HorizontalLayout> {
         signInButton.setEnabled(true);
         // 先通知监听器（例如写入 Spring Security），再导航：否则受保护的 continue 目标会在认证建立前被拦截
         fireEvent(new SignedInEvent(this, verified));
-        if (!navigateToContinueTarget) return;
+        // 监听器可能已注销登录，此时不导航
+        if (!navigateToContinueTarget || Web3Session.currentIdentity().isEmpty()) return;
         getUI().ifPresent(ui -> {
             QueryParameters parameters = ui.getInternals().getActiveViewLocation().getQueryParameters();
             parameters.getSingleParameter("continue").filter(RequestOrigins::isSafeContinueTarget)
@@ -218,6 +228,14 @@ public class SiwsLogin extends Composite<HorizontalLayout> {
         flowInProgress = false;
         signInButton.setEnabled(true);
         fireEvent(new SignInFailedEvent(this, code, walletErrorCode, userRejected));
+    }
+
+    private VaadinContext context() {
+        return contextLookup == null ? currentContext() : contextLookup.get();
+    }
+
+    private VaadinRequest request() {
+        return requestLookup == null ? VaadinRequest.getCurrent() : requestLookup.get();
     }
 
     private static Throwable unwrap(Throwable error) {

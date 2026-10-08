@@ -3,6 +3,7 @@ package com.wontlost.web3.solana.wallet;
 import java.util.Objects;
 
 import com.vaadin.flow.server.VaadinContext;
+import com.vaadin.flow.server.startup.ApplicationConfiguration;
 import com.wontlost.web3.siws.SolanaCluster;
 
 /**
@@ -10,8 +11,8 @@ import com.wontlost.web3.siws.SolanaCluster;
  * <p>
  * {@link SolanaConnect} looks up the wallet registered for the application and registers it in the page next to the
  * browser's own wallets. Signing requests made through it are forwarded to the server; the private key never reaches
- * the browser. Intended for development and testing only: {@link SolanaConnect} refuses to attach in Vaadin
- * production mode while a server wallet is registered.
+ * the browser. Intended for development and testing only: {@link #register(VaadinContext, SolanaServerWallet)}
+ * refuses to register one in Vaadin production mode, so the application fails at startup.
  */
 public interface SolanaServerWallet {
 
@@ -28,17 +29,27 @@ public interface SolanaServerWallet {
     byte[] signMessage(byte[] message);
 
     /**
-     * Registers the server wallet for the application. Registering the same instance again is a no-op; registering a
-     * different instance throws {@link IllegalStateException}.
+     * Registers the server wallet for the application, typically from a {@code VaadinServiceInitListener}. Throws
+     * {@link IllegalStateException} in Vaadin production mode, or when a different wallet is already registered.
+     * Registering the same instance again is a no-op.
      */
     static void register(VaadinContext context, SolanaServerWallet wallet) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(wallet, "wallet");
+        requireDevelopmentMode(wallet, ApplicationConfiguration.get(context).isProductionMode());
         SolanaServerWallet current = context.getAttribute(SolanaServerWallet.class);
         if (current != null && current != wallet) {
             throw new IllegalStateException("A different SolanaServerWallet is already registered");
         }
         context.setAttribute(SolanaServerWallet.class, wallet);
+    }
+
+    /** Throws when {@code wallet} is present and the application runs in production mode. */
+    static void requireDevelopmentMode(SolanaServerWallet wallet, boolean productionMode) {
+        if (wallet != null && productionMode) {
+            throw new IllegalStateException("A SolanaServerWallet (" + wallet.getClass().getName()
+                    + ") must not be registered in Vaadin production mode; server wallets are for development only");
+        }
     }
 
     /** Returns the server wallet registered for the application, or {@code null}. */

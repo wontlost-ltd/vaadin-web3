@@ -28,6 +28,14 @@ export function renderWalletPicker(wallets, title, emptyText, closeLabel, choose
   </div>`;
 }
 
+/** Moves focus into the open picker: the first wallet, otherwise the close button or the dialog itself. */
+export function focusWalletPicker(component) {
+  const root = component.shadowRoot;
+  const target = root.querySelector('.wallet-option') || root.querySelector('.wallet-picker-close')
+    || root.querySelector('[role="dialog"]');
+  target?.focus();
+}
+
 export function showWalletPicker(component) {
   component._pickerPreviousFocus = component.shadowRoot.activeElement || document.activeElement;
   component._pickerOpen = true;
