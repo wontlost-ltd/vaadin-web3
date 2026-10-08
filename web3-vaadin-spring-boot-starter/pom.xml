@@ -72,6 +72,12 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>com.wontlost</groupId>
+            <artifactId>web3-vaadin-solana</artifactId>
+            <version>${project.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
@@ -202,13 +208,16 @@
                             <goal>test</goal>
                         </goals>
                         <configuration>
-                            <excludes combine.self="override"/>
+                            <excludes combine.self="override">
+                                <exclude>**/Web3SolanaAutoConfigurationTest.java</exclude>
+                            </excludes>
                             <includes>
                                 <include>**/StarterWithoutOptionalModulesTest.java</include>
                             </includes>
                             <classpathDependencyExcludes>
                                 <classpathDependencyExclude>com.wontlost:web3-vaadin-onramp</classpathDependencyExclude>
                                 <classpathDependencyExclude>com.wontlost:web3-vaadin-walletconnect</classpathDependencyExclude>
+                                <classpathDependencyExclude>com.wontlost:web3-vaadin-solana</classpathDependencyExclude>
                                 <classpathDependencyExclude>org.springframework.security:spring-security-config</classpathDependencyExclude>
                                 <classpathDependencyExclude>org.springframework.security:spring-security-web</classpathDependencyExclude>
                                 <classpathDependencyExclude>org.springframework.security:spring-security-core</classpathDependencyExclude>

@@ -20,6 +20,8 @@ class StarterWithoutOptionalModulesTest {
         assertThrows(ClassNotFoundException.class, () -> Class.forName("com.wontlost.web3.onramp.OnrampProvider"));
         assertThrows(ClassNotFoundException.class, () -> Class.forName("com.wontlost.web3.walletconnect.WalletConnect"));
         assertThrows(ClassNotFoundException.class,
+                () -> Class.forName("com.wontlost.web3.solana.wallet.SiwsLogin"));
+        assertThrows(ClassNotFoundException.class,
                 () -> Class.forName("org.springframework.security.core.context.SecurityContext"));
         assertThrows(ClassNotFoundException.class,
                 () -> Class.forName("org.springframework.boot.health.contributor.HealthIndicator"));
@@ -27,13 +29,15 @@ class StarterWithoutOptionalModulesTest {
 
     @Test void starterStartsWithoutOptionalModules() {
         new ApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(Web3VaadinAutoConfiguration.class))
+                .withConfiguration(AutoConfigurations.of(Web3VaadinAutoConfiguration.class,
+                        Web3SolanaAutoConfiguration.class))
                 .withConfiguration(AutoConfigurations.of(Web3OnrampAutoConfiguration.class,
                         Web3WalletConnectAutoConfiguration.class,
                         com.wontlost.web3.autoconfigure.security.Web3SecurityAutoConfiguration.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(ChainRegistry.class).hasSingleBean(NonceStore.class);
+                    assertThat(context).hasSingleBean(com.wontlost.web3.solana.SolanaClusters.class);
                     assertThat(context).hasBean("web3VaadinContextInitializer");
                     assertThat(context).doesNotHaveBean("web3OnrampProvider");
                 });
