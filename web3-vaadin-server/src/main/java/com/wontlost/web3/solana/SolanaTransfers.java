@@ -64,7 +64,8 @@ public final class SolanaTransfers {
 
     /**
      * Throws when {@code recipient} exists and is owned by a program other than the System Program, for example a
-     * token account pasted instead of a wallet address. A missing account is a valid new wallet.
+     * token account pasted instead of a wallet address. A missing account is a valid new wallet. System-owned
+     * accounts that hold data, such as durable nonce accounts, still pass.
      */
     public static void requireWalletRecipient(SolanaRpcClient client, String recipient) {
         String owner = client.getAccountOwner(recipient).orElse(SolanaPrograms.SYSTEM);

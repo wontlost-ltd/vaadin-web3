@@ -133,6 +133,7 @@ public final class SolanaTransaction {
         }
         out.writeBytes(message);
         byte[] wire = out.toByteArray();
+        // 防御性断言：compile 已保证不超限
         if (wire.length > MAX_SIZE) throw new IllegalArgumentException("transaction exceeds " + MAX_SIZE + " bytes");
         return wire;
     }

@@ -275,7 +275,10 @@ public final class SolanaRpcClient implements AutoCloseable {
     private static SignatureStatus signatureStatus(JsonNode value) {
         long slot = value.path("slot").asLong(-1);
         JsonNode confirmations = value.path("confirmations");
-        SolanaCommitment status = switch (value.path("confirmationStatus").asString("")) {
+        JsonNode statusNode = value.path("confirmationStatus");
+        // Agave 对 None 输出显式 null；缺失与 null 同等处理
+        String statusText = statusNode.isNull() || statusNode.isMissingNode() ? "" : statusNode.asString("?");
+        SolanaCommitment status = switch (statusText) {
             case "processed" -> SolanaCommitment.PROCESSED;
             case "confirmed" -> SolanaCommitment.CONFIRMED;
             case "finalized" -> SolanaCommitment.FINALIZED;

@@ -327,6 +327,10 @@ class SolanaRpcClientTest {
         assertEquals(SolanaCommitment.FINALIZED, status.confirmationStatus(), "rooted when the status field is absent");
         assertEquals("\"BlockhashNotFound\"", status.error());
         assertTrue(status.failed());
+        SolanaRpcClient explicitNull = client(new ArrayList<>(), request -> "{\"value\":[{\"slot\":5,"
+                + "\"confirmations\":null,\"err\":null,\"confirmationStatus\":null}]}", SolanaCommitment.CONFIRMED);
+        assertEquals(SolanaCommitment.FINALIZED, explicitNull.getSignatureStatuses(List.of(SIGNATURE), false)
+                .getFirst().orElseThrow().confirmationStatus(), "explicit null is treated like a missing field");
         SolanaRpcClient ambiguous = client(new ArrayList<>(), request -> "{\"value\":[{\"slot\":5,\"confirmations\":3,"
                 + "\"err\":null}]}", SolanaCommitment.CONFIRMED);
         assertThrows(SolanaRpcException.class, () -> ambiguous.getSignatureStatuses(List.of(SIGNATURE), false));
