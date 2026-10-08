@@ -199,6 +199,45 @@ class SolanaConnectTest {
                 () -> SolanaConnect.verifySigned(original, new byte[] {1, 2, 3}, sender.address()));
     }
 
+    @Test void pendingSendsAreCancelledOnDetachInsteadOfHanging() {
+        SolanaConnect connect = new SolanaConnect(true);
+        java.util.concurrent.CompletableFuture<String> sending = new java.util.concurrent.CompletableFuture<>();
+        connect.trackPending(sending);
+
+        connect.cancelPending();
+
+        java.util.concurrent.ExecutionException failure = assertThrows(java.util.concurrent.ExecutionException.class,
+                sending::get);
+        assertTrue(failure.getCause().getMessage().contains("detached"));
+        java.util.concurrent.CompletableFuture<String> done = new java.util.concurrent.CompletableFuture<>();
+        connect.trackPending(done);
+        done.complete("ok");
+        connect.cancelPending();
+        assertEquals("ok", done.join(), "completed futures are untouched");
+    }
+
+    @Test void deliverCompletesTheFutureWhenTheUiIsDetached() {
+        com.vaadin.flow.server.VaadinSession unlocked = new com.vaadin.flow.server.VaadinSession(null) {
+            @Override public boolean hasLock() { return false; }
+        };
+        com.vaadin.flow.component.UI detached = new com.vaadin.flow.component.UI() {
+            @Override public com.vaadin.flow.server.VaadinSession getSession() { return unlocked; }
+            @Override public java.util.concurrent.Future<Void> access(com.vaadin.flow.server.Command command) {
+                throw new com.vaadin.flow.component.UIDetachedException();
+            }
+        };
+        java.util.concurrent.CompletableFuture<String> future = new java.util.concurrent.CompletableFuture<>();
+        boolean[] ran = {false};
+
+        SolanaConnect.deliver(detached, future, () -> ran[0] = true);
+
+        assertTrue(future.isCompletedExceptionally());
+        assertEquals(false, ran[0]);
+        java.util.concurrent.CompletableFuture<String> direct = new java.util.concurrent.CompletableFuture<>();
+        SolanaConnect.deliver(null, direct, () -> direct.complete("ran"));
+        assertEquals("ran", direct.join(), "without a UI the command runs directly");
+    }
+
     @Test void applicationSendsMapNodeRejectionsToWalletErrors() {
         java.util.List<byte[]> sent = new java.util.ArrayList<>();
         SolanaDevWallet sender = new SolanaDevWallet(new byte[32], SolanaCluster.LOCALNET);

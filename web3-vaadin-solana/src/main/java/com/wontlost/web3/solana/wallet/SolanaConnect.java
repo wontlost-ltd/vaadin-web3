@@ -178,7 +178,7 @@ public class SolanaConnect extends Component {
         byte[] original = Objects.requireNonNull(transaction, "transaction").clone();
         String encoded = Base64.getEncoder().encodeToString(original);
         String expectedSigner = account;
-        UI ui = UI.getCurrent();
+        UI ui = UI.getCurrent() != null ? UI.getCurrent() : getUI().orElse(null);
         return call("this.signAndSendTransaction($0)", encoded).thenCompose(json -> {
             WalletResult result = parseWalletResult(json);
             if (result.signature() != null) return CompletableFuture.completedFuture(result.signature());
@@ -186,10 +186,11 @@ public class SolanaConnect extends Component {
             if (rpc == null) {
                 throw new SolanaWalletException(4200, "The wallet can only sign; no RPC client was given to send", false);
             }
-            // 发送是阻塞 RPC：放到后台线程，结果回到 UI 线程完成
+            // 发送是阻塞 RPC：放到后台线程，结果回到 UI 线程完成；登记为在途，分离时会被取消而不是永远挂起
             CompletableFuture<String> sent = new CompletableFuture<>();
+            trackPending(sent);
             CompletableFuture.supplyAsync(() -> sendSigned(rpc, signed)).whenComplete((signature, error) -> deliver(ui,
-                    () -> {
+                    sent, () -> {
                         if (error == null) sent.complete(signature);
                         else sent.completeExceptionally(error instanceof java.util.concurrent.CompletionException
                                 && error.getCause() != null ? error.getCause() : error);
@@ -256,10 +257,21 @@ public class SolanaConnect extends Component {
         }
     }
 
-    /** 持有会话锁时直接执行，否则经 ui.access 排队；没有 UI（例如测试）时直接执行。 */
-    private static void deliver(UI ui, Runnable command) {
-        if (ui == null || ui.getSession() == null || ui.getSession().hasLock()) command.run();
-        else ui.access(command::run);
+    /**
+     * 持有会话锁时直接执行，否则经 ui.access 排队；没有 UI（例如测试）时直接执行。
+     * UI 已分离时 ui.access 会抛出：此时以异常完成 future，避免调用方永远等待。
+     */
+    static void deliver(UI ui, CompletableFuture<?> future, Runnable command) {
+        if (ui == null || ui.getSession() == null || ui.getSession().hasLock()) {
+            command.run();
+            return;
+        }
+        try {
+            ui.access(command::run);
+        } catch (com.vaadin.flow.component.UIDetachedException exception) {
+            future.completeExceptionally(new SolanaWalletException(-1, "Component detached; wallet request cancelled",
+                    false));
+        }
     }
 
     /** Handles a signing request from the development wallet registered in the browser. */
@@ -294,6 +306,11 @@ public class SolanaConnect extends Component {
 
     @Override
     protected void onDetach(DetachEvent detachEvent) {
+        cancelPending();
+        super.onDetach(detachEvent);
+    }
+
+    void cancelPending() {
         List<CompletableFuture<String>> pending;
         synchronized (this) {
             pending = pendingFutures;
@@ -304,7 +321,6 @@ public class SolanaConnect extends Component {
                     false);
             pending.forEach(future -> future.completeExceptionally(error));
         }
-        super.onDetach(detachEvent);
     }
 
     /**
@@ -498,8 +514,8 @@ public class SolanaConnect extends Component {
         fireEvent(new AccountChangedEvent(this, nextAccount, nextWallet));
     }
 
-    private CompletableFuture<String> call(String expression, Serializable... params) {
-        CompletableFuture<String> future = new CompletableFuture<>();
+    /** 登记在途 future：完成时移除；组件分离时统一以异常完成。 */
+    void trackPending(CompletableFuture<String> future) {
         synchronized (this) {
             if (pendingFutures == null) pendingFutures = new ArrayList<>();
             pendingFutures.add(future);
@@ -509,6 +525,11 @@ public class SolanaConnect extends Component {
                 if (pendingFutures != null) pendingFutures.remove(future);
             }
         });
+    }
+
+    private CompletableFuture<String> call(String expression, Serializable... params) {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        trackPending(future);
         String invocation = "return Promise.resolve(" + expression + ").catch(e => { throw new Error('" + ERROR_MARKER
                 + "' + JSON.stringify(this._errorInfo(e))); })";
         // 以通用 JSON 节点接收：JS 返回对象时按 String 反序列化会在回调前失败，future 永远挂起
