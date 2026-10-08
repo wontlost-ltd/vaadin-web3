@@ -306,8 +306,10 @@ class X402PaymentFilterTest {
             HttpIdentityResolver identity, String path, String resourceId) {
         var policies = new InMemoryResourcePolicyRegistry(List.of(new HttpResourcePolicy(
                 resourceId, "GET", path, false, false, List.of(31337L))));
-        var siwx = new SiwxVerifier(new InMemorySiwxChallengeStore(),
-                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC), Duration.ofMinutes(5), null);
+        // 挑战存储与 verifier 共用同一固定时钟，避免真实时间越过固定时钟后挑战被当作过期清理
+        Clock clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
+        var siwx = new SiwxVerifier(new InMemorySiwxChallengeStore(InMemorySiwxChallengeStore.DEFAULT_MAXIMUM_ENTRIES, clock),
+                clock, Duration.ofMinutes(5), null);
         return new X402PaymentFilter(policies, payments, payments.codec, siwx, identity, ORIGIN, maxResponseBytes);
     }
 
