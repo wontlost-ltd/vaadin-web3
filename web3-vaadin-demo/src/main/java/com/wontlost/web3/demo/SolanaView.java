@@ -3,9 +3,9 @@ package com.wontlost.web3.demo;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
-import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
@@ -17,11 +17,13 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
+import org.springframework.beans.factory.annotation.Value;
 import com.wontlost.web3.identity.Web3Identity;
 import com.wontlost.web3.siwe.Web3Session;
 import com.wontlost.web3.siws.SiwsVerifier;
 import com.wontlost.web3.siws.SolanaCluster;
 import com.wontlost.web3.solana.SolanaBalance;
+import com.wontlost.web3.solana.SolanaClusters;
 import com.wontlost.web3.solana.SolanaRpcClient;
 import com.wontlost.web3.solana.SolanaRpcException;
 import com.wontlost.web3.solana.SplTokenBalance;
@@ -57,9 +59,11 @@ public final class SolanaView extends VerticalLayout {
     private final SolanaTransactionStatus transferStatus;
     private final SiwsLogin login;
 
-    public SolanaView(SiwsVerifier verifier, SolanaCluster cluster, SolanaRpcClient rpc) {
-        this.rpc = rpc;
-        this.cluster = cluster;
+    public SolanaView(SiwsVerifier verifier, SolanaClusters clusters,
+            @Value("${web3.demo.solana.cluster:devnet}") String clusterName) {
+        this.cluster = SolanaCluster.valueOf(clusterName.trim().toUpperCase(Locale.ROOT));
+        this.rpc = clusters.get(cluster).orElseThrow(() -> new IllegalStateException(
+                "No Solana RPC client is configured for the demo cluster '" + cluster.chainId() + "'"));
         login = new SiwsLogin(verifier, cluster).setStatement("Sign in to the Vaadin Web3 demo");
         transferStatus = new SolanaTransactionStatus(rpc, cluster);
         transferStatus.setId("solana-transfer-status");

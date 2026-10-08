@@ -620,6 +620,38 @@ misconfigured application fails at startup. If a wallet is placed in the
 context some other way, `SolanaConnect` doesn't offer it in production mode. The demo enables one for `solana-test-validator` in the
 `demo` profile; see `/solana`.
 
+### Solana with Spring Boot
+
+The starter configures Solana RPC clients, a shared-clock SIWS verifier, and
+the Vaadin context registry. The wallet UI integration is enabled when the
+optional `web3-vaadin-solana` module is present. A single RPC URL uses HTTP
+directly; multiple URLs are tried in order with Solana-aware failover. The
+starter reuses `web3.rpc.failure-threshold`, `web3.rpc.open-duration`, and
+`web3.rpc.request-timeout`.
+
+```properties
+web3.solana.clusters.devnet.rpc-urls[0]=https://api.devnet.solana.com
+web3.solana.clusters.devnet.rpc-urls[1]=https://backup.example/rpc
+web3.solana.commitment=confirmed
+web3.solana.dev-wallet.enabled=false
+web3.solana.dev-wallet.cluster=localnet
+# Optional: exactly 64 hex characters (32-byte Ed25519 seed).
+# web3.solana.dev-wallet.seed=<64 hexadecimal characters>
+```
+
+Supported cluster keys are `mainnet`, `devnet`, `testnet`, and `localnet`.
+Commitment defaults to `confirmed`; the development wallet defaults to disabled
+and `localnet`. When enabled without a seed, it receives a random key at
+startup. Development wallets are refused in Vaadin production mode.
+
+The starter also stores `SolanaClusters` in the Vaadin context, so
+`@RequiresSplToken` gates work without extra code. When the
+`web3-vaadin-solana` module is present, it registers the verifier for
+`SiwsLogin`. Define your own `SolanaClusters`, `SiwsChallengeStore`,
+`SiwsVerifier` or `SolanaServerWallet` bean to replace a default. A `Clock`
+bean, if you define one, is used by both the challenge store and the
+verifier.
+
 ### Solana balances (server)
 
 `SolanaRpcClient` reads SOL and SPL token balances. It takes a
@@ -682,8 +714,9 @@ failed preflight simulations (-32002) and failed signature checks (-32003).
 Without a dialect, the transport uses `JsonRpcDialect.ETHEREUM`, so existing
 EVM setups are unchanged. If your provider blocks `getHealth`, create a dialect
 with another probe method, for example
-`JsonRpcDialect.of("getSlot", JsonRpcDialect.SOLANA::classify)`. The Spring
-Boot starter and the monitor still build Ethereum transports only.
+`JsonRpcDialect.of("getSlot", JsonRpcDialect.SOLANA::classify)`. The monitor
+builds Ethereum transports only. The Spring Boot starter also configures Solana
+clients and SIWS; see *Solana with Spring Boot*.
 
 ### Solana transfers and transaction status (server)
 

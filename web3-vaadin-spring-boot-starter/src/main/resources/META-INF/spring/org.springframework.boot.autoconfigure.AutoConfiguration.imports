@@ -3,6 +3,7 @@ com.wontlost.web3.autoconfigure.Web3RpcHealthAutoConfiguration
 com.wontlost.web3.autoconfigure.Web3OnrampAutoConfiguration
 com.wontlost.web3.autoconfigure.Web3NftAutoConfiguration
 com.wontlost.web3.autoconfigure.Web3WalletConnectAutoConfiguration
+com.wontlost.web3.autoconfigure.Web3SolanaAutoConfiguration
 com.wontlost.web3.autoconfigure.security.Web3SecurityAutoConfiguration
 
 com.wontlost.web3.autoconfigure.X402AutoConfiguration
