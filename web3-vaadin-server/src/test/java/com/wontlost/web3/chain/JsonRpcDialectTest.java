@@ -74,7 +74,7 @@ class JsonRpcDialectTest {
     }
 
     @Test void solanaTransientErrorsSwitchEndpointsButDeterministicOnesDoNot() throws Exception {
-        for (int code : List.of(-32004, -32005, -32014, -32016, -32019)) {
+        for (int code : List.of(-32001, -32004, -32005, -32008, -32010, -32011, -32012, -32014, -32016, -32019, -32429)) {
             AtomicInteger backupCalls = new AtomicInteger();
             var transport = failover(request -> error(code, "server error"), request -> {
                 backupCalls.incrementAndGet();
@@ -83,7 +83,7 @@ class JsonRpcDialectTest {
             assertEquals(result(), transport.send(request("getBalance")), "code " + code);
             assertEquals(1, backupCalls.get(), "code " + code);
         }
-        for (int code : List.of(-32002, -32003, -32006, -32013, -32015, -32601, -32001)) {
+        for (int code : List.of(-32002, -32003, -32006, -32007, -32009, -32013, -32015, -32018, -32020, -32601, -32017)) {
             AtomicInteger backupCalls = new AtomicInteger();
             var transport = failover(request -> error(code, "server error"), request -> {
                 backupCalls.incrementAndGet();
@@ -98,16 +98,21 @@ class JsonRpcDialectTest {
         JsonRpcDialect solana = JsonRpcDialect.SOLANA;
         assertEquals(EthRpcException.Category.TRANSIENT_NODE, solana.classify(-32005, "Node is unhealthy", null));
         assertEquals(EthRpcException.Category.TRANSIENT_NODE, solana.classify(-32014, null, null));
-        for (int code : List.of(-32004, -32005, -32014, -32016, -32019)) {
+        for (int code : List.of(-32001, -32004, -32005, -32008, -32010, -32011, -32012, -32014, -32016, -32019)) {
             assertEquals(EthRpcException.Category.TRANSIENT_NODE, solana.classify(code, "server error", null), "code " + code);
         }
-        for (int code : List.of(-32002, -32003, -32006, -32013, -32015)) {
+        for (int code : List.of(-32002, -32003, -32006, -32007, -32009, -32013, -32015, -32018, -32020)) {
             assertEquals(EthRpcException.Category.DETERMINISTIC, solana.classify(code, "server error", null), "code " + code);
         }
         assertEquals(EthRpcException.Category.INVALID_REQUEST, solana.classify(-32602, "Invalid params", null));
         assertEquals(EthRpcException.Category.RATE_LIMITED, solana.classify(-32000, "Too many requests", null));
-        assertEquals(EthRpcException.Category.RATE_LIMITED, solana.classify(-32000, null, "{\"status\":429}"));
-        assertEquals(EthRpcException.Category.UNKNOWN, solana.classify(-32007, "Slot 5 was skipped", null));
+        assertEquals(EthRpcException.Category.RATE_LIMITED, solana.classify(-32000, null, "{\"reason\":\"rate limit exceeded\"}"));
+        assertEquals(EthRpcException.Category.RATE_LIMITED, solana.classify(429, "Too Many", null));
+        assertEquals(EthRpcException.Category.RATE_LIMITED, solana.classify(-32429, null, null));
+        assertEquals(EthRpcException.Category.UNKNOWN, solana.classify(-32017, "Epoch rewards period active", null));
+        assertEquals(EthRpcException.Category.UNKNOWN,
+                solana.classify(-32000, "Block 342942901 not available for slot 4290", "{\"slot\":4290}"),
+                "slot numbers containing 429 are not rate limits");
         assertEquals(EthRpcException.Category.UNKNOWN, solana.classify(-32000, "header not found", null),
                 "EVM node texts do not apply to Solana");
     }
@@ -123,7 +128,7 @@ class JsonRpcDialectTest {
     @Test void customDialectAndNullChecks() throws Exception {
         List<String> methods = new CopyOnWriteArrayList<>();
         AtomicBoolean down = new AtomicBoolean(true);
-        JsonRpcDialect custom = new JsonRpcDialect.Simple("net_ping",
+        JsonRpcDialect custom = JsonRpcDialect.of("net_ping",
                 (code, message, data) -> code == -1 ? EthRpcException.Category.TRANSIENT_NODE : EthRpcException.Category.UNKNOWN);
         var transport = failover(request -> {
             String method = JSON.readTree(request).path("method").asString();
@@ -136,11 +141,60 @@ class JsonRpcDialectTest {
 
         // 第一次失败切到备用端点后立即用自定义方法探测主端点，恢复后第二次请求回到主端点
         assertEquals(List.of("x", "net_ping", "x"), methods);
-        assertThrows(NullPointerException.class, () -> new JsonRpcDialect.Simple(null, (c, m, d) -> null));
-        assertThrows(NullPointerException.class, () -> new JsonRpcDialect.Simple("getHealth", null));
+        assertThrows(NullPointerException.class, () -> JsonRpcDialect.of(null, (c, m, d) -> EthRpcException.Category.UNKNOWN));
+        assertThrows(IllegalArgumentException.class, () -> JsonRpcDialect.of(" ", (c, m, d) -> EthRpcException.Category.UNKNOWN));
+        assertThrows(NullPointerException.class, () -> JsonRpcDialect.of("getHealth", null));
+        JsonRpcDialect nullClassifier = JsonRpcDialect.of("getHealth", (c, m, d) -> null);
+        assertEquals("classifier returned null",
+                assertThrows(NullPointerException.class, () -> nullClassifier.classify(1, null, null)).getMessage());
         assertThrows(NullPointerException.class, () -> new FailoverJsonRpcTransport(
                 List.of(new FailoverJsonRpcTransport.Endpoint("a", request -> result())),
                 FailoverJsonRpcTransport.Config.defaults(), null));
+    }
+
+    @Test void pinnedViewUsesTheSolanaClassification() throws Exception {
+        var transient_ = failover(request -> error(-32005, "Node is unhealthy"), request -> result(), JsonRpcDialect.SOLANA);
+        JsonRpcTransport pinned = transient_.pinned();
+        assertThrows(IOException.class, () -> pinned.send(request("getBalance")));
+        assertEquals("TRANSIENT_NODE", transient_.healthSnapshot().getFirst().lastErrorCategory());
+        assertEquals(result(), transient_.pinned().send(request("getBalance")), "the next view moves to the backup");
+
+        var deterministic = failover(request -> error(-32002, "Transaction simulation failed"), request -> result(),
+                JsonRpcDialect.SOLANA);
+        assertEquals(error(-32002, "Transaction simulation failed"), deterministic.pinned().send(request("sendTransaction")));
+        assertEquals(FailoverJsonRpcTransport.State.CLOSED, deterministic.healthSnapshot().getFirst().state());
+    }
+
+    @Test void ethereumProbeErrorsKeepTheirCategoryAndMessage() throws Exception {
+        AtomicBoolean down = new AtomicBoolean(true);
+        var transport = failover(request -> {
+            if (down.getAndSet(false)) throw new IOException("timeout");
+            return error(-32000, "header not found");
+        }, request -> result(), JsonRpcDialect.ETHEREUM);
+
+        transport.send(request("eth_blockNumber"));
+
+        assertEquals("TRANSIENT_NODE", transport.healthSnapshot().getFirst().lastErrorCategory());
+        assertEquals("header not found", transport.healthSnapshot().getFirst().lastErrorMessage());
+    }
+
+    @Test void malformedProbeResponseKeepsThePrimaryFailed() throws Exception {
+        AtomicBoolean down = new AtomicBoolean(true);
+        AtomicInteger backupCalls = new AtomicInteger();
+        var transport = failover(request -> {
+            if (down.getAndSet(false)) throw new IOException("timeout");
+            return "<html>bad gateway</html>";
+        }, request -> {
+            backupCalls.incrementAndGet();
+            return result();
+        }, JsonRpcDialect.SOLANA);
+
+        transport.send(request("getBalance"));
+        transport.send(request("getBalance"));
+
+        assertEquals(2, backupCalls.get());
+        assertEquals("IO", transport.healthSnapshot().getFirst().lastErrorCategory());
+        assertEquals("Invalid JSON-RPC response", transport.healthSnapshot().getFirst().lastErrorMessage());
     }
 
     // 模拟 Solana 节点：不认识 eth_* 方法；down 时任何请求都超时

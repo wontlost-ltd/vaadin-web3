@@ -530,10 +530,17 @@ errors:
 | -32016 | Minimum context slot not reached |
 | -32019 | Long-term storage unreachable |
 
-Rate-limit errors also move the request. Errors that another node would repeat
-do not, such as a failed preflight simulation (-32002) or a failed signature
-check (-32003). Without a dialect, the transport uses `JsonRpcDialect.ETHEREUM`,
-so existing EVM setups are unchanged.
+The table shows the main codes. The dialect also switches on codes that mean
+this node lacks data another node may have, for example -32001 (block cleaned
+up) and -32011 (transaction history not enabled). Rate-limit errors move the
+request too. All other errors are returned to the caller unchanged, including
+failed preflight simulations (-32002) and failed signature checks (-32003).
+
+Without a dialect, the transport uses `JsonRpcDialect.ETHEREUM`, so existing
+EVM setups are unchanged. If your provider blocks `getHealth`, create a dialect
+with another probe method, for example
+`JsonRpcDialect.of("getSlot", JsonRpcDialect.SOLANA::classify)`. The Spring
+Boot starter and the monitor still build Ethereum transports only.
 
 ### On-chain reads
 

@@ -32,6 +32,7 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
     /**
      * Creates a transport for endpoints in priority order. The dialect selects the request used to check whether
      * the primary endpoint has recovered and how node errors are classified, e.g. {@link JsonRpcDialect#SOLANA}.
+     * Head-lag rejection and the three-endpoint limit for raw transactions are applied only by {@link EthRpcClient}.
      */
     public FailoverJsonRpcTransport(List<Endpoint> endpoints, Config config, JsonRpcDialect dialect) {
         if (endpoints == null || endpoints.isEmpty()) throw new IllegalArgumentException("At least one endpoint is required");

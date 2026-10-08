@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows
 - Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
 
 ### Added
+- Add Sign-In With Solana server verification (`SiwsVerifier`), CAIP-10 identities (`ChainAccount`, `Web3Identity`) and `SolanaRpcClient` for SOL and SPL token balances.
+- Add `JsonRpcDialect` so `FailoverJsonRpcTransport` can check endpoint recovery and classify node errors per chain; `JsonRpcDialect.SOLANA` probes with `getHealth` and switches endpoints on Agave's transient error codes. Existing transports keep the Ethereum behaviour.
 - Add an opt-in x402 v2 EVM payment core with EIP-3009 authorization, facilitator integration, and an in-memory payment store.
 - Add the `JsonRpcTransportDecorator` extension point for observing or wrapping RPC sends in Spring Boot applications.
 - Add ordered `SiweAuthoritiesResolver` and request-aware `SiweLoginCustomizer` extension points, with Spring Security authentication, failure and logout events.
