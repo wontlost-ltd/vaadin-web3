@@ -26,6 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 class SiwxVerifierTest {
     private static final URI ORIGIN = URI.create("https://merchant.example");
     private static final Instant NOW = Instant.parse("2026-10-08T00:00:00Z");
+    private static final Clock FIXED_CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final ECKeyPair KEY = ECKeyPair.create(java.math.BigInteger.ONE);
     private static final String ADDRESS = "0x" + Keys.getAddress(KEY.getPublicKey());
     private static final String RESOURCE_URL = "https://merchant.example/api/x402/quote";
@@ -112,7 +113,7 @@ class SiwxVerifierTest {
 
     @Test
     void rejectsChallengeWhenCapacityIsFullWithoutEvictingLiveEntry() {
-        Fixture fixture = new Fixture(new InMemorySiwxChallengeStore(1));
+        Fixture fixture = new Fixture(new InMemorySiwxChallengeStore(1, FIXED_CLOCK));
         SiwxChallenge first = fixture.verifier.issue(ORIGIN, List.of(31337L), "first", RESOURCE_URL);
 
         assertThrows(SiwxChallengeCapacityException.class,
@@ -161,13 +162,14 @@ class SiwxVerifierTest {
     }
 
     private static final class Fixture {
-        private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        private final Clock clock = FIXED_CLOCK;
         private final InMemorySiwxChallengeStore store;
         private final SiwxVerifier verifier;
         private final ObjectMapper mapper = new ObjectMapper();
 
         private Fixture() {
-            this(new InMemorySiwxChallengeStore());
+            // 挑战存储必须与 verifier 共用同一时钟，否则真实时间越过固定时钟后会把挑战当作过期清理
+            this(new InMemorySiwxChallengeStore(InMemorySiwxChallengeStore.DEFAULT_MAXIMUM_ENTRIES, FIXED_CLOCK));
         }
 
         private Fixture(InMemorySiwxChallengeStore store) {
