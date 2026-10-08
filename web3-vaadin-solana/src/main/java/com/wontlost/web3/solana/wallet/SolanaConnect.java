@@ -14,6 +14,7 @@ import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.Tag;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
 import org.slf4j.Logger;
@@ -166,35 +167,99 @@ public class SolanaConnect extends Component {
      * Asks the connected wallet to sign and send {@code transaction} (wire format, as from
      * {@link SolanaTransaction#unsignedWire()}) and completes with the base58 transaction signature.
      * <p>
-     * Wallets with {@code solana:signAndSendTransaction} submit it themselves. Wallets that only support
-     * {@code solana:signTransaction} return the signed transaction, which is then sent through {@code rpc}; pass
-     * {@code null} to fail instead. Wallets may add instructions (for example priority fees) before signing.
+     * Wallets with {@code solana:signAndSendTransaction} submit it themselves; the signature is the wallet's report,
+     * so verify the transaction on chain (for example with {@link SolanaTransactionStatus}) before crediting anything.
+     * Wallets that only support {@code solana:signTransaction} return the signed transaction. It must keep the
+     * original fee payer and blockhash and carry a valid signature from the connected account; it is then sent
+     * through {@code rpc} on a background thread (pass {@code null} to fail instead). The future completes on the
+     * UI thread when the component is attached, which needs {@code @Push} or polling to reach the browser promptly.
      */
     public CompletableFuture<String> signAndSendTransaction(byte[] transaction, SolanaRpcClient rpc) {
-        String encoded = Base64.getEncoder().encodeToString(Objects.requireNonNull(transaction, "transaction"));
-        return call("this.signAndSendTransaction($0)", encoded).thenApply(json -> submitted(json, rpc));
+        byte[] original = Objects.requireNonNull(transaction, "transaction").clone();
+        String encoded = Base64.getEncoder().encodeToString(original);
+        String expectedSigner = account;
+        UI ui = UI.getCurrent();
+        return call("this.signAndSendTransaction($0)", encoded).thenCompose(json -> {
+            WalletResult result = parseWalletResult(json);
+            if (result.signature() != null) return CompletableFuture.completedFuture(result.signature());
+            byte[] signed = verifySigned(original, result.signedTransaction(), expectedSigner);
+            if (rpc == null) {
+                throw new SolanaWalletException(4200, "The wallet can only sign; no RPC client was given to send", false);
+            }
+            // 发送是阻塞 RPC：放到后台线程，结果回到 UI 线程完成
+            CompletableFuture<String> sent = new CompletableFuture<>();
+            CompletableFuture.supplyAsync(() -> sendSigned(rpc, signed)).whenComplete((signature, error) -> deliver(ui,
+                    () -> {
+                        if (error == null) sent.complete(signature);
+                        else sent.completeExceptionally(error instanceof java.util.concurrent.CompletionException
+                                && error.getCause() != null ? error.getCause() : error);
+                    }));
+            return sent;
+        });
     }
 
-    /** 处理浏览器返回：已发送则转换签名；仅签名则校验后经 rpc 发送。 */
-    static String submitted(String json, SolanaRpcClient rpc) {
-        JsonNode result = MAPPER.readTree(json);
-        Base64.Decoder decoder = Base64.getDecoder();
-        byte[] signedTransaction;
+    /** 钱包返回：已发送时为 base58 签名，仅签名时为签名后的交易字节。 */
+    record WalletResult(String signature, byte[] signedTransaction) {
+    }
+
+    static WalletResult parseWalletResult(String json) {
         try {
+            JsonNode result = MAPPER.readTree(json);
+            Base64.Decoder decoder = Base64.getDecoder();
             if (result.path("signature").isString()) {
                 byte[] signature = decoder.decode(result.path("signature").asString());
                 if (signature.length != 64) throw new IllegalArgumentException("signature length");
-                return Base58.encode(signature);
+                return new WalletResult(Base58.encode(signature), null);
             }
             if (!result.path("signedTransaction").isString()) throw new IllegalArgumentException("no result");
-            signedTransaction = decoder.decode(result.path("signedTransaction").asString());
-        } catch (IllegalArgumentException exception) {
+            return new WalletResult(null, decoder.decode(result.path("signedTransaction").asString()));
+        } catch (RuntimeException exception) {
             throw new SolanaWalletException(-32603, "The wallet returned an invalid result", false);
         }
-        if (rpc == null) {
-            throw new SolanaWalletException(4200, "The wallet can only sign; no RPC client was given to send", false);
+    }
+
+    /**
+     * 校验钱包签好的交易：手续费支付者与区块哈希必须与服务端构建的一致（否则过期判定失效），
+     * 且已连接账户的签名对消息有效。钱包可以增加指令（例如优先费），这里不比较指令。
+     */
+    static byte[] verifySigned(byte[] original, byte[] signed, String expectedSigner) {
+        try {
+            List<String> signers = SolanaTransaction.signersOf(signed);
+            if (!signers.getFirst().equals(SolanaTransaction.signersOf(original).getFirst())) {
+                throw new SolanaWalletException(-32603, "The wallet changed the transaction's fee payer", false);
+            }
+            if (!SolanaTransaction.recentBlockhashOf(signed).equals(SolanaTransaction.recentBlockhashOf(original))) {
+                throw new SolanaWalletException(-32603, "The wallet changed the transaction's blockhash; build it again",
+                        false);
+            }
+            String signer = expectedSigner == null ? signers.getFirst() : expectedSigner;
+            int slot = signers.indexOf(signer);
+            if (slot < 0) throw new SolanaWalletException(-32603, "The connected account did not sign", false);
+            int signaturesStart = SolanaTransaction.messageOffset(signed) - signers.size() * 64;
+            byte[] signature = java.util.Arrays.copyOfRange(signed, signaturesStart + slot * 64,
+                    signaturesStart + slot * 64 + 64);
+            SolanaTransaction.withSignature(signed, signer, signature);
+            return signed;
+        } catch (IllegalArgumentException exception) {
+            throw new SolanaWalletException(-32603, "The wallet returned an invalid transaction", false);
         }
-        return rpc.sendTransaction(signedTransaction);
+    }
+
+    /** 经应用的 RPC 发送；节点拒绝统一映射为钱包错误，不透传节点文本。 */
+    static String sendSigned(SolanaRpcClient rpc, byte[] signed) {
+        try {
+            return rpc.sendTransaction(signed);
+        } catch (SolanaRpcException exception) {
+            throw new SolanaWalletException(-32603, "The transaction was rejected by the node", false);
+        } catch (IllegalArgumentException exception) {
+            throw new SolanaWalletException(-32603, "The wallet returned an invalid transaction", false);
+        }
+    }
+
+    /** 持有会话锁时直接执行，否则经 ui.access 排队；没有 UI（例如测试）时直接执行。 */
+    private static void deliver(UI ui, Runnable command) {
+        if (ui == null || ui.getSession() == null || ui.getSession().hasLock()) command.run();
+        else ui.access(command::run);
     }
 
     /** Handles a signing request from the development wallet registered in the browser. */
@@ -270,6 +335,7 @@ public class SolanaConnect extends Component {
         info.put("address", wallet.address());
         info.put("publicKey", Base64.getEncoder().encodeToString(Base58.decode(wallet.address(), 32)));
         info.put("chain", chain(wallet.cluster()));
+        info.put("canSend", wallet.canSendTransactions());
         return info;
     }
 

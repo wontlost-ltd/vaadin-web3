@@ -50,6 +50,11 @@ public final class SolanaDevWallet implements SolanaServerWallet {
     }
 
     @Override
+    public boolean canSendTransactions() {
+        return rpc != null;
+    }
+
+    @Override
     public String sendTransaction(byte[] signedTransaction) {
         if (rpc == null) return SolanaServerWallet.super.sendTransaction(signedTransaction);
         return rpc.sendTransaction(signedTransaction);

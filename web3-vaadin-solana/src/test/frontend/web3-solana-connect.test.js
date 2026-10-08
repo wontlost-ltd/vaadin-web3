@@ -323,6 +323,15 @@ describe('transactions', () => {
     expect([...fromBase64(result.signedTransaction)]).toEqual([9, 1]);
   });
 
+  it('refuses when the account has no Solana chain', async () => {
+    const wallet = fakeWallet({ signAndSend: true, accounts: [account('NoChain', [])], chains: ['solana:devnet'] });
+    const element = mount({ preferredWallet: 'Phantom', chain: '' });
+    await element.connect();
+
+    await expect(element.signAndSendTransaction(toBase64(new Uint8Array([1])))).rejects.toMatchObject({ code: 4200 });
+    expect(wallet.features['solana:signAndSendTransaction'].signAndSendTransaction).not.toHaveBeenCalled();
+  });
+
   it('refuses when the wallet cannot sign transactions or is not connected', async () => {
     fakeWallet();
     const element = mount({ preferredWallet: 'Phantom' });
@@ -380,8 +389,21 @@ describe('server wallet', () => {
     element._resolveServerWalletRequest('unknown', '{}');
   });
 
-  it('forwards transactions to the server for signing and sending', async () => {
+  it('without a sending server wallet the browser falls back to signTransaction', async () => {
     const element = mount({ serverWallet: JSON.stringify(info), preferredWallet: info.name });
+    await element.connect();
+    const wallet = getWallets().get().find((item) => item.name === info.name);
+    expect(wallet.features['solana:signAndSendTransaction']).toBeUndefined();
+
+    const sending = element.signAndSendTransaction(toBase64(new Uint8Array([4, 2])));
+    expect(element.lastRequest.method).toBe('signTransaction');
+    element._resolveServerWalletRequest(element.lastRequest.id,
+      JSON.stringify({ signedTransaction: toBase64(new Uint8Array([4, 2, 9])) }));
+    await expect(sending).resolves.toEqual({ signedTransaction: toBase64(new Uint8Array([4, 2, 9])) });
+  });
+
+  it('forwards transactions to the server for signing and sending', async () => {
+    const element = mount({ serverWallet: JSON.stringify({ ...info, canSend: true }), preferredWallet: info.name });
     await element.connect();
 
     const sending = element.signAndSendTransaction(toBase64(new Uint8Array([4, 2])));

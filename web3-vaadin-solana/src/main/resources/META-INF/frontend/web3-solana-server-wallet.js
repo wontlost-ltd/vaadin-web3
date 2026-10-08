@@ -45,7 +45,7 @@ function createWallet(info, entry) {
     publicKey: fromBase64(info.publicKey),
     chains: Object.freeze([info.chain]),
     features: Object.freeze(['solana:signIn', 'solana:signMessage', 'solana:signTransaction',
-      'solana:signAndSendTransaction'])
+      ...(info.canSend ? ['solana:signAndSendTransaction'] : [])])
   });
   const forward = (method, payload) => new Promise((resolve, reject) => {
     const owner = entry.owners.at(-1);
@@ -60,6 +60,17 @@ function createWallet(info, entry) {
     owner._serverWalletPending.set(id, { resolve, reject, timer });
     owner.$server.solanaServerWalletRequest(id, method, JSON.stringify(payload));
   });
+  // 只有服务端钱包能发送交易时才提供 signAndSendTransaction，否则浏览器端改用 signTransaction + 应用发送
+  const sendFeature = info.canSend ? {
+    'solana:signAndSendTransaction': {
+      version: '1.0.0',
+      supportedTransactionVersions: Object.freeze(['legacy', 0]),
+      signAndSendTransaction: (...inputs) => Promise.all(inputs.map(async ({ transaction }) => {
+        const result = await forward('signAndSendTransaction', { transaction: toBase64(transaction) });
+        return { signature: fromBase64(result.signature) };
+      }))
+    }
+  } : {};
   return Object.freeze({
     version: '1.0.0',
     name: info.name,
@@ -86,14 +97,7 @@ function createWallet(info, entry) {
           return { signedTransaction: fromBase64(result.signedTransaction) };
         }))
       },
-      'solana:signAndSendTransaction': {
-        version: '1.0.0',
-        supportedTransactionVersions: Object.freeze(['legacy', 0]),
-        signAndSendTransaction: (...inputs) => Promise.all(inputs.map(async ({ transaction }) => {
-          const result = await forward('signAndSendTransaction', { transaction: toBase64(transaction) });
-          return { signature: fromBase64(result.signature) };
-        }))
-      },
+      ...sendFeature,
       'solana:signMessage': {
         version: '1.1.0',
         signMessage: (...inputs) => Promise.all(inputs.map(async ({ message }) => {

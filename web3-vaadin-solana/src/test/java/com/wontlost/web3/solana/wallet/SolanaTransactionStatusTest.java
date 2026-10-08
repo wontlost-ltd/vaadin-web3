@@ -37,13 +37,13 @@ class SolanaTransactionStatusTest {
         view.track(SIGNATURE, 150);
 
         statuses.add("null");
-        view.poll();
+        view.pollNow();
         statuses.add(status("processed", "0", "null"));
-        view.poll();
+        view.pollNow();
         statuses.add(status("confirmed", "1", "null"));
-        view.poll();
+        view.pollNow();
         statuses.add(status("finalized", "null", "null"));
-        view.poll();
+        view.pollNow();
 
         assertEquals(List.of(SolanaTransactionStatus.Status.SUBMITTED, SolanaTransactionStatus.Status.PROCESSED,
                 SolanaTransactionStatus.Status.CONFIRMED), events, "tracking stops once confirmed (the default target)");
@@ -58,23 +58,27 @@ class SolanaTransactionStatusTest {
         statuses.add(status("confirmed", "1", "null"));
         statuses.add(status("finalized", "null", "null"));
 
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.CONFIRMED, view.getStatus().orElseThrow());
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.FINALIZED, view.getStatus().orElseThrow());
     }
 
     @Test void onChainErrorsAreFinalFailures() {
         SolanaTransactionStatus view = view();
         view.track(SIGNATURE);
+        // processed 级别的失败可能随分叉消失：先只记为 PROCESSED
+        statuses.add(status("processed", "0", "{\"InstructionError\":[0,{\"Custom\":1}]}"));
+        view.pollNow();
+        assertEquals(SolanaTransactionStatus.Status.PROCESSED, view.getStatus().orElseThrow());
         statuses.add(status("confirmed", "1", "{\"InstructionError\":[0,{\"Custom\":1}]}"));
 
-        view.poll();
+        view.pollNow();
 
         assertEquals(SolanaTransactionStatus.Status.FAILED, view.getStatus().orElseThrow());
         assertTrue(view.getLastSignatureStatus().orElseThrow().failed());
         statuses.add(status("finalized", "null", "null"));
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.FAILED, view.getStatus().orElseThrow(), "final states do not change");
     }
 
@@ -83,21 +87,88 @@ class SolanaTransactionStatusTest {
         view.track(SIGNATURE, 150);
         statuses.add("null");
         statuses.add("null");
+        statuses.add("null");
 
         blockHeight = 150;
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.SUBMITTED, view.getStatus().orElseThrow());
         blockHeight = 151;
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.EXPIRED, view.getStatus().orElseThrow());
+        assertTrue(statuses.isEmpty(), "the status is read again after the height check");
 
         SolanaTransactionStatus unbounded = view();
         unbounded.track(SIGNATURE);
         statuses.add("null");
         int before = heightReads.get();
-        unbounded.poll();
+        unbounded.pollNow();
         assertEquals(before, heightReads.get(), "without a last valid height the block height is not read");
         assertEquals(SolanaTransactionStatus.Status.SUBMITTED, unbounded.getStatus().orElseThrow());
+    }
+
+    @Test void aTransactionLandingBetweenTheReadsIsNotReportedAsExpired() {
+        SolanaTransactionStatus view = view();
+        view.track(SIGNATURE, 150);
+        blockHeight = 151;
+        statuses.add("null");
+        statuses.add(status("confirmed", "1", "null"));
+
+        view.pollNow();
+
+        assertEquals(SolanaTransactionStatus.Status.CONFIRMED, view.getStatus().orElseThrow());
+    }
+
+    @Test void progressNeverMovesBackwardsAndReTrackingStartsOver() {
+        SolanaTransactionStatus view = view().setTarget(SolanaCommitment.FINALIZED);
+        List<SolanaTransactionStatus.Status> events = new ArrayList<>();
+        view.addStatusChangedListener(event -> events.add(event.getStatus()));
+        view.track(SIGNATURE);
+        statuses.add(status("confirmed", "1", "null"));
+        statuses.add(status("processed", "0", "null"));
+        view.pollNow();
+        view.pollNow();
+        assertEquals(SolanaTransactionStatus.Status.CONFIRMED, view.getStatus().orElseThrow(), "a lagging node is ignored");
+
+        view.track(SIGNATURE);
+        assertEquals(List.of(SolanaTransactionStatus.Status.SUBMITTED, SolanaTransactionStatus.Status.CONFIRMED,
+                SolanaTransactionStatus.Status.SUBMITTED), events, "re-tracking fires SUBMITTED again");
+    }
+
+    @Test void reTrackingWhileSubmittedFiresAgain() {
+        SolanaTransactionStatus view = view();
+        List<SolanaTransactionStatus.Status> events = new ArrayList<>();
+        view.addStatusChangedListener(event -> events.add(event.getStatus()));
+
+        view.track(SIGNATURE);
+        view.track(SIGNATURE);
+
+        assertEquals(List.of(SolanaTransactionStatus.Status.SUBMITTED, SolanaTransactionStatus.Status.SUBMITTED), events);
+    }
+
+    @Test void raisingTheTargetResumesAfterConfirmed() {
+        SolanaTransactionStatus view = view();
+        view.track(SIGNATURE);
+        statuses.add(status("confirmed", "1", "null"));
+        view.pollNow();
+        statuses.add(status("finalized", "null", "null"));
+        view.pollNow();
+        assertEquals(SolanaTransactionStatus.Status.CONFIRMED, view.getStatus().orElseThrow());
+
+        view.setTarget(SolanaCommitment.FINALIZED).pollNow();
+
+        assertEquals(SolanaTransactionStatus.Status.FINALIZED, view.getStatus().orElseThrow());
+    }
+
+    @Test void lateAsyncResultsFromAnEarlierTrackAreDiscarded() {
+        SolanaTransactionStatus view = view();
+        view.track(SIGNATURE);
+        statuses.add(status("confirmed", "1", "null"));
+        SolanaTransactionStatus.Reading stale = SolanaTransactionStatus.read(rpc(), SIGNATURE, -1);
+        view.track(SIGNATURE);
+
+        view.apply(0, stale, null);
+
+        assertEquals(SolanaTransactionStatus.Status.SUBMITTED, view.getStatus().orElseThrow());
     }
 
     @Test void rpcOutagesKeepTheStatusAndTimeoutEnds() throws InterruptedException {
@@ -105,10 +176,10 @@ class SolanaTransactionStatusTest {
         view.track(SIGNATURE);
         down = true;
 
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.SUBMITTED, view.getStatus().orElseThrow());
         Thread.sleep(60);
-        view.poll();
+        view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.TIMED_OUT, view.getStatus().orElseThrow());
     }
 
@@ -123,7 +194,7 @@ class SolanaTransactionStatusTest {
         assertThrows(IllegalArgumentException.class, () -> view.setTimeout(Duration.ofSeconds(-1)));
         assertThrows(NullPointerException.class, () -> view.track(null));
         assertFalse(view.getStatus().isPresent());
-        view.poll();
+        view.pollNow();
         assertFalse(view.getStatus().isPresent(), "nothing happens before tracking starts");
         view.setI18n(new SolanaTransactionStatus.I18n().set(SolanaTransactionStatus.Status.SUBMITTED, "Gesendet"));
         view.track(SIGNATURE);
@@ -131,7 +202,11 @@ class SolanaTransactionStatusTest {
     }
 
     private SolanaTransactionStatus view() {
-        SolanaRpcClient rpc = new SolanaRpcClient(request -> {
+        return new SolanaTransactionStatus(rpc(), SolanaCluster.DEVNET);
+    }
+
+    private SolanaRpcClient rpc() {
+        return new SolanaRpcClient(request -> {
             if (down) throw new java.io.IOException("node down");
             JsonNode node = JSON.readTree(request);
             String result = switch (node.path("method").asString()) {
@@ -143,7 +218,6 @@ class SolanaTransactionStatusTest {
             };
             return "{\"jsonrpc\":\"2.0\",\"id\":" + node.path("id").asLong() + ",\"result\":" + result + "}";
         }, SolanaCommitment.CONFIRMED);
-        return new SolanaTransactionStatus(rpc, SolanaCluster.DEVNET);
     }
 
     private static String status(String commitment, String confirmations, String error) {

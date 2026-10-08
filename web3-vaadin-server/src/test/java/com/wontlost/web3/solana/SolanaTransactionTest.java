@@ -167,6 +167,12 @@ class SolanaTransactionTest {
                 TOKEN_MINT, recipientTokenAccount, BigInteger.ONE, 6, SolanaPrograms.TOKEN, BLOCKHASH, true));
         assertTrue(refused.getMessage().contains("not a wallet address"));
 
+        // SOL 同样拒绝曲线外地址：链上尚不存在的代币账户地址也无法被 requireWalletRecipient 识别
+        assertThrows(IllegalArgumentException.class,
+                () -> SolanaTransfers.sol(SENDER, recipientTokenAccount, BigInteger.ONE, BLOCKHASH));
+        assertTrue(SolanaTransfers.solToProgramAddress(SENDER, recipientTokenAccount, BigInteger.ONE, BLOCKHASH)
+                .accountKeys().contains(recipientTokenAccount));
+
         SolanaTransaction toVault = SolanaTransfers.splToProgramAddress(SENDER, TOKEN_MINT, recipientTokenAccount,
                 BigInteger.ONE, 6, SolanaPrograms.TOKEN, BLOCKHASH, true);
         assertTrue(toVault.accountKeys().contains(recipientTokenAccount), "explicit opt-in for program-derived wallets");
@@ -280,6 +286,22 @@ class SolanaTransactionTest {
         assertEquals((byte) 0x80, message[0]);
         byte[] signed = SolanaTransaction.withSignature(wire, SENDER, sign(message));
         assertEquals(Base58.encode(sign(message)), SolanaTransaction.signatureOf(signed));
+    }
+
+    @Test void recentBlockhashIsReadFromLegacyAndV0Messages() {
+        byte[] legacy = SolanaTransfers.sol(SENDER, RECIPIENT, BigInteger.ONE, BLOCKHASH).unsignedWire();
+        assertEquals(BLOCKHASH, SolanaTransaction.recentBlockhashOf(legacy));
+        ByteArrayOutputStream v0 = new ByteArrayOutputStream();
+        v0.write(1);
+        v0.writeBytes(new byte[64]);
+        v0.write(0x80);
+        v0.write(legacy, 65, legacy.length - 65);
+        v0.write(0);
+        assertEquals(BLOCKHASH, SolanaTransaction.recentBlockhashOf(v0.toByteArray()));
+        byte[] v1 = v0.toByteArray();
+        v1[65] = (byte) 0x81;
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.signersOf(v1), "only v0 exists");
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.recentBlockhashOf(Arrays.copyOf(legacy, 160)));
     }
 
     @Test void malformedWireTransactionsAreRejected() {

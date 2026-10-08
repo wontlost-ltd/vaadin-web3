@@ -160,8 +160,7 @@ public final class SolanaTransaction {
     public static List<String> signersOf(byte[] wire) {
         int[] count = readLength(wire, 0);
         int offset = messageOffset(wire);
-        // 版本化消息以 0x80|版本 开头，其后与 legacy 头相同
-        if ((wire[offset] & 0x80) != 0) offset++;
+        offset = headerOffset(wire, offset);
         if (offset + 3 > wire.length) throw new IllegalArgumentException("truncated transaction");
         int required = wire[offset] & 0xFF;
         if (required != count[0]) throw new IllegalArgumentException("signature count does not match the message header");
@@ -192,6 +191,22 @@ public final class SolanaTransaction {
         byte[] signed = wire.clone();
         System.arraycopy(signature, 0, signed, readLength(wire, 0)[1] + slot * 64, 64);
         return signed;
+    }
+
+    /** The recent blockhash (base58) a wire transaction is bound to. */
+    public static String recentBlockhashOf(byte[] wire) {
+        int offset = headerOffset(wire, messageOffset(wire));
+        int[] keys = readLength(wire, offset + 3);
+        int start = keys[1] + keys[0] * 32;
+        if (start + 32 > wire.length) throw new IllegalArgumentException("truncated transaction");
+        return Base58.encode(Arrays.copyOfRange(wire, start, start + 32));
+    }
+
+    /** 版本化消息以 0x80|版本 开头，其后与 legacy 头相同；目前只有 v0。返回消息头的偏移。 */
+    private static int headerOffset(byte[] wire, int messageOffset) {
+        if ((wire[messageOffset] & 0x80) == 0) return messageOffset;
+        if ((wire[messageOffset] & 0x7F) != 0) throw new IllegalArgumentException("unsupported transaction version");
+        return messageOffset + 1;
     }
 
     /** The message bytes of a wire transaction: what each signer signs. */

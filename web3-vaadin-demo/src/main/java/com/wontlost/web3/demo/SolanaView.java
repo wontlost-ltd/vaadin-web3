@@ -67,7 +67,7 @@ public final class SolanaView extends VerticalLayout {
             if (event.getStatus() == SolanaTransactionStatus.Status.CONFIRMED
                     || event.getStatus() == SolanaTransactionStatus.Status.FINALIZED) {
                 showSolBalance();
-                if (!mint.isEmpty()) showTokenBalance();
+                if (!mint.getValue().isBlank()) showTokenBalance();
             }
         });
         recipient.setWidth("32rem");
@@ -174,7 +174,8 @@ public final class SolanaView extends VerticalLayout {
             BigDecimal value = new BigDecimal(amount.getValue().trim());
             String to = recipient.getValue().trim();
             latest = rpc.getLatestBlockhash();
-            transaction = mint.isEmpty() ? SolanaTransfers.sol(sender, to,
+            SolanaTransfers.requireWalletRecipient(rpc, to);
+            transaction = mint.getValue().isBlank() ? SolanaTransfers.sol(sender, to,
                     value.movePointRight(SolanaBalance.DECIMALS).toBigIntegerExact(), latest.blockhash())
                     : tokenTransfer(sender, to, value, latest.blockhash());
         } catch (ArithmeticException exception) {
@@ -201,7 +202,6 @@ public final class SolanaView extends VerticalLayout {
 
     private SolanaTransaction tokenTransfer(String sender, String to, BigDecimal value, String blockhash) {
         String tokenMint = mint.getValue().trim();
-        SolanaTransfers.requireWalletRecipient(rpc, to);
         String program = rpc.getAccountOwner(tokenMint).filter(SolanaPrograms::isTokenProgram)
                 .orElseThrow(() -> new IllegalStateException("the mint is not an SPL token"));
         int decimals = rpc.getTokenBalance(sender, tokenMint).decimals();

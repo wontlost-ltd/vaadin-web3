@@ -198,6 +198,7 @@ export class Web3SolanaConnect extends LitElement {
       this._requireAccount();
       const transaction = fromBase64(transactionBase64);
       const chain = this.chain || (this._walletAccount.chains || []).find((item) => item.startsWith('solana:'));
+      if (!chain) throw Object.assign(new Error('The account has no Solana chain'), { code: 4200 });
       const input = { account: this._walletAccount, transaction, chain };
       const sendFeature = this._wallet.features[SIGN_AND_SEND];
       if (sendFeature) {

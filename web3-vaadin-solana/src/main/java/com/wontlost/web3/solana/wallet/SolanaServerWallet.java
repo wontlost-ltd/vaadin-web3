@@ -36,6 +36,11 @@ public interface SolanaServerWallet {
         throw new SolanaConnect.SolanaWalletException(4200, "This server wallet cannot send transactions", false);
     }
 
+    /** Whether {@link #sendTransaction} works; only then is {@code solana:signAndSendTransaction} offered. */
+    default boolean canSendTransactions() {
+        return false;
+    }
+
     /**
      * Registers the server wallet for the application, typically from a {@code VaadinServiceInitListener}. Throws
      * {@link IllegalStateException} in Vaadin production mode, or when a different wallet is already registered.

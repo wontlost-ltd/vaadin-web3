@@ -7,11 +7,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
 import com.vaadin.flow.component.Composite;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.html.Anchor;
 import com.vaadin.flow.component.html.Div;
@@ -21,16 +23,20 @@ import com.wontlost.web3.siws.SolanaCluster;
 import com.wontlost.web3.solana.SignatureStatus;
 import com.wontlost.web3.solana.SolanaCommitment;
 import com.wontlost.web3.solana.SolanaRpcClient;
-import com.wontlost.web3.solana.SolanaRpcException;
 import com.wontlost.web3.ui.UiPolling;
 
 /**
  * Shows the server-observed progress of a Solana transaction: submitted, processed, confirmed, finalized, failed,
  * or expired (its blockhash ran out before it landed, so it is safe to build and send again).
  * <p>
- * Polling uses the UI's shared poll interval ({@link UiPolling}) and stops once the transaction reaches the target
- * commitment ({@code confirmed} by default) or another final state. {@link Status#EXPIRED} relies on the block height
- * read by the client, so give it a client at {@code confirmed} or {@code finalized} (the default), not {@code processed}.
+ * Polling uses the UI's shared poll interval ({@link UiPolling}); the RPC reads run off the UI thread and the
+ * result is applied with {@code UI.access}, so a slow node never blocks the UI. Polling stops once the transaction
+ * reaches the target commitment ({@code confirmed} by default) or another final state. Progress only moves forward,
+ * and an on-chain failure is final only once it is at least {@code confirmed}.
+ * <p>
+ * {@link Status#EXPIRED} needs the transaction's {@code lastValidBlockHeight} and a client at {@code confirmed}
+ * (the default) or {@code finalized}. It assumes the wallet kept the blockhash the server built the transaction
+ * with; a wallet that replaced it could still land the transaction later, so check the explorer before retrying.
  */
 public class SolanaTransactionStatus extends Composite<Div> {
     /** Progress of the tracked transaction. */
@@ -41,6 +47,9 @@ public class SolanaTransactionStatus extends Composite<Div> {
     private final SolanaCluster cluster;
     private transient SolanaRpcClient rpc;
     private transient Registration polling;
+    /** 每次 track/分离递增：迟到的异步结果按代号丢弃。 */
+    private long generation;
+    private boolean checking;
     private SolanaCommitment target = SolanaCommitment.CONFIRMED;
     private Duration pollInterval = Duration.ofSeconds(1);
     private Duration timeout = Duration.ofMinutes(2);
@@ -78,6 +87,10 @@ public class SolanaTransactionStatus extends Composite<Div> {
         this.lastValidBlockHeight = lastValidBlockHeight;
         startedAt = System.nanoTime();
         lastStatus = null;
+        generation++;
+        checking = false;
+        // 重新跟踪时从头开始，确保再次触发 SUBMITTED 事件
+        status = null;
         explorer.setHref(explorerUrl(cluster, transactionSignature));
         explorer.setVisible(cluster != SolanaCluster.LOCALNET);
         change(Status.SUBMITTED);
@@ -88,6 +101,7 @@ public class SolanaTransactionStatus extends Composite<Div> {
     /** The commitment at which tracking stops successfully; {@code confirmed} by default. */
     public SolanaTransactionStatus setTarget(SolanaCommitment value) {
         target = Objects.requireNonNull(value);
+        restartPolling();
         return this;
     }
 
@@ -134,36 +148,82 @@ public class SolanaTransactionStatus extends Composite<Div> {
         return addListener(StatusChangedEvent.class, listener);
     }
 
-    /**
-     * 读一次状态并推进；到达目标、失败、过期或超时即停止轮询。
-     * RPC 暂时失败时保持当前状态，下次继续（超时兜底）。
-     */
-    void poll() {
-        if (signature == null || isFinal(status) || rpc == null) {
-            stopPolling();
-            return;
-        }
+    /** 轮询回调（持有 UI 锁）：在后台线程读取，结果经 ui.access 应用；同一时间只有一次读取在途。 */
+    private void poll() {
+        if (signature == null || isFinal(status) || rpc == null || checking) return;
+        UI ui = getUI().orElse(null);
+        if (ui == null) return;
+        checking = true;
+        long current = generation;
+        SolanaRpcClient client = rpc;
+        String tracked = signature;
+        long lastValid = lastValidBlockHeight;
+        CompletableFuture.supplyAsync(() -> read(client, tracked, lastValid))
+                .whenComplete((reading, failure) -> ui.access(() -> apply(current, reading, failure)));
+    }
+
+    /** 同步读取并应用一次（测试与无 UI 场景）。 */
+    void pollNow() {
+        if (signature == null || isFinal(status) || rpc == null) return;
+        long current = generation;
+        Reading reading = null;
+        Throwable failure = null;
         try {
-            Optional<SignatureStatus> read = rpc.getSignatureStatuses(List.of(signature), true).getFirst();
-            if (read.isPresent()) {
-                lastStatus = read.get();
-                change(read.get().failed() ? Status.FAILED : progress(read.get().confirmationStatus()));
-            } else if (lastValidBlockHeight >= 0 && rpc.getBlockHeight() > lastValidBlockHeight) {
-                change(Status.EXPIRED);
-            }
-        } catch (SolanaRpcException exception) {
-            // 节点暂时不可用：不改变状态
+            reading = read(rpc, signature, lastValidBlockHeight);
+        } catch (RuntimeException exception) {
+            failure = exception;
+        }
+        apply(current, reading, failure);
+    }
+
+    /**
+     * 后台读取（不碰 UI）。过期判定先确认区块高度已超过 lastValidBlockHeight，再最后读一次签名状态，
+     * 仍不存在才算过期：避免交易恰好在两次读取之间落块而被误报为过期。
+     */
+    static Reading read(SolanaRpcClient client, String signature, long lastValidBlockHeight) {
+        Optional<SignatureStatus> first = status(client, signature);
+        if (first.isPresent() || lastValidBlockHeight < 0) return new Reading(first, false);
+        if (client.getBlockHeight() <= lastValidBlockHeight) return new Reading(Optional.empty(), false);
+        Optional<SignatureStatus> again = status(client, signature);
+        return new Reading(again, again.isEmpty());
+    }
+
+    private static Optional<SignatureStatus> status(SolanaRpcClient client, String signature) {
+        return client.getSignatureStatuses(List.of(signature), true).getFirst();
+    }
+
+    /** 在 UI 线程应用读取结果；节点暂时失败时保持状态，超时兜底。 */
+    void apply(long current, Reading reading, Throwable failure) {
+        if (current != generation) return;
+        checking = false;
+        if (failure == null && reading.expired()) {
+            change(Status.EXPIRED);
+        } else if (failure == null && reading.status().isPresent()) {
+            lastStatus = reading.status().get();
+            advance(next(lastStatus));
         }
         if (!isFinal(status) && System.nanoTime() - startedAt > timeout.toNanos()) change(Status.TIMED_OUT);
         if (isFinal(status)) stopPolling();
     }
 
-    private Status progress(SolanaCommitment commitment) {
-        return switch (commitment) {
+    /** processed 级别的失败可能随分叉被丢弃，只有达到 confirmed 才视为最终失败。 */
+    private static Status next(SignatureStatus read) {
+        boolean settled = read.confirmationStatus().ordinal() >= SolanaCommitment.CONFIRMED.ordinal();
+        if (read.failed()) return settled ? Status.FAILED : Status.PROCESSED;
+        return switch (read.confirmationStatus()) {
             case PROCESSED -> Status.PROCESSED;
             case CONFIRMED -> Status.CONFIRMED;
             case FINALIZED -> Status.FINALIZED;
         };
+    }
+
+    /** 状态只前进：负载均衡下落后的节点可能返回较低的确认级别，忽略之。 */
+    private void advance(Status next) {
+        if (status == null || next.ordinal() > status.ordinal()) change(next);
+    }
+
+    /** 一次读取的结果：签名状态（可能不存在）与是否已确定过期。 */
+    record Reading(Optional<SignatureStatus> status, boolean expired) {
     }
 
     /** 失败、过期、超时为终态；成功则在达到目标确认级别时视为终态。 */
@@ -202,6 +262,8 @@ public class SolanaTransactionStatus extends Composite<Div> {
 
     @Override
     protected void onDetach(DetachEvent detachEvent) {
+        generation++;
+        checking = false;
         stopPolling();
         super.onDetach(detachEvent);
     }
@@ -239,7 +301,8 @@ public class SolanaTransactionStatus extends Composite<Div> {
                 Status.CONFIRMED, "Confirmed.",
                 Status.FINALIZED, "Finalized.",
                 Status.FAILED, "The transaction failed on chain.",
-                Status.EXPIRED, "The transaction expired before it landed. It is safe to try again.",
+                Status.EXPIRED, "The transaction did not land in time and can no longer be processed. Check the "
+                        + "explorer, then try again.",
                 Status.TIMED_OUT, "Still waiting for the transaction. Check the explorer before trying again."));
 
         public String get(Status status) { return texts.get(status); }

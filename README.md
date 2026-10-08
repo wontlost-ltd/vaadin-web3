@@ -576,18 +576,35 @@ login.getWallet().signAndSendTransaction(transfer.unsignedWire(), rpc).whenCompl
 
 - **Sending.** `signAndSendTransaction` uses the wallet's
   `solana:signAndSendTransaction`. If the wallet only supports
-  `solana:signTransaction`, the server sends the signed transaction through
-  the `SolanaRpcClient` you pass in (or fails if you pass `null`). Wallets may
-  add instructions, such as priority fees, before signing.
+  `solana:signTransaction`, the server checks the signed transaction and
+  sends it on a background thread through the `SolanaRpcClient` you pass in
+  (or fails if you pass `null`). The check requires:
+  - the original fee payer and blockhash;
+  - a valid signature from the connected account.
+
+  Wallets may add instructions, such as priority fees, before signing.
+- **Treat the signature as a claim.** The returned signature is what the
+  wallet reports. Before crediting anything, verify the transaction on chain:
+  track it to `CONFIRMED`, and check what it actually did.
+- **Push.** The future completes on the UI thread. With the fallback path,
+  enable `@Push` (or polling) so the result reaches the browser promptly.
 - **Status.** `SolanaTransactionStatus` polls `getSignatureStatuses` through
-  the UI's shared poll interval. It moves through submitted, processed,
-  confirmed and finalized. It stops at the target commitment (`confirmed` by
-  default; change it with `setTarget`).
+  the UI's shared poll interval.
+  - It moves through submitted, processed, confirmed and finalized, and stops
+    at the target commitment (`confirmed` by default; change it with
+    `setTarget`).
+  - The RPC reads run off the UI thread, so a slow node never blocks the UI.
+  - Progress never moves backwards, even when a lagging node reports a lower
+    commitment.
 - **Final states.** Besides success, tracking ends in one of three ways:
-  - `FAILED`: the transaction failed on chain (`getLastSignatureStatus()`
-    holds the error);
-  - `EXPIRED`: the blockhash ran out before the transaction landed, so it is
-    safe to build and send it again;
+  - `FAILED`: the transaction failed on chain at `confirmed` or above
+    (`getLastSignatureStatus()` holds the error). A failure seen only at
+    `processed` is not final yet.
+  - `EXPIRED`: the cluster passed the transaction's `lastValidBlockHeight`
+    and, on a final re-check, still had no record of it. This assumes the
+    wallet kept the blockhash the server built the transaction with. The
+    fallback path enforces that. With `signAndSendTransaction` the server
+    cannot see it, so check the explorer before rebuilding.
   - `TIMED_OUT`: no final answer arrived in time. Check the Solana Explorer
     link before retrying.
 
@@ -701,8 +718,9 @@ byte[] forWallet = usdc.unsignedWire();      // pass to solana:signAndSendTransa
   account, and the tokens could be stranded. So `spl` rejects off-curve
   addresses (token accounts and other program-derived addresses), and
   `requireWalletRecipient` rejects addresses owned by a program other than the
-  System Program. To pay a program-derived wallet, such as a multisig vault, on
-  purpose, use `splToProgramAddress`.
+  System Program. `sol` rejects off-curve recipients too, since no key could
+  move SOL out of one. To pay a program-derived address on purpose, such as a
+  multisig vault, use `solToProgramAddress` or `splToProgramAddress`.
 - **Recipient account creation.** `spl(..., true)` adds the Associated Token
   Account program's `CreateIdempotent` instruction. If the recipient's token
   account already exists, it does nothing. If not, the sender pays its rent,
