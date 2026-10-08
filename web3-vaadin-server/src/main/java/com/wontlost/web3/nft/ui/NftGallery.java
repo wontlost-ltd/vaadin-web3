@@ -6,11 +6,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
-import java.util.concurrent.Executor;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Component;
@@ -85,7 +85,9 @@ public final class NftGallery extends VerticalLayout {
     private boolean loading;
     private boolean cardFocusRequested;
     private volatile boolean detached = true;
-    private Div focusedCard;
+    // 记录打开详情的条目而非卡片元素：setI18n 或截断会重建卡片，旧元素已脱离 DOM
+    private GalleryItem focusedItem;
+    private int lastFocusedCardIndex = -1;
 
     public NftGallery(NftOwnershipSource ownership, NftMetadataResolver metadataResolver,
             List<NftCollection> collections, int pageSize, String loginPath) {
@@ -118,7 +120,7 @@ public final class NftGallery extends VerticalLayout {
         liveStatus.getElement().setAttribute("aria-live", "polite");
         failureList.getElement().setAttribute("aria-live", "polite");
         loadMore.setText(i18n.getLoadMore());
-        loadMore.addClickListener(event -> loadNextPage());
+        loadMore.addClickListener(event -> loadNextPage(true));
         loadMore.setVisible(false);
         retry.addClickListener(event -> refresh());
         retry.setVisible(false);
@@ -148,6 +150,9 @@ public final class NftGallery extends VerticalLayout {
         }
         renderItems();
         renderFailures();
+        if (details.isOpened() && focusedItem != null) {
+            showDetails(focusedItem);
+        }
         return this;
     }
 
@@ -240,7 +245,7 @@ public final class NftGallery extends VerticalLayout {
             state = GalleryState.LOADING;
             renderState();
             if (!detached && !chainIds.isEmpty()) {
-                loadNextPage();
+                loadNextPage(false);
             } else if (chainIds.isEmpty()) {
                 state = GalleryState.EMPTY;
                 renderState();
@@ -248,7 +253,8 @@ public final class NftGallery extends VerticalLayout {
         }
     }
 
-    private void loadNextPage() {
+    // userRequested 表示由“加载更多”触发：决定加载完成后是否移动键盘焦点与播报“已加载更多”
+    private void loadNextPage(boolean userRequested) {
         if (loading) {
             return;
         }
@@ -281,16 +287,16 @@ public final class NftGallery extends VerticalLayout {
         String pageOwner = owner;
         int remainingCapacity = maxLoadedItems - items.size();
         executor.execute(() -> loadPage(ui, operation, chainId, chainCollections, pageCursor, pageOwner,
-                remainingCapacity));
+                remainingCapacity, userRequested));
     }
 
     private void loadPage(UI ui, long operation, long chainId, List<NftCollection> chainCollections,
-            String pageCursor, String pageOwner, int remainingCapacity) {
+            String pageCursor, String pageOwner, int remainingCapacity, boolean userRequested) {
         try {
             NftOwnershipPage page = ownership.find(chainId, pageOwner, chainCollections, pageCursor, pageSize);
             List<NftHolding> holdingsToResolve = page.holdings().stream().limit(remainingCapacity).toList();
             List<NftMetadataResult> resolved = metadataResolver.resolve(holdingsToResolve);
-            update(ui, operation, () -> applyPage(operation, page, resolved, pageCursor));
+            update(ui, operation, () -> applyPage(operation, page, resolved, userRequested));
         } catch (RuntimeException exception) {
             update(ui, operation, () -> applyPageFailure(operation));
         }
@@ -301,7 +307,8 @@ public final class NftGallery extends VerticalLayout {
             return;
         }
         if (ui.getSession() == null) {
-            // 无会话 UI 只在单测或嵌入场景出现，此时回调仍在当前 UI 线程执行。
+            // 无会话的 UI 仅出现在单测或未接入 VaadinSession 的嵌入场景，回调在调用线程直接执行；
+            // 生产环境 UI 总有会话，界面更新一律经 ui.access 持锁执行。
             if (isAttached() && operation == generation.get()) {
                 action.run();
             }
@@ -319,7 +326,7 @@ public final class NftGallery extends VerticalLayout {
     }
 
     private void applyPage(long operation, NftOwnershipPage page, List<NftMetadataResult> resolved,
-            String requestedCursor) {
+            boolean userRequested) {
         if (!isCurrent(operation)) {
             return;
         }
@@ -348,7 +355,7 @@ public final class NftGallery extends VerticalLayout {
             renderState();
             content.add(new Paragraph(i18n.getContinueChains()));
             renderFailures();
-            liveStatus.setText(requestedCursor == null ? i18n.getReady() : i18n.getLoadedMore());
+            liveStatus.setText(userRequested ? i18n.getLoadedMore() : i18n.getReady());
             return;
         }
         if (!failures.isEmpty()) {
@@ -361,7 +368,11 @@ public final class NftGallery extends VerticalLayout {
         appendItems(firstNewItem);
         renderFailures();
         updateContinuationControls();
-        liveStatus.setText(requestedCursor == null ? i18n.getReady() : i18n.getLoadedMore());
+        liveStatus.setText(userRequested ? i18n.getLoadedMore() : i18n.getReady());
+        if (userRequested && items.size() > firstNewItem && !details.isOpened()) {
+            // “加载更多”可能随即隐藏，键盘焦点移到第一张新卡片，读屏也会朗读该卡片；详情打开时不抢焦点
+            focusCardAt(firstNewItem);
+        }
     }
 
     private void applyPageFailure(long operation) {
@@ -381,7 +392,7 @@ public final class NftGallery extends VerticalLayout {
     }
 
     private void clearData() {
-        focusedCard = null;
+        focusedItem = null;
         cardFocusRequested = false;
         details.close();
         detailsContent.removeAll();
@@ -590,11 +601,11 @@ public final class NftGallery extends VerticalLayout {
             Div metadataStatus = secondaryText("nft-gallery-metadata-status", i18n.getMetadataUnavailable());
             card.add(metadataStatus);
         }
-        card.addClickListener(event -> showDetails(item, card));
+        card.addClickListener(event -> showDetails(item));
         card.getElement().addEventListener("keydown", event -> {
             String key = event.getEventData().path("event.key").asString();
             if ("Enter".equals(key) || " ".equals(key)) {
-                showDetails(item, card);
+                showDetails(item);
             }
         }).addEventData("event.key")
                 .setFilter("event.key === 'Enter' || event.key === ' '")
@@ -623,8 +634,8 @@ public final class NftGallery extends VerticalLayout {
         };
     }
 
-    private void showDetails(GalleryItem item, Div card) {
-        focusedCard = card;
+    private void showDetails(GalleryItem item) {
+        focusedItem = item;
         cardFocusRequested = false;
         detailsContent.removeAll();
         NftHolding holding = item.holding();
@@ -711,10 +722,30 @@ public final class NftGallery extends VerticalLayout {
     }
 
     private void focusCard() {
-        if (focusedCard != null) {
-            cardFocusRequested = true;
-            focusedCard.getElement().callJsFunction("focus");
+        if (focusedItem == null || items.isEmpty()) {
+            return;
         }
+        // 按引用查找，避免两个相等的条目映射到错误的卡片；条目被上限截断时退回第一张卡片
+        int index = 0;
+        for (int candidate = 0; candidate < items.size(); candidate++) {
+            if (items.get(candidate) == focusedItem) {
+                index = candidate;
+                break;
+            }
+        }
+        cardFocusRequested = true;
+        focusCardAt(index);
+    }
+
+    // 按条目序号聚焦当前网格中的卡片；卡片可能已被重建，因此不缓存元素引用
+    private void focusCardAt(int index) {
+        if (itemGrid == null) {
+            return;
+        }
+        itemGrid.getChildren().skip(index).findFirst().ifPresent(card -> {
+            lastFocusedCardIndex = index;
+            card.getElement().callJsFunction("focus");
+        });
     }
 
     private void renderFailures() {
@@ -775,7 +806,7 @@ public final class NftGallery extends VerticalLayout {
     public record GalleryItem(NftHolding holding, NftMetadataResult metadata) { }
 
     void loadMoreForTest() {
-        loadNextPage();
+        loadNextPage(true);
     }
 
     void detachForTest() {
@@ -784,7 +815,7 @@ public final class NftGallery extends VerticalLayout {
 
     void showDetailsForTest(int index) {
         GalleryItem item = items.get(index);
-        showDetails(item, card(item));
+        showDetails(item);
     }
 
     String detailsTextForTest() {
@@ -853,6 +884,10 @@ public final class NftGallery extends VerticalLayout {
 
     String failureTextForTest() {
         return componentText(failureList);
+    }
+
+    int lastFocusedCardIndexForTest() {
+        return lastFocusedCardIndex;
     }
 
     boolean cardFocusRequestedForTest() {

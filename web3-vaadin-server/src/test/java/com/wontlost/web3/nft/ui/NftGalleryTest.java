@@ -2,6 +2,7 @@ package com.wontlost.web3.nft.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -347,6 +348,22 @@ class NftGalleryTest {
     }
 
     @Test
+    void loadMoreAfterAnEmptyFirstPageMovesFocusAndAnnouncesLoadedMore() {
+        // 稀疏 ID 范围：首页为空但有游标，用户按“加载更多”拿到最后一页；此时尚无卡片，仍须移动焦点
+        FakeSource source = new FakeSource();
+        source.pages.add(new NftOwnershipPage(List.of(), "cursor-2", 1, List.of()));
+        source.pages.add(new NftOwnershipPage(List.of(holding(7)), null, 1, List.of()));
+        NftGallery gallery = gallery(source, new FakeMetadata(), () -> SIWE_ADDRESS, Runnable::run);
+        attach(gallery);
+
+        gallery.loadMoreForTest();
+
+        assertFalse(gallery.loadMoreVisibleForTest());
+        assertEquals(0, gallery.lastFocusedCardIndexForTest());
+        assertEquals(new NftGalleryI18n().getLoadedMore(), gallery.liveStatusForTest());
+    }
+
+    @Test
     void aSingleMetadataFailureKeepsTheHoldingAndRendersAPlaceholder() {
         FakeSource source = new FakeSource();
         NftMetadataResolver resolver = holdings -> List.of(new NftMetadataResult(holdings.getFirst(), null,
@@ -408,6 +425,78 @@ class NftGalleryTest {
         gallery.fireDialogCloseActionForTest();
 
         assertFalse(gallery.dialogOpenedForTest());
+        assertTrue(gallery.cardFocusRequestedForTest());
+    }
+
+    @Test
+    void loadMoreMovesKeyboardFocusToTheFirstNewCard() {
+        FakeSource source = new FakeSource();
+        source.pages.add(new NftOwnershipPage(List.of(holding(1)), "cursor-2", 1, List.of()));
+        source.pages.add(new NftOwnershipPage(List.of(holding(2)), null, 1, List.of()));
+        NftGallery gallery = gallery(source, new FakeMetadata(), () -> SIWE_ADDRESS, Runnable::run);
+        attach(gallery);
+
+        gallery.loadMoreForTest();
+
+        // 最后一页后“加载更多”隐藏，焦点必须落在第一张新卡片上而不是丢到 body
+        assertFalse(gallery.loadMoreVisibleForTest());
+        assertEquals(1, gallery.lastFocusedCardIndexForTest());
+    }
+
+    @Test
+    void loadMoreIntoTheNextChainAlsoMovesFocusAndAnnouncesLoadedMore() {
+        // 第二条链的首页游标为空，仍属于“加载更多”
+        NftCollection otherChain = new NftCollection(1,
+                "0x4444444444444444444444444444444444444444", NftStandard.ERC721, true, List.of());
+        FakeSource source = new FakeSource();
+        source.pages.add(new NftOwnershipPage(List.of(holding(1)), null, 1, List.of()));
+        source.pages.add(new NftOwnershipPage(List.of(new NftHolding(1, otherChain.contract(), BigInteger.TWO,
+                BigInteger.ONE, NftStandard.ERC721)), null, 1, List.of()));
+        NftGallery gallery = new NftGallery(source, new FakeMetadata(), List.of(COLLECTION, otherChain), 1, null,
+                () -> SIWE_ADDRESS, Runnable::run);
+        attach(gallery);
+        assertEquals(-1, gallery.lastFocusedCardIndexForTest());
+
+        gallery.loadMoreForTest();
+
+        assertEquals(java.util.Arrays.asList(null, null), source.cursors);
+        assertEquals(1, gallery.lastFocusedCardIndexForTest());
+        assertEquals(new NftGalleryI18n().getLoadedMore(), gallery.liveStatusForTest());
+    }
+
+    @Test
+    void loadMoreDoesNotStealFocusFromAnOpenDetailsDialog() {
+        FakeSource source = new FakeSource();
+        source.pages.add(new NftOwnershipPage(List.of(holding(1)), "cursor-2", 1, List.of()));
+        source.pages.add(new NftOwnershipPage(List.of(holding(2)), null, 1, List.of()));
+        NftGallery gallery = gallery(source, new FakeMetadata(), () -> SIWE_ADDRESS, Runnable::run);
+        attach(gallery);
+        gallery.showDetailsForTest(0);
+
+        gallery.loadMoreForTest();
+
+        assertTrue(gallery.dialogOpenedForTest());
+        assertEquals(-1, gallery.lastFocusedCardIndexForTest());
+    }
+
+    @Test
+    void focusReturnsToTheRebuiltCardAndOpenDetailsAreRelocalized() {
+        FakeSource source = new FakeSource();
+        NftGallery gallery = gallery(source, new FakeMetadata(), () -> SIWE_ADDRESS, Runnable::run);
+        attach(gallery);
+        gallery.showDetailsForTest(0);
+        Component originalCard = gallery.cardForTest(0);
+
+        // setI18n 会重建全部卡片；详情需立即使用新文案，关闭后焦点回到重建后的卡片
+        gallery.setI18n(new NftGalleryI18n().setDetails("Token details"));
+        assertTrue(gallery.detailsTextForTest().contains("Token details"));
+        Component rebuiltCard = gallery.cardForTest(0);
+        assertNotSame(originalCard, rebuiltCard);
+        assertEquals(-1, gallery.lastFocusedCardIndexForTest());
+
+        gallery.fireDialogCloseActionForTest();
+
+        assertEquals(0, gallery.lastFocusedCardIndexForTest());
         assertTrue(gallery.cardFocusRequestedForTest());
     }
 
