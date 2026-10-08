@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.Executor;
 
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +35,68 @@ class SolanaConnectTest {
     private final Clock clock = Clock.systemUTC();
     private final SiwsVerifier verifier = new SiwsVerifier(new InMemorySiwsChallengeStore(clock), clock);
     private final SolanaDevWallet wallet = SolanaDevWallet.random(SolanaCluster.LOCALNET);
+
+    @Test void explicitExecutorRunsFallbackSendOnlyWhenScheduledTaskRuns() {
+        List<Runnable> tasks = new ArrayList<>();
+        SolanaConnect connect = new SolanaConnect().setExecutor(tasks::add);
+        java.util.concurrent.atomic.AtomicReference<String> sent = new java.util.concurrent.atomic.AtomicReference<>();
+        var future = connect.sendInBackground(() -> "signature");
+        future.thenAccept(sent::set);
+
+        assertTrue(tasks.size() == 1);
+        assertTrue(!future.isDone());
+        tasks.removeFirst().run();
+        assertEquals("signature", future.join());
+        assertEquals("signature", sent.get());
+    }
+
+    @Test void signAndSendThenComposeSchedulesSignedFallbackThroughConfiguredExecutor() {
+        List<Runnable> tasks = new ArrayList<>();
+        List<byte[]> sent = new ArrayList<>();
+        SolanaDevWallet sender = new SolanaDevWallet(new byte[32], SolanaCluster.LOCALNET);
+        var transfer = com.wontlost.web3.solana.SolanaTransfers.sol(sender.address(), wallet.address(),
+                java.math.BigInteger.ONE, BLOCKHASH);
+        byte[] signed = transfer.wire(java.util.Map.of(sender.address(), sender.signMessage(transfer.message())));
+        String response = "{\"signedTransaction\":\"" + Base64.getEncoder().encodeToString(signed) + "\"}";
+        SolanaConnect connect = new SolanaConnect().setExecutor(tasks::add);
+
+        var result = connect.sendSignedTransactionAfterWallet(java.util.concurrent.CompletableFuture.completedFuture(response),
+                transfer.unsignedWire(), sender.address(), echoingRpc(sent, false), null);
+
+        assertEquals(1, tasks.size());
+        assertFalse(result.isDone());
+        tasks.removeFirst().run();
+        assertEquals(com.wontlost.web3.solana.SolanaTransaction.signatureOf(signed), result.join());
+        assertArrayEquals(signed, sent.getFirst());
+    }
+
+    @Test void rejectedFallbackSendCompletesWithServerBusyWalletError() {
+        Executor rejecting = command -> { throw new java.util.concurrent.RejectedExecutionException(); };
+        SolanaConnect connect = new SolanaConnect().setExecutor(rejecting);
+
+        var failure = assertThrows(java.util.concurrent.CompletionException.class,
+                () -> connect.sendInBackground(() -> "signature").join());
+        assertTrue(failure.getCause() instanceof SolanaConnect.SolanaWalletException);
+        SolanaConnect.SolanaWalletException walletError = (SolanaConnect.SolanaWalletException) failure.getCause();
+        assertEquals(-32603, walletError.getCode());
+        assertEquals("Server is busy; try again", walletError.getMessage());
+        assertFalse(walletError.isUserRejected());
+    }
+
+    @Test void executorResolutionPrefersExplicitThenVaadinContextThenCommonPool() {
+        Executor explicit = Runnable::run;
+        Executor configured = command -> { };
+        com.wontlost.web3.solana.SolanaBackgroundExecutor wrapper =
+                new com.wontlost.web3.solana.SolanaBackgroundExecutor(configured);
+        java.util.Map<Class<?>, Object> attributes = new java.util.HashMap<>();
+        com.vaadin.flow.server.VaadinContext context = context(attributes);
+        com.wontlost.web3.solana.SolanaBackgroundExecutor.register(context, wrapper);
+        assertSame(wrapper, com.wontlost.web3.solana.SolanaBackgroundExecutor.find(context));
+        assertSame(explicit, SolanaBackgroundExecutorResolver.resolve(explicit, context));
+        assertSame(configured, SolanaBackgroundExecutorResolver.resolve(null, context));
+        assertSame(java.util.concurrent.ForkJoinPool.commonPool(),
+                SolanaBackgroundExecutorResolver.resolve(null, null, null));
+    }
 
     @Test void devWalletSignInProducesExactlyTheBytesTheVerifierExpects() {
         SiwsChallenge challenge = verifier.issue("app.example.com", "https://app.example.com", "Sign in to Example",

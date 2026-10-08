@@ -581,6 +581,8 @@ login.getWallet().signAndSendTransaction(transfer.unsignedWire(), rpc).whenCompl
   (or fails if you pass `null`). The check requires:
   - the original fee payer and blockhash;
   - a valid signature from the connected account.
+  The blocking fallback accepts an explicit executor through `SolanaConnect.setExecutor`;
+  otherwise it uses `SolanaBackgroundExecutor` from the Vaadin context, then the common pool.
 
   Wallets may add instructions, such as priority fees, before signing.
 - **Treat the signature as a claim.** The returned signature is what the
@@ -594,6 +596,8 @@ login.getWallet().signAndSendTransaction(transfer.unsignedWire(), rpc).whenCompl
     at the target commitment (`confirmed` by default; change it with
     `setTarget`).
   - The RPC reads run off the UI thread, so a slow node never blocks the UI.
+  Set an executor with `SolanaTransactionStatus.setExecutor`, or register a
+  `SolanaBackgroundExecutor` in the Vaadin context to share an application pool.
   - Progress never moves backwards, even when a lagging node reports a lower
     commitment.
 - **Final states.** Besides success, tracking ends in one of three ways:
@@ -635,6 +639,8 @@ web3.solana.clusters.devnet.rpc-urls[1]=https://backup.example/rpc
 web3.solana.commitment=confirmed
 web3.solana.dev-wallet.enabled=false
 web3.solana.dev-wallet.cluster=localnet
+web3.solana.background.max-threads=8
+web3.solana.background.queue-capacity=256
 # Optional: exactly 64 hex characters (32-byte Ed25519 seed).
 # web3.solana.dev-wallet.seed=<64 hexadecimal characters>
 ```
@@ -643,6 +649,9 @@ Supported cluster keys are `mainnet`, `devnet`, `testnet`, and `localnet`.
 Commitment defaults to `confirmed`; the development wallet defaults to disabled
 and `localnet`. When enabled without a seed, it receives a random key at
 startup. Development wallets are refused in Vaadin production mode.
+The starter provides a bounded daemon pool for blocking wallet RPC work;
+override the two background settings or provide your own
+`SolanaBackgroundExecutor` bean. Components can also set an executor directly.
 
 The starter also stores `SolanaClusters` in the Vaadin context, so
 `@RequiresSplToken` gates work without extra code. When the

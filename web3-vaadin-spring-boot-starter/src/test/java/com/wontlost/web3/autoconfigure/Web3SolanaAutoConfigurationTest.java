@@ -2,6 +2,8 @@ package com.wontlost.web3.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +11,11 @@ import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
@@ -31,6 +38,7 @@ import com.wontlost.web3.siws.SolanaCluster;
 import com.wontlost.web3.solana.SolanaClusters;
 import com.wontlost.web3.solana.SolanaCommitment;
 import com.wontlost.web3.solana.SolanaRpcClient;
+import com.wontlost.web3.solana.SolanaBackgroundExecutor;
 import com.wontlost.web3.solana.wallet.SolanaDevWallet;
 
 class Web3SolanaAutoConfigurationTest {
@@ -173,6 +181,83 @@ class Web3SolanaAutoConfigurationTest {
         runner.withBean(SolanaClusters.class, () -> custom).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(SolanaClusters.class)).isSameAs(custom);
+        });
+    }
+
+    @Test
+    void createsBoundedDefaultPoolWithDaemonSolanaThreadsAndShutsItDown() throws Exception {
+        AtomicReference<SolanaBackgroundExecutor> configured = new AtomicReference<>();
+        AtomicReference<ThreadPoolExecutor> poolRef = new AtomicReference<>();
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        runner.run(context -> {
+            assertThat(context).hasNotFailed();
+            SolanaBackgroundExecutor background = context.getBean(SolanaBackgroundExecutor.class);
+            configured.set(background);
+            ThreadPoolExecutor pool = (ThreadPoolExecutor) background.executor();
+            poolRef.set(pool);
+            assertThat(pool.getCorePoolSize()).isEqualTo(8);
+            assertThat(pool.getMaximumPoolSize()).isEqualTo(8);
+            assertThat(pool.getQueue()).isInstanceOf(ArrayBlockingQueue.class);
+            assertThat(pool.getQueue().remainingCapacity()).isEqualTo(256);
+            assertThat(pool.allowsCoreThreadTimeOut()).isTrue();
+            pool.execute(() -> worker.set(Thread.currentThread()));
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (worker.get() == null && System.nanoTime() < deadline) Thread.sleep(1);
+            assertThat(worker.get()).isNotNull().satisfies(thread -> {
+                assertThat(thread.isDaemon()).isTrue();
+                assertThat(thread.getName()).startsWith("web3-solana-");
+            });
+        });
+        assertThat(configured.get()).isNotNull();
+        assertThat(poolRef.get().isShutdown()).isTrue();
+    }
+
+    @Test
+    void rejectsInvalidBackgroundPoolSettings() {
+        runner.withPropertyValues("web3.solana.background.max-threads=0")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseMessage(
+                            "web3.solana.background.max-threads must be positive");
+                });
+        runner.withPropertyValues("web3.solana.background.queue-capacity=-1")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseMessage(
+                            "web3.solana.background.queue-capacity must be positive");
+                });
+    }
+
+    @Test
+    void userExecutorOverridesDefaultAndIsNotShutDownByStarter() {
+        ThreadPoolExecutor userPool = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(2));
+        SolanaBackgroundExecutor userExecutor = new SolanaBackgroundExecutor(userPool);
+        runner.withBean(SolanaBackgroundExecutor.class, () -> userExecutor).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(SolanaBackgroundExecutor.class)).isSameAs(userExecutor);
+        });
+        assertThat(userPool.isShutdown()).isFalse();
+        userPool.shutdownNow();
+    }
+
+    @Test
+    void serviceInitializerRegistersBackgroundExecutorInVaadinContext() {
+        Map<Class<?>, Object> attributes = new java.util.concurrent.ConcurrentHashMap<>();
+        VaadinContext vaadinContext = mock(VaadinContext.class);
+        doAnswer(invocation -> attributes.put(invocation.getArgument(0), invocation.getArgument(1)))
+                .when(vaadinContext).setAttribute(any(), any());
+        doAnswer(invocation -> attributes.get(invocation.getArgument(0)))
+                .when(vaadinContext).getAttribute(any());
+        VaadinService service = mock(VaadinService.class);
+        ServiceInitEvent event = mock(ServiceInitEvent.class);
+        when(service.getContext()).thenReturn(vaadinContext);
+        when(event.getSource()).thenReturn(service);
+
+        runner.run(context -> {
+            SolanaBackgroundExecutor executor = context.getBean(SolanaBackgroundExecutor.class);
+            context.getBean("web3SolanaContextInitializer", VaadinServiceInitListener.class).serviceInit(event);
+            assertThat(attributes.get(SolanaBackgroundExecutor.class)).isSameAs(executor);
         });
     }
 

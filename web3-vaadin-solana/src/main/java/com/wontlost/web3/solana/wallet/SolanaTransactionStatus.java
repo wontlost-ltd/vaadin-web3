@@ -8,6 +8,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.ComponentEvent;
@@ -47,6 +51,7 @@ public class SolanaTransactionStatus extends Composite<Div> {
     private final SolanaCluster cluster;
     private transient SolanaRpcClient rpc;
     private transient Registration polling;
+    private transient Executor executor;
     /** 每次 track/分离递增：迟到的异步结果按代号丢弃。 */
     private long generation;
     private boolean checking;
@@ -120,6 +125,12 @@ public class SolanaTransactionStatus extends Composite<Div> {
         return this;
     }
 
+    /** Sets the executor used for background status reads. */
+    public SolanaTransactionStatus setExecutor(Executor value) {
+        executor = Objects.requireNonNull(value, "executor");
+        return this;
+    }
+
     /** Reattaches the RPC client after deserialization. */
     public SolanaTransactionStatus setRpc(SolanaRpcClient value) {
         rpc = Objects.requireNonNull(value);
@@ -149,17 +160,30 @@ public class SolanaTransactionStatus extends Composite<Div> {
     }
 
     /** 轮询回调（持有 UI 锁）：在后台线程读取，结果经 ui.access 应用；同一时间只有一次读取在途。 */
-    private void poll() {
-        if (signature == null || isFinal(status) || rpc == null || checking) return;
+    void poll() {
+        if (signature == null || isFinal(status) || rpc == null) return;
         UI ui = getUI().orElse(null);
         if (ui == null) return;
-        checking = true;
         long current = generation;
         SolanaRpcClient client = rpc;
         String tracked = signature;
         long lastValid = lastValidBlockHeight;
-        CompletableFuture.supplyAsync(() -> read(client, tracked, lastValid))
-                .whenComplete((reading, failure) -> ui.access(() -> apply(current, reading, failure)));
+        scheduleRead(() -> read(client, tracked, lastValid),
+                (reading, failure) -> ui.access(() -> apply(current, reading, failure)));
+    }
+
+    void scheduleRead(Supplier<Reading> read, BiConsumer<Reading, Throwable> completion) {
+        if (checking) return;
+        checking = true;
+        try {
+            CompletableFuture.supplyAsync(read,
+                    SolanaBackgroundExecutorResolver.resolve(executor, UI.getCurrent() != null
+                            ? UI.getCurrent() : getUI().orElse(null)))
+                    .whenComplete(completion);
+        } catch (RejectedExecutionException rejected) {
+            // 线程池已满时不推进状态，清除在途标记后由下一轮轮询重试。
+            checking = false;
+        }
     }
 
     /** 同步读取并应用一次（测试与无 UI 场景）。 */

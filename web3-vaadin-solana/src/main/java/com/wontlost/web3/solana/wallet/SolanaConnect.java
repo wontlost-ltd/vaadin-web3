@@ -6,6 +6,9 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Supplier;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.ClientCallable;
@@ -58,6 +61,7 @@ public class SolanaConnect extends Component {
     private String walletName;
     private SolanaCluster cluster;
     private transient List<CompletableFuture<String>> pendingFutures;
+    private transient Executor executor;
 
     /** Creates a connector rendered as a connect/disconnect button. */
     public SolanaConnect() {
@@ -120,6 +124,12 @@ public class SolanaConnect extends Component {
         return this;
     }
 
+    /** Sets the executor used for the blocking RPC fallback after wallet signing. */
+    public SolanaConnect setExecutor(Executor value) {
+        executor = Objects.requireNonNull(value, "executor");
+        return this;
+    }
+
     /** The connected base58 address, or {@code null}. */
     public String getAccount() {
         return account;
@@ -179,7 +189,13 @@ public class SolanaConnect extends Component {
         String encoded = Base64.getEncoder().encodeToString(original);
         String expectedSigner = account;
         UI ui = UI.getCurrent() != null ? UI.getCurrent() : getUI().orElse(null);
-        return call("this.signAndSendTransaction($0)", encoded).thenCompose(json -> {
+        return sendSignedTransactionAfterWallet(call("this.signAndSendTransaction($0)", encoded), original,
+                expectedSigner, rpc, ui);
+    }
+
+    CompletableFuture<String> sendSignedTransactionAfterWallet(CompletableFuture<String> walletResponse,
+            byte[] original, String expectedSigner, SolanaRpcClient rpc, UI ui) {
+        return walletResponse.thenCompose(json -> {
             WalletResult result = parseWalletResult(json);
             if (result.signature() != null) return CompletableFuture.completedFuture(result.signature());
             byte[] signed = verifySigned(original, result.signedTransaction(), expectedSigner);
@@ -189,7 +205,7 @@ public class SolanaConnect extends Component {
             // 发送是阻塞 RPC：放到后台线程，结果回到 UI 线程完成；登记为在途，分离时会被取消而不是永远挂起
             CompletableFuture<String> sent = new CompletableFuture<>();
             trackPending(sent);
-            CompletableFuture.supplyAsync(() -> sendSigned(rpc, signed)).whenComplete((signature, error) -> deliver(ui,
+            sendInBackground(() -> sendSigned(rpc, signed)).whenComplete((signature, error) -> deliver(ui,
                     sent, () -> {
                         if (error == null) sent.complete(signature);
                         else sent.completeExceptionally(error instanceof java.util.concurrent.CompletionException
@@ -197,6 +213,17 @@ public class SolanaConnect extends Component {
                     }));
             return sent;
         });
+    }
+
+    CompletableFuture<String> sendInBackground(Supplier<String> send) {
+        UI ui = UI.getCurrent() != null ? UI.getCurrent() : getUI().orElse(null);
+        Executor resolved = SolanaBackgroundExecutorResolver.resolve(executor, ui);
+        try {
+            return CompletableFuture.supplyAsync(send, resolved);
+        } catch (RejectedExecutionException rejected) {
+            return CompletableFuture.failedFuture(
+                    new SolanaWalletException(-32603, "Server is busy; try again", false));
+        }
     }
 
     /** 钱包返回：已发送时为 base58 签名，仅签名时为签名后的交易字节。 */
