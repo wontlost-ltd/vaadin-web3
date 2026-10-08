@@ -65,6 +65,12 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- SIWS 的 Ed25519 验签直接使用 BouncyCastle；版本与 web3j 传递引入的一致，避免冲突 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.80</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
