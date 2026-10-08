@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows
 - Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
 
 ### Added
+- Add a pluggable bounded executor for Solana background transaction polling and signed-transaction RPC sends.
 - Add Spring Boot Solana auto-configuration for cluster RPC clients, Solana-aware failover, SIWS services, and an optional development wallet.
 - Add browser-signed Solana transfers: `SolanaConnect.signAndSendTransaction` (Wallet Standard `solana:signAndSendTransaction`, falling back to `solana:signTransaction` plus a server send), a `SolanaTransactionStatus` component (processed/confirmed/finalized, failed, expired, timed out), transaction signing in the development wallet, and `SolanaTransaction.signersOf`/`withSignature`/`messageOf` for wire transactions.
 - Add Solana transfers and status: `SolanaTransfers` builds unsigned SOL and SPL (Token/Token-2022) transfers whose messages match the official CLI byte for byte, `SolanaAddresses` derives associated token accounts, `SolanaRpcClient` gains `getLatestBlockhash`, `getBlockHeight`, `getSignatureStatuses`, `sendTransaction` and `getAccountOwner`, and `@RequiresSplToken` gates views on SPL balances through `SolanaClusters`.

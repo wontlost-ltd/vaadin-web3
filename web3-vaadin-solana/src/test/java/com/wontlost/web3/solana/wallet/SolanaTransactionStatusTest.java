@@ -8,10 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
+import com.vaadin.flow.component.UI;
 import com.wontlost.web3.siws.SolanaCluster;
 import com.wontlost.web3.solana.SolanaCommitment;
 import com.wontlost.web3.solana.SolanaRpcClient;
@@ -29,6 +31,54 @@ class SolanaTransactionStatusTest {
     private volatile long blockHeight = 100;
     private volatile boolean down;
     private final AtomicInteger heightReads = new AtomicInteger();
+
+    @Test void explicitExecutorRunsStatusReadOnlyWhenScheduledTaskRuns() {
+        List<Runnable> tasks = new ArrayList<>();
+        AtomicInteger reads = new AtomicInteger();
+        SolanaTransactionStatus view = view().setExecutor(tasks::add);
+
+        view.scheduleRead(() -> {
+            reads.incrementAndGet();
+            return new SolanaTransactionStatus.Reading(java.util.Optional.empty(), false);
+        }, (reading, failure) -> { });
+
+        assertEquals(0, reads.get());
+        assertEquals(1, tasks.size());
+        tasks.removeFirst().run();
+        assertEquals(1, reads.get());
+    }
+
+    @Test void rejectedStatusReadCanBeRetriedOnTheNextPoll() {
+        List<Runnable> tasks = new ArrayList<>();
+        AtomicInteger attempts = new AtomicInteger();
+        Executor rejectingOnce = command -> {
+            if (attempts.getAndIncrement() == 0) throw new java.util.concurrent.RejectedExecutionException();
+            tasks.add(command);
+        };
+        SolanaTransactionStatus view = view().setExecutor(rejectingOnce);
+        java.util.function.Supplier<SolanaTransactionStatus.Reading> read =
+                () -> new SolanaTransactionStatus.Reading(java.util.Optional.empty(), false);
+
+        view.scheduleRead(read, (reading, failure) -> { });
+        view.scheduleRead(read, (reading, failure) -> { });
+
+        assertEquals(1, tasks.size(), "rejection clears the in-flight guard for the next poll");
+        tasks.removeFirst().run();
+    }
+
+    @Test void pollSubmitsExactlyOneReadWhilePreviousReadIsInFlight() {
+        List<Runnable> tasks = new ArrayList<>();
+        SolanaTransactionStatus view = view().setExecutor(tasks::add);
+        UI ui = new UI();
+        ui.add(view);
+        view.track(SIGNATURE);
+
+        view.poll();
+        assertEquals(1, tasks.size());
+
+        view.poll();
+        assertEquals(1, tasks.size());
+    }
 
     @Test void progressesThroughCommitmentsAndStopsAtTheTarget() {
         SolanaTransactionStatus view = view();

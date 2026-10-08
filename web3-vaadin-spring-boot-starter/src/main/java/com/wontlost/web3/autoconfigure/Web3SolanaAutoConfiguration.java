@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +34,7 @@ import com.wontlost.web3.siws.SiwsChallengeStore;
 import com.wontlost.web3.siws.SiwsVerifier;
 import com.wontlost.web3.siws.SolanaCluster;
 import com.wontlost.web3.solana.SolanaClusters;
+import com.wontlost.web3.solana.SolanaBackgroundExecutor;
 import com.wontlost.web3.solana.SolanaCommitment;
 import com.wontlost.web3.solana.SolanaRpcClient;
 
@@ -38,6 +43,21 @@ import com.wontlost.web3.solana.SolanaRpcClient;
 @EnableConfigurationProperties({Web3SolanaProperties.class, Web3RpcProperties.class})
 public class Web3SolanaAutoConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(Web3SolanaAutoConfiguration.class);
+    private static final AtomicInteger SOLANA_THREAD_NUMBER = new AtomicInteger();
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    SolanaBackgroundExecutor web3SolanaBackgroundExecutor(Web3SolanaProperties properties) {
+        Web3SolanaProperties.Background settings = properties.getBackground();
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(settings.getMaxThreads(), settings.getMaxThreads(),
+                60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(settings.getQueueCapacity()), task -> {
+                    Thread thread = new Thread(task, "web3-solana-" + SOLANA_THREAD_NUMBER.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                }, new ThreadPoolExecutor.AbortPolicy());
+        pool.allowCoreThreadTimeOut(true);
+        return SolanaBackgroundExecutor.managed(pool);
+    }
 
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
@@ -91,8 +111,14 @@ public class Web3SolanaAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "web3SolanaContextInitializer")
-    VaadinServiceInitListener web3SolanaContextInitializer(ObjectProvider<SolanaClusters> clusters) {
-        return event -> event.getSource().getContext().setAttribute(SolanaClusters.class, clusters.getObject());
+    VaadinServiceInitListener web3SolanaContextInitializer(ObjectProvider<SolanaClusters> clusters,
+            ObjectProvider<SolanaBackgroundExecutor> backgroundExecutor) {
+        return event -> {
+            var context = event.getSource().getContext();
+            context.setAttribute(SolanaClusters.class, clusters.getObject());
+            SolanaBackgroundExecutor executor = backgroundExecutor.getIfAvailable();
+            if (executor != null) SolanaBackgroundExecutor.register(context, executor);
+        };
     }
 
     private static SolanaCluster cluster(String key) {
