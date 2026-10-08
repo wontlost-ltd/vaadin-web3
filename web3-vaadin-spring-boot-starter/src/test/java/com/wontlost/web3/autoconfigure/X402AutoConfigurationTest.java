@@ -48,6 +48,36 @@ class X402AutoConfigurationTest {
                 });
     }
 
+    @Test void startsWithoutSpringMvcAndSkipsOnlyTheHttpFilter() {
+        // 无 Spring MVC 的类路径上启用 x402 时，核心 bean 仍须可用，只有依赖 MVC 路由扫描的 HTTP 过滤器不注册
+        runner.withClassLoader(new org.springframework.boot.test.context.FilteredClassLoader("org.springframework.web.servlet"))
+                .withPropertyValues("web3.x402.enabled=true", "web3.x402.http.enabled=true",
+                        "web3.x402.origin=https://merchant.example",
+                        "web3.x402.facilitator.base-url=https://facilitator.example")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(com.wontlost.web3.x402.payment.X402PaymentService.class);
+                    assertThat(context).hasSingleBean(com.wontlost.web3.x402.store.PaidResourceStore.class);
+                    assertThat(context).doesNotHaveBean(com.wontlost.web3.x402.http.X402PaymentFilter.class);
+                    assertThat(context).doesNotHaveBean("x402PaymentFilterRegistration");
+                });
+    }
+
+    @Test void mainConfigurationSignaturesDoNotReferenceOptionalTypes() {
+        // 主配置类（含编译器生成的 lambda 方法）在 Spring 内省时会被反射，签名中出现可选依赖的类型
+        // 会在缺少该依赖的应用中导致整个自动配置无法解析
+        java.util.List<String> optionalPrefixes = java.util.List.of("jakarta.servlet.",
+                "org.springframework.web.servlet.", "org.springframework.security.");
+        for (java.lang.reflect.Method method : X402AutoConfiguration.class.getDeclaredMethods()) {
+            java.util.List<Class<?>> types = new java.util.ArrayList<>(java.util.List.of(method.getParameterTypes()));
+            types.add(method.getReturnType());
+            for (Class<?> type : types) {
+                assertThat(optionalPrefixes).as(method.toGenericString())
+                        .noneMatch(prefix -> type.getName().startsWith(prefix));
+            }
+        }
+    }
+
     @Test void rejectsNonPositiveSiwxChallengeCapacity() {
         runner.withPropertyValues("web3.x402.enabled=true", "web3.x402.http.enabled=true",
                 "web3.x402.origin=https://merchant.example",
