@@ -19,7 +19,7 @@ public record ResourcePolicy(String resourceId, String version, X402Resource res
                 || tokenName.length() > 128 || tokenVersion.length() > 32)
             throw new IllegalArgumentException("invalid resource policy");
         long chainId = X402Validation.chainId(network, java.util.Set.of());
-        network = "eip155:" + chainId;
+        network = com.wontlost.web3.identity.Caip2.eip155(chainId);
         asset = X402Validation.address(asset);
         payTo = X402Validation.address(payTo);
     }

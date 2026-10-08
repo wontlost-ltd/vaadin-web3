@@ -16,6 +16,7 @@ import com.wontlost.web3.chain.Erc20;
 import com.wontlost.web3.chain.EthRpcClient;
 import com.wontlost.web3.chain.TokenInfo;
 import com.wontlost.web3.chain.Tokens;
+import com.wontlost.web3.identity.ChainAccount;
 import com.wontlost.web3.siwe.Web3Session;
 
 /**
@@ -47,13 +48,20 @@ public final class TokenGate implements BeforeEnterListener {
     public void beforeEnter(BeforeEnterEvent event) {
         RequiresToken requirement = event.getNavigationTarget().getAnnotation(RequiresToken.class);
         if (requirement == null) return;
-        var signIn = Web3Session.current();
-        if (signIn.isEmpty()) {
+        var identity = Web3Session.currentIdentity();
+        if (identity.isEmpty()) {
             String path = event.getLocation().getPath();
             event.forwardTo(requirement.redirectTo(), QueryParameters.of("continue", path));
             return;
         }
-        Decision decision = evaluate(requirement, signIn.get().address());
+        ChainAccount account = identity.get().account();
+        if (!account.isEvm()) {
+            // ERC-20 门槛只能由 EVM 账户满足：非 EVM 会话（如 Solana）确定性拒绝，不发起任何 RPC
+            event.rerouteToError(TokenGateDeniedException.class, "an EVM wallet holding at least "
+                    + requirement.minBalance() + " " + resolve(requirement).symbol());
+            return;
+        }
+        Decision decision = evaluate(requirement, account.address());
         if (decision == Decision.UNAVAILABLE) {
             event.rerouteToError(TokenGateUnavailableException.class, "Token balance cannot be verified temporarily");
         } else if (decision == Decision.INSUFFICIENT) {
