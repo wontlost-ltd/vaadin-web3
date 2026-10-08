@@ -15,6 +15,10 @@ public record HttpResourcePolicy(String resourceId, String method, String pathTe
             throw new IllegalArgumentException("HTTP payment routes cannot protect framework paths");
         }
         allowedChainIds = List.copyOf(allowedChainIds);
+        if (allowedChainIds.stream().anyMatch(chainId -> chainId == null || chainId <= 0)) {
+            // 启动期拒绝非正链 ID，避免在请求处理中签发无法验证的 SIWX 挑战
+            throw new IllegalArgumentException("HTTP payment resource chain ids must be positive");
+        }
         if (!method.equals("GET") && !method.equals("HEAD") && !idempotent) {
             throw new IllegalArgumentException("only GET/HEAD or explicitly idempotent resources may require payment");
         }

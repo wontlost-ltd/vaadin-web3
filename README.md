@@ -411,7 +411,7 @@ Web3Session.current().ifPresent(user ->
 login.signOut(); // Clears the verified session and disconnects the wallet by default
 ```
 
-`VerifiedSignIn.account()` returns the identity as a chain-neutral CAIP-10 `ChainAccount` (for example `eip155:1:0xAbC…`). `Web3Session.currentIdentity()` returns the signed-in identity of any chain, while `Web3Session.current()` returns only an EVM (SIWE) sign-in, so EVM-specific code keeps working unchanged and treats a non-EVM session as signed out. `ChainAccount.sameAccount` compares EVM addresses case-insensitively and other namespaces (such as base58 Solana addresses) exactly. `TokenGate` denies non-EVM identities before making any RPC call.
+`VerifiedSignIn.account()` returns the identity as a chain-neutral CAIP-10 `ChainAccount` (for example `eip155:1:0xAbC…`). `Web3Session.currentIdentity()` returns the signed-in identity of any chain, while `Web3Session.current()` returns only an EVM (SIWE) sign-in, so EVM-specific code keeps working unchanged and treats a non-EVM session as signed out. EVM addresses in a `ChainAccount` are canonicalized to EIP-55 checksum form, so `equals` and `sameAccount` agree; other namespaces (such as base58 Solana addresses) are kept and compared exactly. `TokenGate` denies non-EVM identities before making any RPC call.
 
 If you don't set the domain and URI, the component derives them from the
 request. It checks these sources in order:

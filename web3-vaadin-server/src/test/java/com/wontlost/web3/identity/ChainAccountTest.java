@@ -85,6 +85,12 @@ class ChainAccountTest {
     }
 
     @Test
+    void httpPaymentPoliciesRejectNonPositiveChainIdsAtConstruction() {
+        assertThrows(IllegalArgumentException.class, () -> new com.wontlost.web3.x402.http.HttpResourcePolicy(
+                "quote", "GET", "/api/quote", false, false, java.util.List.of(0L)));
+    }
+
+    @Test
     void verifiedSignInExposesItsCaip10Account() {
         VerifiedSignIn signIn = new VerifiedSignIn("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", 8453, null,
                 Instant.parse("2026-01-01T00:00:00Z"));
