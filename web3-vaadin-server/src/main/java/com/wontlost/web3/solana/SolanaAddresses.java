@@ -37,7 +37,7 @@ public final class SolanaAddresses {
     }
 
     /**
-     * Finds the program address for {@code seeds}, trying bump seeds from 255 down like
+     * Finds the program address for {@code seeds}, trying bump seeds from 255 down to 1 like
      * {@code Pubkey::find_program_address}: the first SHA-256 result that is not an Ed25519 point is the address.
      */
     public static ProgramAddress findProgramAddress(List<byte[]> seeds, String programId) {
@@ -46,7 +46,7 @@ public final class SolanaAddresses {
             if (Objects.requireNonNull(seed).length > MAX_SEED_LENGTH) throw new IllegalArgumentException("seed too long");
         }
         byte[] program = key(programId);
-        for (int bump = 255; bump >= 0; bump--) {
+        for (int bump = 255; bump >= 1; bump--) {
             byte[] candidate = hash(seeds, (byte) bump, program);
             if (!isOnCurve(candidate)) return new ProgramAddress(Base58.encode(candidate), bump);
         }
@@ -54,9 +54,13 @@ public final class SolanaAddresses {
     }
 
     /**
-     * Whether 32 bytes decode to an Ed25519 point. PDAs must not, so no private key can sign for them. Solana uses
-     * curve25519-dalek's {@code decompress}; BouncyCastle's partial validation agrees except for non-canonical
-     * encodings, which a SHA-256 output hits with negligible probability (about 2<sup>-250</sup>).
+     * Whether 32 bytes are a usable Ed25519 public key. PDAs must not be, so no private key can sign for them.
+     * <p>
+     * Solana's {@code is_on_curve} is curve25519-dalek's {@code decompress}. BouncyCastle's partial validation used
+     * here additionally rejects a few dozen encodings that decompress: non-canonical y values, the small-order points
+     * (including the identity, {@code 01 00…00}) and "negative zero". No private key can sign for those, and a SHA-256
+     * output hits one with negligible probability, so program-address derivation is unaffected; for those inputs this
+     * method answers {@code false} where Solana would say {@code true}.
      */
     public static boolean isOnCurve(byte[] key) {
         return key.length == 32 && Ed25519.validatePublicKeyPartial(key, 0);

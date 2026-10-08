@@ -279,6 +279,8 @@ public final class SolanaRpcClient implements AutoCloseable {
             case "processed" -> SolanaCommitment.PROCESSED;
             case "confirmed" -> SolanaCommitment.CONFIRMED;
             case "finalized" -> SolanaCommitment.FINALIZED;
+            // 旧节点可能不返回 confirmationStatus：confirmations 为 null 表示已 rooted，即 finalized
+            case "" -> confirmations.isNull() ? SolanaCommitment.FINALIZED : null;
             default -> null;
         };
         if (slot < 0 || status == null || !(confirmations.isNull() || confirmations.isIntegralNumber())) {

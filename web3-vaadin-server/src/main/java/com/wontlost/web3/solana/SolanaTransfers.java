@@ -35,12 +35,47 @@ public final class SolanaTransfers {
 
     /**
      * An SPL token transfer of {@code amount} base units between the associated token accounts of {@code owner}
-     * (the fee payer and signer) and {@code recipient}. {@code decimals} must match the mint, which the token program
-     * checks. With {@code createRecipientAccount}, the transaction first creates the recipient's associated token
-     * account if it does not exist yet; the sender pays its rent (about 0.002 SOL).
+     * (the fee payer and signer) and the wallet {@code recipient}. {@code decimals} must match the mint, which the
+     * token program checks. With {@code createRecipientAccount}, the transaction first creates the recipient's
+     * associated token account if it does not exist yet; the sender pays its rent (about 0.002 SOL).
+     * <p>
+     * {@code recipient} must be a wallet address, not a token account. An off-curve address (a token account or
+     * other program-derived address) is rejected, because tokens sent to an associated account owned by it could be
+     * stranded. Also confirm with {@link #requireWalletRecipient} that the recipient is not a program-owned account.
+     * To pay a program-derived wallet on purpose, use {@link #splToProgramAddress}.
      */
     public static SolanaTransaction spl(String owner, String mint, String recipient, BigInteger amount, int decimals,
             String tokenProgram, String recentBlockhash, boolean createRecipientAccount) {
+        if (!SolanaAddresses.isOnCurve(SolanaAddresses.key(recipient))) {
+            throw new IllegalArgumentException("recipient is not a wallet address (it is off the Ed25519 curve, like a "
+                    + "token account); send to the owner's wallet address instead");
+        }
+        return splTransfer(owner, mint, recipient, amount, decimals, tokenProgram, recentBlockhash, createRecipientAccount);
+    }
+
+    /**
+     * Like {@link #spl} for a recipient that is a program-derived address controlled by a program, such as a
+     * multisig vault. Only use it when the recipient program can move tokens out of its associated token account.
+     */
+    public static SolanaTransaction splToProgramAddress(String owner, String mint, String recipient, BigInteger amount,
+            int decimals, String tokenProgram, String recentBlockhash, boolean createRecipientAccount) {
+        return splTransfer(owner, mint, recipient, amount, decimals, tokenProgram, recentBlockhash, createRecipientAccount);
+    }
+
+    /**
+     * Throws when {@code recipient} exists and is owned by a program other than the System Program, for example a
+     * token account pasted instead of a wallet address. A missing account is a valid new wallet.
+     */
+    public static void requireWalletRecipient(SolanaRpcClient client, String recipient) {
+        String owner = client.getAccountOwner(recipient).orElse(SolanaPrograms.SYSTEM);
+        if (!SolanaPrograms.SYSTEM.equals(owner)) {
+            throw new IllegalArgumentException("recipient is an account owned by " + owner
+                    + ", not a wallet; send to the owner's wallet address instead");
+        }
+    }
+
+    private static SolanaTransaction splTransfer(String owner, String mint, String recipient, BigInteger amount,
+            int decimals, String tokenProgram, String recentBlockhash, boolean createRecipientAccount) {
         if (decimals < 0 || decimals > 255) throw new IllegalArgumentException("decimals must be 0-255");
         String source = SolanaAddresses.associatedTokenAddress(owner, mint, tokenProgram);
         String destination = SolanaAddresses.associatedTokenAddress(recipient, mint, tokenProgram);

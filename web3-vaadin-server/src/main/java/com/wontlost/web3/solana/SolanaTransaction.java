@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.bouncycastle.math.ec.rfc8032.Ed25519;
+
 import com.wontlost.web3.siws.Base58;
 
 /**
@@ -75,7 +77,12 @@ public final class SolanaTransaction {
             writeLength(out, data.length);
             out.writeBytes(data);
         }
-        return new SolanaTransaction(keys, signers, out.toByteArray());
+        byte[] message = out.toByteArray();
+        // 在编译时就拒绝永远发不出去的交易；1232 字节上限意味着签名者不超过十余个，签名数的 compact-u16 只占 1 字节
+        if (1 + signers * 64 + message.length > MAX_SIZE) {
+            throw new IllegalArgumentException("transaction exceeds " + MAX_SIZE + " bytes");
+        }
+        return new SolanaTransaction(keys, signers, message);
     }
 
     /** The account keys in message order; the first {@link #requiredSignatures()} must sign. */
@@ -105,18 +112,24 @@ public final class SolanaTransaction {
 
     /**
      * The wire format with the given signatures (keyed by signer address) in their slots; missing signers keep a
-     * zeroed slot. Throws when a signature is not 64 bytes or belongs to an account that is not a signer.
+     * zeroed slot. Each signature is verified against its signer and this message, so a wrong key or a signature over
+     * other bytes fails here rather than at the node.
      */
     public byte[] wire(Map<String, byte[]> signatures) {
-        for (String signer : signatures.keySet()) {
-            if (!signers().contains(signer)) throw new IllegalArgumentException("not a signer of this transaction");
+        for (Map.Entry<String, byte[]> entry : signatures.entrySet()) {
+            if (!signers().contains(entry.getKey())) throw new IllegalArgumentException("not a signer of this transaction");
+            byte[] signature = entry.getValue();
+            if (signature == null || signature.length != 64) {
+                throw new IllegalArgumentException("Ed25519 signatures are 64 bytes");
+            }
+            if (!Ed25519.verify(signature, 0, SolanaAddresses.key(entry.getKey()), 0, message, 0, message.length)) {
+                throw new IllegalArgumentException("signature does not match the signer and this message");
+            }
         }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writeLength(out, requiredSignatures);
         for (String signer : signers()) {
-            byte[] signature = signatures.getOrDefault(signer, new byte[64]);
-            if (signature.length != 64) throw new IllegalArgumentException("Ed25519 signatures are 64 bytes");
-            out.writeBytes(signature);
+            out.writeBytes(signatures.getOrDefault(signer, new byte[64]));
         }
         out.writeBytes(message);
         byte[] wire = out.toByteArray();

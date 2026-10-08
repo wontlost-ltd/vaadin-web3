@@ -90,7 +90,7 @@ class SplTokenGateTest {
         gate(Duration.ofMinutes(1)).beforeEnter(event);
 
         assertEquals(TokenGateDeniedException.class, event.errorType);
-        assertEquals("a Solana wallet on devnet holding at least 2.5 USDC", event.errorMessage);
+        assertEquals("at least 2.5 USDC", event.errorMessage);
     }
 
     @Test void visitorsWhoAreNotSignedInAreSentToSignIn() {
@@ -108,6 +108,7 @@ class SplTokenGateTest {
         TestEvent evm = event(GatedView.class);
         gate(Duration.ofMinutes(1)).beforeEnter(evm);
         assertEquals(TokenGateDeniedException.class, evm.errorType);
+        assertEquals("a Solana wallet on devnet holding at least 2.5 USDC", evm.errorMessage);
 
         // 其他命名空间即使引用字符串与 devnet 相同，也不是 Solana 账户
         signIn("polkadot", SolanaCluster.DEVNET.reference());

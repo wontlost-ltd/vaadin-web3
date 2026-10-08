@@ -18,6 +18,7 @@ import com.wontlost.web3.solana.SolanaRpcClient;
  * read the balance denies entry with a temporary error rather than letting the visitor in.
  */
 public final class SplTokenGate implements BeforeEnterListener {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(SplTokenGate.class);
     private final SolanaClusters clusters;
     private final BalanceCache<BalanceKey, BigDecimal> balances;
 
@@ -40,12 +41,19 @@ public final class SplTokenGate implements BeforeEnterListener {
             event.forwardTo(requirement.redirectTo(), QueryParameters.of("continue", event.getLocation().getPath()));
             return;
         }
-        TokenGate.Decision decision = evaluate(requirement, identity.get().account());
+        ChainAccount account = identity.get().account();
+        if (!onCluster(requirement, account)) {
+            // 与 TokenGate 一致：只有身份不匹配时才提示需要哪种钱包
+            event.rerouteToError(TokenGateDeniedException.class, "a Solana wallet on " + requirement.cluster().chainId()
+                    + " holding at least " + requirement.minBalance() + " " + requirement.symbol());
+            return;
+        }
+        TokenGate.Decision decision = evaluate(requirement, account);
         if (decision == TokenGate.Decision.UNAVAILABLE) {
             event.rerouteToError(TokenGateUnavailableException.class, "Token balance cannot be verified temporarily");
         } else if (decision == TokenGate.Decision.INSUFFICIENT) {
-            event.rerouteToError(TokenGateDeniedException.class, "a Solana wallet on " + requirement.cluster().chainId()
-                    + " holding at least " + requirement.minBalance() + " " + requirement.symbol());
+            event.rerouteToError(TokenGateDeniedException.class,
+                    "at least " + requirement.minBalance() + " " + requirement.symbol());
         }
     }
 
@@ -54,17 +62,21 @@ public final class SplTokenGate implements BeforeEnterListener {
      * 查询余额或解析门槛的任何失败都归为 UNAVAILABLE（故障关闭）。
      */
     TokenGate.Decision evaluate(RequiresSplToken requirement, ChainAccount account) {
-        if (!"solana".equals(account.namespace()) || !requirement.cluster().reference().equals(account.reference())) {
-            return TokenGate.Decision.INSUFFICIENT;
-        }
+        if (!onCluster(requirement, account)) return TokenGate.Decision.INSUFFICIENT;
         try {
             BigDecimal minimum = new BigDecimal(requirement.minBalance());
             BigDecimal held = balances.get(new BalanceKey(requirement.cluster(), requirement.mint(), account.address()),
                     () -> client(requirement).getTokenBalance(account.address(), requirement.mint()).uiAmount());
             return held.compareTo(minimum) >= 0 ? TokenGate.Decision.ALLOW : TokenGate.Decision.INSUFFICIENT;
         } catch (RuntimeException exception) {
+            LOGGER.debug("SPL token gate could not read the balance of {} on {}", requirement.mint(),
+                    requirement.cluster(), exception);
             return TokenGate.Decision.UNAVAILABLE;
         }
+    }
+
+    private static boolean onCluster(RequiresSplToken requirement, ChainAccount account) {
+        return "solana".equals(account.namespace()) && requirement.cluster().reference().equals(account.reference());
     }
 
     private SolanaRpcClient client(RequiresSplToken requirement) {

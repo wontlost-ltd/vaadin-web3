@@ -160,6 +160,86 @@ class SolanaTransactionTest {
         assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.compile(SENDER, BLOCKHASH, List.of()));
     }
 
+    @Test void splTransfersRefuseTokenAccountsAsRecipients() {
+        String recipientTokenAccount = SolanaAddresses.associatedTokenAddress(RECIPIENT, TOKEN_MINT, SolanaPrograms.TOKEN);
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> SolanaTransfers.spl(SENDER,
+                TOKEN_MINT, recipientTokenAccount, BigInteger.ONE, 6, SolanaPrograms.TOKEN, BLOCKHASH, true));
+        assertTrue(refused.getMessage().contains("not a wallet address"));
+
+        SolanaTransaction toVault = SolanaTransfers.splToProgramAddress(SENDER, TOKEN_MINT, recipientTokenAccount,
+                BigInteger.ONE, 6, SolanaPrograms.TOKEN, BLOCKHASH, true);
+        assertTrue(toVault.accountKeys().contains(recipientTokenAccount), "explicit opt-in for program-derived wallets");
+    }
+
+    @Test void requireWalletRecipientChecksTheAccountOwner() {
+        java.util.Map<String, String> owners = new java.util.HashMap<>(java.util.Map.of(
+                RECIPIENT, SolanaPrograms.SYSTEM, TOKEN_MINT, SolanaPrograms.TOKEN));
+        SolanaRpcClient client = new SolanaRpcClient(request -> {
+            var node = new tools.jackson.databind.ObjectMapper().readTree(request);
+            String owner = owners.get(node.path("params").get(0).asString());
+            String value = owner == null ? "null" : "{\"owner\":\"" + owner + "\",\"lamports\":1}";
+            return "{\"jsonrpc\":\"2.0\",\"id\":" + node.path("id").asLong()
+                    + ",\"result\":{\"context\":{\"slot\":1},\"value\":" + value + "}}";
+        }, SolanaCommitment.CONFIRMED);
+
+        SolanaTransfers.requireWalletRecipient(client, RECIPIENT);
+        SolanaTransfers.requireWalletRecipient(client, SENDER);
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> SolanaTransfers.requireWalletRecipient(client, TOKEN_MINT));
+        assertTrue(refused.getMessage().contains(SolanaPrograms.TOKEN));
+    }
+
+    @Test void wireRejectsSignaturesFromTheWrongKeyOrOverOtherBytes() {
+        SolanaTransaction transaction = SolanaTransfers.sol(SENDER, RECIPIENT, BigInteger.ONE, BLOCKHASH);
+        SolanaTransaction other = SolanaTransfers.sol(SENDER, RECIPIENT, BigInteger.TWO, BLOCKHASH);
+        byte[] otherKeySignature = signWith(new Ed25519PrivateKeyParameters(new java.security.SecureRandom()),
+                transaction.message());
+
+        assertThrows(IllegalArgumentException.class, () -> transaction.wire(Map.of(SENDER, otherKeySignature)));
+        assertThrows(IllegalArgumentException.class, () -> transaction.wire(Map.of(SENDER, sign(other.message()))));
+        java.util.Map<String, byte[]> withNull = new java.util.HashMap<>();
+        withNull.put(SENDER, null);
+        assertThrows(IllegalArgumentException.class, () -> transaction.wire(withNull));
+    }
+
+    @Test void oversizedTransactionsAreRejectedAtCompileTime() {
+        SolanaInstruction large = new SolanaInstruction(SolanaPrograms.SYSTEM,
+                List.of(new AccountMeta(RECIPIENT, false, true)), new byte[1100]);
+        SolanaInstruction fits = new SolanaInstruction(SolanaPrograms.SYSTEM,
+                List.of(new AccountMeta(RECIPIENT, false, true)), new byte[900]);
+
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.compile(SENDER, BLOCKHASH, List.of(large)));
+        SolanaTransaction compiled = SolanaTransaction.compile(SENDER, BLOCKHASH, List.of(fits));
+        assertTrue(compiled.unsignedWire().length <= SolanaTransaction.MAX_SIZE);
+    }
+
+    @Test void feePayerAndProgramPermissionsMergeWithInstructionAccounts() {
+        SolanaInstruction payerReadOnly = new SolanaInstruction(SolanaPrograms.SYSTEM, List.of(
+                new AccountMeta(SENDER, false, false), new AccountMeta(SolanaPrograms.TOKEN, false, true)), new byte[0]);
+
+        SolanaTransaction transaction = SolanaTransaction.compile(SENDER, BLOCKHASH, List.of(payerReadOnly));
+        byte[] message = transaction.message();
+
+        assertEquals(List.of(SENDER, SolanaPrograms.TOKEN, SolanaPrograms.SYSTEM), transaction.accountKeys(),
+                "payer stays the writable signer; a program passed as writable is a writable non-signer");
+        assertArrayEquals(new byte[] {1, 0, 1}, Arrays.copyOfRange(message, 0, 3));
+    }
+
+    @Test void selfTransfersAreBuilt() {
+        SolanaTransaction sol = SolanaTransfers.sol(SENDER, SENDER, BigInteger.ONE, BLOCKHASH);
+        assertEquals(List.of(SENDER, SolanaPrograms.SYSTEM), sol.accountKeys());
+        SolanaTransaction spl = SolanaTransfers.spl(SENDER, TOKEN_MINT, SENDER, BigInteger.ONE, 6, SolanaPrograms.TOKEN,
+                BLOCKHASH, false);
+        assertEquals(1, spl.requiredSignatures());
+    }
+
+    @Test void onCurveIsStricterThanSolanaForDegenerateEncodings() {
+        byte[] identity = new byte[32];
+        identity[0] = 1;
+        assertFalse(SolanaAddresses.isOnCurve(identity), "documented divergence: the identity point decompresses in dalek");
+    }
+
     @Test void moreThan256AccountsAreRejected() {
         java.util.List<AccountMeta> accounts = new java.util.ArrayList<>();
         java.security.SecureRandom random = new java.security.SecureRandom();
@@ -216,6 +296,13 @@ class SolanaTransactionTest {
         byte[] read = instruction.data();
         read[1] = 9;
         assertArrayEquals(new byte[] {1, 2}, instruction.data());
+    }
+
+    private static byte[] signWith(Ed25519PrivateKeyParameters key, byte[] message) {
+        Ed25519Signer signer = new Ed25519Signer();
+        signer.init(true, key);
+        signer.update(message, 0, message.length);
+        return signer.generateSignature();
     }
 
     private static byte[] sign(byte[] message) {

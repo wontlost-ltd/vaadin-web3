@@ -318,6 +318,20 @@ class SolanaRpcClientTest {
         assertEquals(4, sent.get(0).path("params").get(0).size());
     }
 
+    @Test void signatureStatusesHandleOlderNodesAndUnitErrors() {
+        SolanaRpcClient client = client(new ArrayList<>(), request -> "{\"context\":{\"slot\":9},\"value\":["
+                + "{\"slot\":5,\"confirmations\":null,\"err\":\"BlockhashNotFound\"}]}", SolanaCommitment.CONFIRMED);
+
+        SignatureStatus status = client.getSignatureStatuses(List.of(SIGNATURE), false).getFirst().orElseThrow();
+
+        assertEquals(SolanaCommitment.FINALIZED, status.confirmationStatus(), "rooted when the status field is absent");
+        assertEquals("\"BlockhashNotFound\"", status.error());
+        assertTrue(status.failed());
+        SolanaRpcClient ambiguous = client(new ArrayList<>(), request -> "{\"value\":[{\"slot\":5,\"confirmations\":3,"
+                + "\"err\":null}]}", SolanaCommitment.CONFIRMED);
+        assertThrows(SolanaRpcException.class, () -> ambiguous.getSignatureStatuses(List.of(SIGNATURE), false));
+    }
+
     @Test void signatureStatusesValidateInputAndResponse() {
         SolanaRpcClient client = client(new ArrayList<>(), request -> "{\"value\":[]}", SolanaCommitment.CONFIRMED);
         assertThrows(IllegalArgumentException.class, () -> client.getSignatureStatuses(List.of(), false));
@@ -373,10 +387,14 @@ class SolanaRpcClientTest {
     }
 
     private static byte[] signedWire() {
-        SolanaTransaction transaction = SolanaTransfers.sol(OWNER, MINT, java.math.BigInteger.ONE, BLOCKHASH);
-        byte[] signature = new byte[64];
-        signature[0] = 7;
-        return transaction.wire(java.util.Map.of(OWNER, signature));
+        var key = new org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(new java.security.SecureRandom());
+        String sender = com.wontlost.web3.siws.Base58.encode(key.generatePublicKey().getEncoded());
+        SolanaTransaction transaction = SolanaTransfers.sol(sender, MINT, java.math.BigInteger.ONE, BLOCKHASH);
+        var signer = new org.bouncycastle.crypto.signers.Ed25519Signer();
+        signer.init(true, key);
+        byte[] message = transaction.message();
+        signer.update(message, 0, message.length);
+        return transaction.wire(java.util.Map.of(sender, signer.generateSignature()));
     }
 
     private static SolanaRpcClient client(List<JsonNode> sent, Function<JsonNode, String> result,

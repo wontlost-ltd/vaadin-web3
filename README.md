@@ -647,6 +647,7 @@ SolanaTransaction sol = SolanaTransfers.sol(sender, recipient,
         new BigInteger("500000000"), latest.blockhash());
 
 // 12.5 USDC (6 decimals); creates the recipient's token account if needed
+SolanaTransfers.requireWalletRecipient(solana, recipient);           // reject pasted token accounts
 String tokenProgram = solana.getAccountOwner(mint).orElseThrow();   // Token or Token-2022
 SolanaTransaction usdc = SolanaTransfers.spl(sender, mint, recipient,
         new BigInteger("12500000"), 6, tokenProgram, latest.blockhash(), true);
@@ -658,6 +659,14 @@ byte[] forWallet = usdc.unsignedWire();      // pass to solana:signAndSendTransa
   Accounts are ordered the way Agave orders them, so the bytes match what the
   `solana` and `spl-token` command-line tools produce. The tests compare against
   messages and signatures dumped from those tools.
+- **Wallet recipients only.** `spl` takes the recipient's wallet address and
+  derives its token account. If the user pastes a token-account address
+  instead, the transfer would create a token account owned by that token
+  account, and the tokens could be stranded. So `spl` rejects off-curve
+  addresses (token accounts and other program-derived addresses), and
+  `requireWalletRecipient` rejects addresses owned by a program other than the
+  System Program. To pay a program-derived wallet, such as a multisig vault, on
+  purpose, use `splToProgramAddress`.
 - **Recipient account creation.** `spl(..., true)` adds the Associated Token
   Account program's `CreateIdempotent` instruction. If the recipient's token
   account already exists, it does nothing. If not, the sender pays its rent,
@@ -666,6 +675,7 @@ byte[] forWallet = usdc.unsignedWire();      // pass to solana:signAndSendTransa
 - **Signing on the server.** When the server does hold a key, sign
   `transaction.message()` with Ed25519. Then pass
   `transaction.wire(Map.of(signer, signature))` to `solana.sendTransaction(...)`.
+  `wire` verifies each signature against its signer and the message.
   The node simulates the transaction first, so most failures come back as a
   `SolanaRpcException` with code -32002 before anything is charged.
 - **Tracking status.** `getSignatureStatuses(signatures, searchHistory)`
@@ -673,9 +683,14 @@ byte[] forWallet = usdc.unsignedWire();      // pass to solana:signAndSendTransa
   and its on-chain error. `status.succeededAt(SolanaCommitment.CONFIRMED)` is
   usually enough for payments. Wait for `FINALIZED` when the transaction must
   never roll back.
-- **Expiry.** A transaction whose blockhash is older than
-  `lastValidBlockHeight` (compare with `getBlockHeight()`) can never land.
-  Rebuild it with a new blockhash and send it again.
+- **Expiry and retries.** Read the blockhash at `confirmed`, the client's
+  default. A transaction can no longer land once `getBlockHeight()` at
+  `confirmed` exceeds its `lastValidBlockHeight`. Only rebuild it with a new
+  blockhash and send it again when both of these hold:
+  - the block height has passed `lastValidBlockHeight`, and
+  - `getSignatureStatuses(…, true)` has no status for the old signature.
+
+  Retrying earlier can pay twice.
 
 ### On-chain reads
 
