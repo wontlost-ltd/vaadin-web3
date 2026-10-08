@@ -11,7 +11,7 @@ function account(address, chains = ['solana:devnet'], fill = 7) {
 }
 
 function fakeWallet({ name = 'Phantom', chains = ['solana:devnet'], accounts = [account('Addr1111')], signIn = true,
-  signMessage = true } = {}) {
+  signMessage = true, signAndSend = false, signTransaction = false } = {}) {
   const listeners = new Set();
   const features = {
     'standard:connect': { version: '1.0.0', connect: vi.fn(async () => ({ accounts })) },
@@ -26,6 +26,14 @@ function fakeWallet({ name = 'Phantom', chains = ['solana:devnet'], accounts = [
   if (signMessage) {
     features['solana:signMessage'] = { version: '1.1.0', signMessage: vi.fn(async ({ message }) => [{
       signedMessage: message, signature: bytes(64, 5) }]) };
+  }
+  if (signAndSend) {
+    features['solana:signAndSendTransaction'] = { version: '1.0.0', signAndSendTransaction: vi.fn(async () => [{
+      signature: bytes(64, 6) }]) };
+  }
+  if (signTransaction) {
+    features['solana:signTransaction'] = { version: '1.0.0', signTransaction: vi.fn(async ({ transaction }) => [{
+      signedTransaction: Uint8Array.from([...transaction, 1]) }]) };
   }
   const wallet = { version: '1.0.0', name, icon: 'data:image/svg+xml,<svg/>', chains, accounts, features,
     emit: (properties) => listeners.forEach((listener) => listener(properties)) };
@@ -274,6 +282,67 @@ describe('signing', () => {
   });
 });
 
+describe('transactions', () => {
+  it('signs and sends with solana:signAndSendTransaction on the configured chain', async () => {
+    const wallet = fakeWallet({ signAndSend: true, signTransaction: true });
+    const element = mount({ preferredWallet: 'Phantom' });
+    await element.connect();
+
+    const result = await element.signAndSendTransaction(toBase64(new Uint8Array([9, 8, 7])));
+
+    const [input] = wallet.features['solana:signAndSendTransaction'].signAndSendTransaction.mock.calls[0];
+    expect(input.account.address).toBe('Addr1111');
+    expect(input.chain).toBe('solana:devnet');
+    expect([...input.transaction]).toEqual([9, 8, 7]);
+    expect(result).toEqual({ signature: toBase64(bytes(64, 6)) });
+    expect(wallet.features['solana:signTransaction'].signTransaction).not.toHaveBeenCalled();
+  });
+
+  it('passes the configured chain, otherwise the account\'s first Solana chain', async () => {
+    const multi = account('Multi', ['eip155:1', 'solana:mainnet', 'solana:devnet']);
+    const wallet = fakeWallet({ signAndSend: true, chains: ['solana:mainnet', 'solana:devnet'], accounts: [multi] });
+    const element = mount({ preferredWallet: 'Phantom' });
+    await element.connect();
+    await element.signAndSendTransaction(toBase64(new Uint8Array([1])));
+    element.chain = '';
+    await element.updateComplete;
+    await element.signAndSendTransaction(toBase64(new Uint8Array([1])));
+
+    const calls = wallet.features['solana:signAndSendTransaction'].signAndSendTransaction.mock.calls;
+    expect(calls[0][0].chain).toBe('solana:devnet');
+    expect(calls[1][0].chain).toBe('solana:mainnet');
+  });
+
+  it('falls back to solana:signTransaction and returns the signed transaction', async () => {
+    fakeWallet({ signTransaction: true });
+    const element = mount({ preferredWallet: 'Phantom', chain: '' });
+    await element.connect();
+
+    const result = await element.signAndSendTransaction(toBase64(new Uint8Array([9])));
+
+    expect([...fromBase64(result.signedTransaction)]).toEqual([9, 1]);
+  });
+
+  it('refuses when the account has no Solana chain', async () => {
+    const wallet = fakeWallet({ signAndSend: true, accounts: [account('NoChain', [])], chains: ['solana:devnet'] });
+    const element = mount({ preferredWallet: 'Phantom', chain: '' });
+    await element.connect();
+
+    await expect(element.signAndSendTransaction(toBase64(new Uint8Array([1])))).rejects.toMatchObject({ code: 4200 });
+    expect(wallet.features['solana:signAndSendTransaction'].signAndSendTransaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the wallet cannot sign transactions or is not connected', async () => {
+    fakeWallet();
+    const element = mount({ preferredWallet: 'Phantom' });
+    const errors = events(element, 'solana-wallet-error');
+    await expect(element.signAndSendTransaction(toBase64(new Uint8Array([1])))).rejects.toMatchObject({ code: 4100 });
+    await element.connect();
+    await expect(element.signAndSendTransaction(toBase64(new Uint8Array([1])))).rejects.toMatchObject({ code: 4200 });
+    expect(errors).toHaveLength(2);
+  });
+});
+
 describe('server wallet', () => {
   const info = { name: 'Solana development wallet', address: 'DevAddr', publicKey: toBase64(bytes(32, 3)),
     chain: 'solana:devnet' };
@@ -318,6 +387,38 @@ describe('server wallet', () => {
 
     await expect(signing).rejects.toMatchObject({ code: 4200, message: 'Server wallet method is not allowed' });
     element._resolveServerWalletRequest('unknown', '{}');
+  });
+
+  it('without a sending server wallet the browser falls back to signTransaction', async () => {
+    const element = mount({ serverWallet: JSON.stringify(info), preferredWallet: info.name });
+    await element.connect();
+    const wallet = getWallets().get().find((item) => item.name === info.name);
+    expect(wallet.features['solana:signAndSendTransaction']).toBeUndefined();
+
+    const sending = element.signAndSendTransaction(toBase64(new Uint8Array([4, 2])));
+    expect(element.lastRequest.method).toBe('signTransaction');
+    element._resolveServerWalletRequest(element.lastRequest.id,
+      JSON.stringify({ signedTransaction: toBase64(new Uint8Array([4, 2, 9])) }));
+    await expect(sending).resolves.toEqual({ signedTransaction: toBase64(new Uint8Array([4, 2, 9])) });
+  });
+
+  it('forwards transactions to the server for signing and sending', async () => {
+    const element = mount({ serverWallet: JSON.stringify({ ...info, canSend: true }), preferredWallet: info.name });
+    await element.connect();
+
+    const sending = element.signAndSendTransaction(toBase64(new Uint8Array([4, 2])));
+    expect(element.lastRequest).toMatchObject({ method: 'signAndSendTransaction',
+      payload: { transaction: toBase64(new Uint8Array([4, 2])) } });
+    element._resolveServerWalletRequest(element.lastRequest.id, JSON.stringify({ signature: toBase64(bytes(64, 3)) }));
+    await expect(sending).resolves.toEqual({ signature: toBase64(bytes(64, 3)) });
+
+    const wallet = getWallets().get().find((item) => item.name === info.name);
+    const signing = wallet.features['solana:signTransaction'].signTransaction({ transaction: new Uint8Array([5]) });
+    expect(element.lastRequest).toMatchObject({ method: 'signTransaction', payload: { transaction: toBase64(new Uint8Array([5])) } });
+    element._resolveServerWalletRequest(element.lastRequest.id, JSON.stringify({ signedTransaction: toBase64(new Uint8Array([5, 6])) }));
+    const [signed] = await signing;
+    expect([...signed.signedTransaction]).toEqual([5, 6]);
+    expect(wallet.features['solana:signAndSendTransaction'].supportedTransactionVersions).toEqual(['legacy', 0]);
   });
 
   it('times out a request the server never answers', async () => {

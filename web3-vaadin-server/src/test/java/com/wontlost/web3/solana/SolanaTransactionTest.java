@@ -167,6 +167,12 @@ class SolanaTransactionTest {
                 TOKEN_MINT, recipientTokenAccount, BigInteger.ONE, 6, SolanaPrograms.TOKEN, BLOCKHASH, true));
         assertTrue(refused.getMessage().contains("not a wallet address"));
 
+        // SOL 同样拒绝曲线外地址：链上尚不存在的代币账户地址也无法被 requireWalletRecipient 识别
+        assertThrows(IllegalArgumentException.class,
+                () -> SolanaTransfers.sol(SENDER, recipientTokenAccount, BigInteger.ONE, BLOCKHASH));
+        assertTrue(SolanaTransfers.solToProgramAddress(SENDER, recipientTokenAccount, BigInteger.ONE, BLOCKHASH)
+                .accountKeys().contains(recipientTokenAccount));
+
         SolanaTransaction toVault = SolanaTransfers.splToProgramAddress(SENDER, TOKEN_MINT, recipientTokenAccount,
                 BigInteger.ONE, 6, SolanaPrograms.TOKEN, BLOCKHASH, true);
         assertTrue(toVault.accountKeys().contains(recipientTokenAccount), "explicit opt-in for program-derived wallets");
@@ -238,6 +244,74 @@ class SolanaTransactionTest {
         byte[] identity = new byte[32];
         identity[0] = 1;
         assertFalse(SolanaAddresses.isOnCurve(identity), "documented divergence: the identity point decompresses in dalek");
+    }
+
+    @Test void wireTransactionsCanBeSignedSlotBySlot() {
+        Ed25519PrivateKeyParameters cosignerKey = new Ed25519PrivateKeyParameters(new java.security.SecureRandom());
+        String cosigner = Base58.encode(cosignerKey.generatePublicKey().getEncoded());
+        SolanaInstruction both = new SolanaInstruction(SolanaPrograms.SYSTEM, List.of(
+                new AccountMeta(cosigner, true, false)), new byte[] {1});
+        SolanaTransaction transaction = SolanaTransaction.compile(SENDER, BLOCKHASH, List.of(both));
+        byte[] unsigned = transaction.unsignedWire();
+
+        assertEquals(List.of(SENDER, cosigner), SolanaTransaction.signersOf(unsigned));
+        assertArrayEquals(transaction.message(), SolanaTransaction.messageOf(unsigned));
+        byte[] cosigned = SolanaTransaction.withSignature(unsigned, cosigner, signWith(cosignerKey, transaction.message()));
+        byte[] signed = SolanaTransaction.withSignature(cosigned, SENDER, sign(transaction.message()));
+
+        assertArrayEquals(transaction.wire(Map.of(SENDER, sign(transaction.message()),
+                cosigner, signWith(cosignerKey, transaction.message()))), signed);
+        assertArrayEquals(new byte[64], Arrays.copyOfRange(cosigned, 1, 65), "the fee-payer slot is untouched");
+        assertArrayEquals(new byte[64], Arrays.copyOfRange(unsigned, 65, 129), "the input is not modified");
+        assertThrows(IllegalArgumentException.class,
+                () -> SolanaTransaction.withSignature(unsigned, RECIPIENT, sign(transaction.message())));
+        assertThrows(IllegalArgumentException.class,
+                () -> SolanaTransaction.withSignature(unsigned, SENDER, signWith(cosignerKey, transaction.message())));
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.withSignature(unsigned, SENDER, null));
+    }
+
+    @Test void versionedMessagesExposeTheirStaticSigners() {
+        byte[] legacy = SolanaTransfers.sol(SENDER, RECIPIENT, BigInteger.ONE, BLOCKHASH).unsignedWire();
+        // v0：在 legacy 消息前加 0x80 前缀，并在末尾追加空的地址查找表列表
+        ByteArrayOutputStream v0 = new ByteArrayOutputStream();
+        v0.write(1);
+        v0.writeBytes(new byte[64]);
+        v0.write(0x80);
+        v0.write(legacy, 65, legacy.length - 65);
+        v0.write(0);
+        byte[] wire = v0.toByteArray();
+
+        assertEquals(List.of(SENDER), SolanaTransaction.signersOf(wire));
+        byte[] message = SolanaTransaction.messageOf(wire);
+        assertEquals((byte) 0x80, message[0]);
+        byte[] signed = SolanaTransaction.withSignature(wire, SENDER, sign(message));
+        assertEquals(Base58.encode(sign(message)), SolanaTransaction.signatureOf(signed));
+    }
+
+    @Test void recentBlockhashIsReadFromLegacyAndV0Messages() {
+        byte[] legacy = SolanaTransfers.sol(SENDER, RECIPIENT, BigInteger.ONE, BLOCKHASH).unsignedWire();
+        assertEquals(BLOCKHASH, SolanaTransaction.recentBlockhashOf(legacy));
+        ByteArrayOutputStream v0 = new ByteArrayOutputStream();
+        v0.write(1);
+        v0.writeBytes(new byte[64]);
+        v0.write(0x80);
+        v0.write(legacy, 65, legacy.length - 65);
+        v0.write(0);
+        assertEquals(BLOCKHASH, SolanaTransaction.recentBlockhashOf(v0.toByteArray()));
+        byte[] v1 = v0.toByteArray();
+        v1[65] = (byte) 0x81;
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.signersOf(v1), "only v0 exists");
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.recentBlockhashOf(Arrays.copyOf(legacy, 160)));
+    }
+
+    @Test void malformedWireTransactionsAreRejected() {
+        byte[] wire = SolanaTransfers.sol(SENDER, RECIPIENT, BigInteger.ONE, BLOCKHASH).unsignedWire();
+        byte[] wrongCount = wire.clone();
+        wrongCount[65] = 2;
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.signersOf(wrongCount));
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.signersOf(Arrays.copyOf(wire, 70)));
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.signersOf(Arrays.copyOf(wire, 66)));
+        assertThrows(IllegalArgumentException.class, () -> SolanaTransaction.signersOf(new byte[0]));
     }
 
     @Test void moreThan256AccountsAreRejected() {

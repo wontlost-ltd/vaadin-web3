@@ -1,5 +1,6 @@
 package com.wontlost.web3.demo;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +25,12 @@ import com.wontlost.web3.solana.SolanaBalance;
 import com.wontlost.web3.solana.SolanaRpcClient;
 import com.wontlost.web3.solana.SolanaRpcException;
 import com.wontlost.web3.solana.SplTokenBalance;
+import com.wontlost.web3.solana.LatestBlockhash;
+import com.wontlost.web3.solana.SolanaPrograms;
+import com.wontlost.web3.solana.SolanaTransaction;
+import com.wontlost.web3.solana.SolanaTransfers;
 import com.wontlost.web3.solana.wallet.SiwsLogin;
+import com.wontlost.web3.solana.wallet.SolanaTransactionStatus;
 
 /** Sign-In With Solana 演示页：登录、查看身份，以及按登录地址读取 SOL 与 SPL 余额。 */
 @Route(value = "solana", layout = MainLayout.class)
@@ -44,12 +50,29 @@ public final class SolanaView extends VerticalLayout {
     private final Button refresh = new Button("Refresh SOL balance");
     private final Button checkToken = new Button("Check token balance");
     private final Button airdrop = new Button("Request 1 SOL airdrop");
+    private final TextField recipient = new TextField("Recipient wallet");
+    private final TextField amount = new TextField("Amount");
+    private final Button send = new Button("Send");
+    private final Span transferHint = new Span("Sends SOL, or the SPL token above when a mint is entered.");
+    private final SolanaTransactionStatus transferStatus;
     private final SiwsLogin login;
 
     public SolanaView(SiwsVerifier verifier, SolanaCluster cluster, SolanaRpcClient rpc) {
         this.rpc = rpc;
         this.cluster = cluster;
         login = new SiwsLogin(verifier, cluster).setStatement("Sign in to the Vaadin Web3 demo");
+        transferStatus = new SolanaTransactionStatus(rpc, cluster);
+        transferStatus.setId("solana-transfer-status");
+        transferStatus.addStatusChangedListener(event -> {
+            if (event.getStatus() == SolanaTransactionStatus.Status.CONFIRMED
+                    || event.getStatus() == SolanaTransactionStatus.Status.FINALIZED) {
+                showSolBalance();
+                if (!mint.getValue().isBlank()) showTokenBalance();
+            }
+        });
+        recipient.setWidth("32rem");
+        amount.setWidth("10rem");
+        send.addClickListener(event -> sendTransfer());
         status.getElement().setAttribute("role", "status");
         status.setId("solana-status");
         identity.setId("solana-identity");
@@ -81,7 +104,11 @@ public final class SolanaView extends VerticalLayout {
                 new H3("Balances"),
                 new HorizontalLayout(solBalance, refresh, airdrop),
                 new HorizontalLayout(mint, checkToken),
-                tokenBalance);
+                tokenBalance,
+                new H3("Send"),
+                transferHint,
+                new HorizontalLayout(recipient, amount, send),
+                transferStatus);
         update();
     }
 
@@ -93,6 +120,7 @@ public final class SolanaView extends VerticalLayout {
         refresh.setEnabled(address != null);
         checkToken.setEnabled(address != null);
         airdrop.setEnabled(address != null);
+        send.setEnabled(address != null);
         solBalance.setText("");
         tokenBalance.setText("");
         if (address != null) showSolBalance();
@@ -130,6 +158,55 @@ public final class SolanaView extends VerticalLayout {
         } catch (SolanaRpcException exception) {
             status.setText("Airdrop failed: " + exception.getMessage());
         }
+    }
+
+    /** 服务端构建未签名交易，由已连接的钱包签名并发送；状态组件随后跟踪确认进度。 */
+    private void sendTransfer() {
+        String sender = address();
+        if (sender == null) return;
+        if (!sender.equals(login.getWallet().getAccount())) {
+            status.setText("Connect the wallet you signed in with before sending.");
+            return;
+        }
+        LatestBlockhash latest;
+        SolanaTransaction transaction;
+        try {
+            BigDecimal value = new BigDecimal(amount.getValue().trim());
+            String to = recipient.getValue().trim();
+            latest = rpc.getLatestBlockhash();
+            SolanaTransfers.requireWalletRecipient(rpc, to);
+            transaction = mint.getValue().isBlank() ? SolanaTransfers.sol(sender, to,
+                    value.movePointRight(SolanaBalance.DECIMALS).toBigIntegerExact(), latest.blockhash())
+                    : tokenTransfer(sender, to, value, latest.blockhash());
+        } catch (ArithmeticException exception) {
+            status.setText("The amount has more decimals than the asset supports.");
+            return;
+        } catch (IllegalArgumentException | IllegalStateException | SolanaRpcException exception) {
+            status.setText("Cannot build the transfer: " + exception.getMessage());
+            return;
+        }
+        send.setEnabled(false);
+        status.setText("Approve the transaction in your wallet.");
+        long lastValid = latest.lastValidBlockHeight();
+        login.getWallet().signAndSendTransaction(transaction.unsignedWire(), rpc).whenComplete((signature, error) -> {
+            send.setEnabled(true);
+            if (error != null) {
+                Throwable cause = error.getCause() == null ? error : error.getCause();
+                status.setText("The transfer was not sent: " + cause.getMessage());
+                return;
+            }
+            status.setText("Sent " + signature);
+            transferStatus.track(signature, lastValid);
+        });
+    }
+
+    private SolanaTransaction tokenTransfer(String sender, String to, BigDecimal value, String blockhash) {
+        String tokenMint = mint.getValue().trim();
+        String program = rpc.getAccountOwner(tokenMint).filter(SolanaPrograms::isTokenProgram)
+                .orElseThrow(() -> new IllegalStateException("the mint is not an SPL token"));
+        int decimals = rpc.getTokenBalance(sender, tokenMint).decimals();
+        return SolanaTransfers.spl(sender, tokenMint, to, value.movePointRight(decimals).toBigIntegerExact(), decimals,
+                program, blockhash, true);
     }
 
     private String address() {

@@ -558,10 +558,63 @@ account changes.
   ready for `SiwsVerifier.verify`.
 - `signMessage(bytes)` signs arbitrary bytes.
 
+#### Sending transfers from the browser wallet
+
+Build the transaction on the server with `SolanaTransfers` (see *Solana
+transfers and transaction status*). Then let the connected wallet sign and
+send it, and show its progress with `SolanaTransactionStatus`:
+
+```java
+LatestBlockhash latest = rpc.getLatestBlockhash();
+SolanaTransaction transfer = SolanaTransfers.sol(sender, recipient, lamports, latest.blockhash());
+
+SolanaTransactionStatus status = new SolanaTransactionStatus(rpc, SolanaCluster.MAINNET);
+login.getWallet().signAndSendTransaction(transfer.unsignedWire(), rpc).whenComplete((signature, error) -> {
+    if (error == null) status.track(signature, latest.lastValidBlockHeight());
+});
+```
+
+- **Sending.** `signAndSendTransaction` uses the wallet's
+  `solana:signAndSendTransaction`. If the wallet only supports
+  `solana:signTransaction`, the server checks the signed transaction and
+  sends it on a background thread through the `SolanaRpcClient` you pass in
+  (or fails if you pass `null`). The check requires:
+  - the original fee payer and blockhash;
+  - a valid signature from the connected account.
+
+  Wallets may add instructions, such as priority fees, before signing.
+- **Treat the signature as a claim.** The returned signature is what the
+  wallet reports. Before crediting anything, verify the transaction on chain:
+  track it to `CONFIRMED`, and check what it actually did.
+- **Push.** The future completes on the UI thread. With the fallback path,
+  enable `@Push` (or polling) so the result reaches the browser promptly.
+- **Status.** `SolanaTransactionStatus` polls `getSignatureStatuses` through
+  the UI's shared poll interval.
+  - It moves through submitted, processed, confirmed and finalized, and stops
+    at the target commitment (`confirmed` by default; change it with
+    `setTarget`).
+  - The RPC reads run off the UI thread, so a slow node never blocks the UI.
+  - Progress never moves backwards, even when a lagging node reports a lower
+    commitment.
+- **Final states.** Besides success, tracking ends in one of three ways:
+  - `FAILED`: the transaction failed on chain at `confirmed` or above
+    (`getLastSignatureStatus()` holds the error). A failure seen only at
+    `processed` is not final yet.
+  - `EXPIRED`: the cluster passed the transaction's `lastValidBlockHeight`
+    and, on a final re-check, still had no record of it. This assumes the
+    wallet kept the blockhash the server built the transaction with. The
+    fallback path enforces that. With `signAndSendTransaction` the server
+    cannot see it, so check the explorer before rebuilding.
+  - `TIMED_OUT`: no final answer arrived in time. Check the Solana Explorer
+    link before retrying.
+
 For local development without a browser wallet, register a
 `SolanaDevWallet` with `SolanaServerWallet.register(VaadinContext, wallet)`.
 It appears in the picker as "Solana development wallet", next to a warning.
-Its Ed25519 key lives only on the server and it signs without asking.
+Its Ed25519 key lives only on the server, and it signs messages and
+transactions without asking. Give it a `SolanaRpcClient`, as in
+`SolanaDevWallet.random(cluster, rpc)`, to support
+`solana:signAndSendTransaction`.
 `SolanaServerWallet.register` throws in Vaadin production mode, so a
 misconfigured application fails at startup. If a wallet is placed in the
 context some other way, `SolanaConnect` doesn't offer it in production mode. The demo enables one for `solana-test-validator` in the
@@ -665,8 +718,9 @@ byte[] forWallet = usdc.unsignedWire();      // pass to solana:signAndSendTransa
   account, and the tokens could be stranded. So `spl` rejects off-curve
   addresses (token accounts and other program-derived addresses), and
   `requireWalletRecipient` rejects addresses owned by a program other than the
-  System Program. To pay a program-derived wallet, such as a multisig vault, on
-  purpose, use `splToProgramAddress`.
+  System Program. `sol` rejects off-curve recipients too, since no key could
+  move SOL out of one. To pay a program-derived address on purpose, such as a
+  multisig vault, use `solToProgramAddress` or `splToProgramAddress`.
 - **Recipient account creation.** `spl(..., true)` adds the Associated Token
   Account program's `CreateIdempotent` instruction. If the recipient's token
   account already exists, it does nothing. If not, the sender pays its rent,

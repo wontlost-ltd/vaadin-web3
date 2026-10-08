@@ -24,8 +24,19 @@ public final class SolanaTransfers {
     private SolanaTransfers() {
     }
 
-    /** A SOL transfer of {@code lamports} from {@code from} (the fee payer and signer) to {@code to}. */
+    /**
+     * A SOL transfer of {@code lamports} from {@code from} (the fee payer and signer) to the wallet {@code to}.
+     * An off-curve recipient (a token account or other program-derived address) is rejected, because no key can
+     * move SOL out of it; use {@link #solToProgramAddress} to fund a program-controlled address on purpose.
+     */
     public static SolanaTransaction sol(String from, String to, BigInteger lamports, String recentBlockhash) {
+        requireOnCurve(to);
+        return solToProgramAddress(from, to, lamports, recentBlockhash);
+    }
+
+    /** Like {@link #sol} for a program-derived recipient, such as a program's vault. */
+    public static SolanaTransaction solToProgramAddress(String from, String to, BigInteger lamports,
+            String recentBlockhash) {
         ByteBuffer data = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
         data.putInt(SYSTEM_TRANSFER).putLong(u64(lamports));
         SolanaInstruction transfer = new SolanaInstruction(SolanaPrograms.SYSTEM,
@@ -46,10 +57,7 @@ public final class SolanaTransfers {
      */
     public static SolanaTransaction spl(String owner, String mint, String recipient, BigInteger amount, int decimals,
             String tokenProgram, String recentBlockhash, boolean createRecipientAccount) {
-        if (!SolanaAddresses.isOnCurve(SolanaAddresses.key(recipient))) {
-            throw new IllegalArgumentException("recipient is not a wallet address (it is off the Ed25519 curve, like a "
-                    + "token account); send to the owner's wallet address instead");
-        }
+        requireOnCurve(recipient);
         return splTransfer(owner, mint, recipient, amount, decimals, tokenProgram, recentBlockhash, createRecipientAccount);
     }
 
@@ -98,6 +106,13 @@ public final class SolanaTransfers {
                 new AccountMeta(destination, false, true),
                 new AccountMeta(owner, true, false)), data.array()));
         return SolanaTransaction.compile(owner, recentBlockhash, instructions);
+    }
+
+    private static void requireOnCurve(String recipient) {
+        if (!SolanaAddresses.isOnCurve(SolanaAddresses.key(recipient))) {
+            throw new IllegalArgumentException("recipient is not a wallet address (it is off the Ed25519 curve, like a "
+                    + "token account); send to the owner's wallet address instead");
+        }
     }
 
     private static long u64(BigInteger value) {

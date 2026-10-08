@@ -265,9 +265,8 @@ class SolanaRpcLocalnetIT {
         return balance;
     }
 
+    /** 随机钱包地址：由新密钥派生的公钥（随机 32 字节约一半不在曲线上，不能作为钱包地址）。 */
     private static String randomAddress() {
-        byte[] key = new byte[32];
-        new SecureRandom().nextBytes(key);
-        return Base58.encode(key);
+        return address(randomKey());
     }
 }
