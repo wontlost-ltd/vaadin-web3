@@ -130,6 +130,7 @@ For a guided flow, see [the tutorial](docs/tutorial.md).
 | Multi-wallet discovery | `web3-vaadin` | EIP-6963 discovery, a keyboard-accessible picker, remembers the last wallet |
 | `Web3Address` | `web3-vaadin` | Shortened address, colour badge, click to copy |
 | WalletConnect mobile wallets | `web3-vaadin-walletconnect` | EIP-6963 discovery, desktop QR codes, mobile wallet deep links, lazy-loaded provider |
+| Solana wallets and `SiwsLogin` | `web3-vaadin-solana` | Wallet Standard discovery, Sign-In With Solana, server-side development wallet |
 | `SiweLogin` | `web3-vaadin-server` | EIP-4361 messages, single-use nonces, ordinary and smart-contract wallets (ERC-1271, ERC-6492), `Web3Session` |
 | `@RequiresToken` | `web3-vaadin-server` | ERC-20/ERC-721 balance gates, redirect to login with a continue link, ready-made 403/503 pages |
 | `StablecoinCheckout` | `web3-vaadin-server` | USDC, USDT, EURC or PYUSD transfer, receipt and Transfer-log checks, confirmations, protection against reusing one transaction for two orders; optional hosted monitoring |
@@ -413,12 +414,6 @@ login.signOut(); // Clears the verified session and disconnects the wallet by de
 
 `VerifiedSignIn.account()` returns the identity as a chain-neutral CAIP-10 `ChainAccount` (for example `eip155:1:0xAbC…`). `Web3Session.currentIdentity()` returns the signed-in identity of any chain, while `Web3Session.current()` returns only an EVM (SIWE) sign-in, so EVM-specific code keeps working unchanged and treats a non-EVM session as signed out. EVM addresses in a `ChainAccount` are canonicalized to EIP-55 checksum form, so `equals` and `sameAccount` agree; other namespaces (such as base58 Solana addresses) are kept and compared exactly. `TokenGate` denies non-EVM identities before making any RPC call.
 
-### Sign-In With Solana (server)
-
-`SiwsVerifier` verifies Sign-In With Solana (the Phantom SIWS format used by Wallet Standard `solana:signIn`). `issue(...)` creates a challenge with a random nonce and saves it server-side in a `SiwsChallengeStore` (use a shared store when running several nodes; `InMemorySiwsChallengeStore` is bounded and single-node). Rate-limit the endpoint that issues challenges: unauthenticated callers can otherwise fill the bounded store until challenges expire. Pass the challenge fields to the wallet's `signIn`, omitting empty `resources` lists. `verify(signedMessage, signature, publicKey)` reads the nonce from the signed text, loads the challenge the server issued — clients cannot supply or alter it, so a signature obtained for another domain is rejected — requires the signed bytes to equal exactly that challenge rendered with the signer's base58 address, checks the Ed25519 signature, the issue time (allowing 60 seconds of clock skew) and expiry, and only then consumes the challenge atomically. Failures raise `SiwsException` with a stable code (`siws_message_mismatch`, `siws_unknown_challenge`, `siws_invalid_signature`, `siws_invalid_public_key`, `siws_not_yet_valid`, `siws_expired`, `siws_nonce_reused`).
-
-The result is a `VerifiedSolanaSignIn` whose account is `solana:<genesis-hash prefix>:<address>` (mainnet `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`, devnet `EtWTRABZaYq6iMfeYKouRu166VU2xqa1`, testnet `4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z`, local validators `localnet`). Store it with `Web3Session.signIn(...)` and rotate the HTTP session id (for example `request.changeSessionId()`), as `SiweLogin` does for EVM sign-ins; `Web3Session.current()` stays empty for Solana sessions, so EVM components treat them as signed out. The Vaadin wallet and sign-in components follow in a later release.
-
 If you don't set the domain and URI, the component derives them from the
 request. It checks these sources in order:
 
@@ -476,6 +471,101 @@ The on-chain check is one blocking call, limited by the transport timeout
 `new SiweVerifier(nonces, clock, chains)`. To check signatures over other
 hashes, use `SignatureValidator.isValidSignature(client, address, hash,
 signature)`.
+
+### Sign-In With Solana (server)
+
+`SiwsVerifier` verifies Sign-In With Solana (the Phantom SIWS format used by Wallet Standard `solana:signIn`). `issue(...)` creates a challenge with a random nonce and saves it server-side in a `SiwsChallengeStore` (use a shared store when running several nodes; `InMemorySiwsChallengeStore` is bounded and single-node). Rate-limit the endpoint that issues challenges: unauthenticated callers can otherwise fill the bounded store until challenges expire. Pass the challenge fields to the wallet's `signIn`, omitting empty `resources` lists. `verify(signedMessage, signature, publicKey)` reads the nonce from the signed text, loads the challenge the server issued — clients cannot supply or alter it, so a signature obtained for another domain is rejected — requires the signed bytes to equal exactly that challenge rendered with the signer's base58 address, checks the Ed25519 signature, the issue time (allowing 60 seconds of clock skew) and expiry, and only then consumes the challenge atomically. Failures raise `SiwsException` with a stable code (`siws_message_mismatch`, `siws_unknown_challenge`, `siws_invalid_signature`, `siws_invalid_public_key`, `siws_not_yet_valid`, `siws_expired`, `siws_nonce_reused`).
+
+The result is a `VerifiedSolanaSignIn` whose account is `solana:<genesis-hash prefix>:<address>` (mainnet `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`, devnet `EtWTRABZaYq6iMfeYKouRu166VU2xqa1`, testnet `4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z`, local validators `localnet`). Store it with `Web3Session.signIn(...)` and rotate the HTTP session id with `SessionIds.rotate(VaadinRequest)`, as `SiweLogin` does for EVM sign-ins; `Web3Session.current()` stays empty for Solana sessions, so EVM components treat them as signed out, while `Web3Session.currentIdentity()` returns them. `SiwsLogin` (below) does all of this for you.
+
+### Solana wallets and Sign-In With Solana (browser)
+
+The optional `web3-vaadin-solana` module connects Solana wallets through the
+[Wallet Standard](https://github.com/wallet-standard/wallet-standard), which
+Phantom, Solflare, Backpack and other wallets implement.
+
+```xml
+<dependency>
+    <groupId>com.wontlost</groupId>
+    <artifactId>web3-vaadin-solana</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+`SiwsLogin` is a ready-made sign-in button. Create one application-scoped
+`SiwsVerifier`, with the challenge store and verifier sharing one clock:
+
+```java
+Clock clock = Clock.systemUTC();
+SiwsVerifier verifier = new SiwsVerifier(new InMemorySiwsChallengeStore(clock), clock);
+
+SiwsLogin login = new SiwsLogin(verifier, SolanaCluster.MAINNET)
+        .setDomain("app.example.com")
+        .setUri("https://app.example.com")
+        .setStatement("Sign in to Example");
+login.addSignedInListener(event -> {
+    VerifiedSolanaSignIn signIn = event.getSignIn();   // also in Web3Session.currentIdentity()
+});
+login.addSignInFailedListener(event -> Notification.show(event.getLocalizedMessage()));
+```
+
+The sign-in works like this:
+
+1. The user picks a wallet. The picker lists only wallets on the configured
+   cluster that can connect and sign.
+2. The server issues a challenge.
+3. The wallet signs it. Wallets with `solana:signIn` sign the challenge
+   fields directly. Wallets that only support `solana:signMessage` sign the
+   message text the server rendered.
+4. The server checks that the signed bytes match the challenge, verifies the
+   Ed25519 signature, and screens the address with `AddressScreening` when
+   one is registered.
+5. The server rotates the HTTP session ID and stores the identity.
+
+Failures fire `SignInFailedEvent` with one of these:
+
+- a `SiwsException` code, such as `siws_expired` or `siws_message_mismatch`;
+- `siws_address_blocked` when screening blocks the address;
+- `siws_screening_unavailable` when screening can't be reached;
+- `siws_origin_unavailable` when the request has no usable host;
+- `siws_internal_error` for unexpected server errors;
+- a wallet error code, with `isUserRejected()` set when the user cancelled.
+
+Messages are localized through `SiwsLoginI18n`.
+
+The domain, URI, `continue` navigation and serialization work as they do for
+`SiweLogin`:
+
+- **Domain and URI:** set them explicitly in production.
+  `RequestOrigins.domain/uri(VaadinRequest)` show what would be derived from
+  the request.
+- **Serialization:** when the component can be deserialized outside the
+  request that created it, call
+  `SiwsLogin.registerVerifier(VaadinContext, verifier)` at startup, for
+  example from a `VaadinServiceInitListener`. A restored component finds the
+  verifier there, or you can pass it again with `setVerifier`.
+
+The user approves twice: once to connect the wallet, then once to sign. If the
+user switches accounts in the wallet afterwards, `SolanaConnect` fires an
+`AccountChangedEvent`, but the signed-in identity stays until `signOut()`.
+Listen for that event if your application should sign the user out when the
+account changes.
+
+`SolanaConnect` is the underlying component, for flows of your own:
+
+- `connect()` returns the wallet address.
+- `signIn(challenge, address)` returns the signer's key and the signed bytes,
+  ready for `SiwsVerifier.verify`.
+- `signMessage(bytes)` signs arbitrary bytes.
+
+For local development without a browser wallet, register a
+`SolanaDevWallet` with `SolanaServerWallet.register(VaadinContext, wallet)`.
+It appears in the picker as "Solana development wallet", next to a warning.
+Its Ed25519 key lives only on the server and it signs without asking.
+`SolanaServerWallet.register` throws in Vaadin production mode, so a
+misconfigured application fails at startup. If a wallet is placed in the
+context some other way, `SolanaConnect` doesn't offer it in production mode. The demo enables one for `solana-test-validator` in the
+`demo` profile; see `/solana`.
 
 ### Solana balances (server)
 
@@ -943,6 +1033,8 @@ The HTTP example is separate from the Vaadin paywall. In the demo profile the fi
 - `web3-vaadin-walletconnect/`: optional WalletConnect v2 mobile wallet integration
   (`com.wontlost:web3-vaadin-walletconnect`).
 - `web3-vaadin-server/`: SIWE, on-chain reads, token gates and checkout (`com.wontlost:web3-vaadin-server`).
+- `web3-vaadin-solana/`: optional Solana wallet connection and Sign-In With Solana components
+  (`com.wontlost:web3-vaadin-solana`).
 - `web3-vaadin-onramp/`: hosted fiat-to-stablecoin purchases (`com.wontlost:web3-vaadin-onramp`).
 - `web3-vaadin-monitor/`: optional hosted payment tracking service (`com.wontlost:web3-vaadin-monitor`).
 - `web3-vaadin-spring-boot-starter/`: Spring Boot auto-configuration and optional SIWE Spring Security bridge.
@@ -974,6 +1066,7 @@ Inquiries: [service@wontlost.com](mailto:service@wontlost.com).
 mvn verify                               # build everything and run the unit tests
 (cd web3-vaadin && npm ci && npm test)         # frontend unit tests (Vitest)
 (cd web3-vaadin-walletconnect && npm ci && npm test) # WalletConnect frontend unit tests
+(cd web3-vaadin-solana && npm ci && npm test)  # Solana wallet frontend unit tests
 mvn install -Pdirectory -pl web3-vaadin -am    # also builds the Vaadin Directory zip
 ```
 
