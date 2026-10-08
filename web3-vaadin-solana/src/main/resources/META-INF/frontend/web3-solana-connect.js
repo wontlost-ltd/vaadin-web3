@@ -10,6 +10,8 @@ const DISCONNECT = 'standard:disconnect';
 const EVENTS = 'standard:events';
 const SIGN_IN = 'solana:signIn';
 const SIGN_MESSAGE = 'solana:signMessage';
+const SIGN_AND_SEND = 'solana:signAndSendTransaction';
+const SIGN_TRANSACTION = 'solana:signTransaction';
 
 /** Wallet Standard 钱包是否可用于 Solana 登录：支持 Solana 链、连接，以及 signIn 或 signMessage 之一。 */
 export function isSolanaWallet(wallet, chain) {
@@ -181,6 +183,33 @@ export class Web3SolanaConnect extends LitElement {
       requirePlainEd25519(output);
       return { publicKey: toBase64(this._walletAccount.publicKey), signedMessage: toBase64(output.signedMessage),
         signature: toBase64(output.signature) };
+    } catch (error) {
+      this._error(error);
+      throw error;
+    }
+  }
+
+  /**
+   * 签名并发送交易（base64 线格式）：优先 solana:signAndSendTransaction，返回 {signature}；
+   * 只支持 solana:signTransaction 的钱包返回 {signedTransaction}，由服务端发送。二者均为 base64。
+   */
+  async signAndSendTransaction(transactionBase64) {
+    try {
+      this._requireAccount();
+      const transaction = fromBase64(transactionBase64);
+      const chain = this.chain || (this._walletAccount.chains || []).find((item) => item.startsWith('solana:'));
+      const input = { account: this._walletAccount, transaction, chain };
+      const sendFeature = this._wallet.features[SIGN_AND_SEND];
+      if (sendFeature) {
+        const [output] = await sendFeature.signAndSendTransaction(input);
+        return { signature: toBase64(output.signature) };
+      }
+      const signFeature = this._wallet.features[SIGN_TRANSACTION];
+      if (!signFeature) {
+        throw Object.assign(new Error('The wallet cannot sign transactions'), { code: 4200 });
+      }
+      const [output] = await signFeature.signTransaction(input);
+      return { signedTransaction: toBase64(output.signedTransaction) };
     } catch (error) {
       this._error(error);
       throw error;

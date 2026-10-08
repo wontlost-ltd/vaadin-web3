@@ -28,6 +28,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 class SolanaConnectTest {
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String BLOCKHASH = "5LvHZdKWcQYtpy4JkmyRkyPWkhTEi1sNK1gTWuWvHKRF";
     private final Clock clock = Clock.systemUTC();
     private final SiwsVerifier verifier = new SiwsVerifier(new InMemorySiwsChallengeStore(clock), clock);
     private final SolanaDevWallet wallet = SolanaDevWallet.random(SolanaCluster.LOCALNET);
@@ -87,7 +88,7 @@ class SolanaConnectTest {
 
     @Test void devWalletRejectsInvalidRequests() {
         assertCode(4100, null, "signMessage", "{\"message\":\"AQID\"}");
-        assertCode(4200, wallet, "signTransaction", "{}");
+        assertCode(4200, wallet, "signAllTransactions", "{}");
         assertCode(4200, wallet, null, "{}");
         assertCode(-32602, wallet, "signMessage", null);
         assertCode(-32602, wallet, "signMessage", "x".repeat(SolanaConnect.MAX_SERVER_WALLET_PAYLOAD + 1));
@@ -109,7 +110,7 @@ class SolanaConnectTest {
         SolanaConnect.ServerWalletResponse ok = SolanaConnect.respond(wallet, "signMessage", "{\"message\":\"AQID\"}");
         assertTrue(ok.result().contains("signature"));
 
-        SolanaConnect.ServerWalletResponse refused = SolanaConnect.respond(wallet, "signTransaction", "{}");
+        SolanaConnect.ServerWalletResponse refused = SolanaConnect.respond(wallet, "signAllTransactions", "{}");
         assertNull(refused.result());
         assertEquals(4200, refused.code());
 
@@ -123,6 +124,73 @@ class SolanaConnectTest {
         assertNull(failed.result());
         assertEquals(-32603, failed.code());
         assertEquals("Server wallet request failed", failed.message());
+    }
+
+    @Test void devWalletSignsAndSendsTransactionsItIsASignerOf() {
+        java.util.List<byte[]> sent = new java.util.ArrayList<>();
+        SolanaDevWallet sender = new SolanaDevWallet(new byte[32], SolanaCluster.LOCALNET, echoingRpc(sent, false));
+        com.wontlost.web3.solana.SolanaTransaction transfer = com.wontlost.web3.solana.SolanaTransfers.sol(
+                sender.address(), wallet.address(), java.math.BigInteger.ONE, BLOCKHASH);
+        String payload = "{\"transaction\":\"" + Base64.getEncoder().encodeToString(transfer.unsignedWire()) + "\"}";
+
+        JsonNode signed = JSON.readTree(SolanaConnect.handleServerWalletRequest(sender, "signTransaction", payload));
+        byte[] signedWire = Base64.getDecoder().decode(signed.path("signedTransaction").asString());
+        assertArrayEquals(transfer.wire(java.util.Map.of(sender.address(), sender.signMessage(transfer.message()))),
+                signedWire);
+
+        JsonNode submitted = JSON.readTree(SolanaConnect.handleServerWalletRequest(sender, "signAndSendTransaction",
+                payload));
+        assertEquals(com.wontlost.web3.solana.SolanaTransaction.signatureOf(signedWire),
+                Base58.encode(Base64.getDecoder().decode(submitted.path("signature").asString())));
+        assertArrayEquals(signedWire, sent.getFirst());
+
+        assertCode(-32602, wallet, "signTransaction", payload);
+        assertCode(-32602, sender, "signTransaction", "{\"transaction\":\"AAAA\"}");
+        assertCode(4200, wallet, "signAndSendTransaction", "{\"transaction\":\""
+                + Base64.getEncoder().encodeToString(com.wontlost.web3.solana.SolanaTransfers.sol(wallet.address(),
+                        sender.address(), java.math.BigInteger.ONE, BLOCKHASH).unsignedWire()) + "\"}");
+        SolanaDevWallet rejecting = new SolanaDevWallet(new byte[32], SolanaCluster.LOCALNET, echoingRpc(sent, true));
+        assertCode(-32603, rejecting, "signAndSendTransaction", payload);
+    }
+
+    @Test void walletSendResultsAreConvertedOrSentThroughTheApplication() {
+        byte[] signature = new byte[64];
+        signature[0] = 5;
+        assertEquals(Base58.encode(signature), SolanaConnect.submitted(
+                "{\"signature\":\"" + Base64.getEncoder().encodeToString(signature) + "\"}", null));
+
+        java.util.List<byte[]> sent = new java.util.ArrayList<>();
+        SolanaDevWallet sender = new SolanaDevWallet(new byte[32], SolanaCluster.LOCALNET);
+        com.wontlost.web3.solana.SolanaTransaction transfer = com.wontlost.web3.solana.SolanaTransfers.sol(
+                sender.address(), wallet.address(), java.math.BigInteger.ONE, BLOCKHASH);
+        byte[] signedWire = transfer.wire(java.util.Map.of(sender.address(), sender.signMessage(transfer.message())));
+        String signOnly = "{\"signedTransaction\":\"" + Base64.getEncoder().encodeToString(signedWire) + "\"}";
+        assertEquals(com.wontlost.web3.solana.SolanaTransaction.signatureOf(signedWire),
+                SolanaConnect.submitted(signOnly, echoingRpc(sent, false)));
+        assertArrayEquals(signedWire, sent.getFirst());
+
+        assertEquals(4200, assertThrows(SolanaConnect.SolanaWalletException.class,
+                () -> SolanaConnect.submitted(signOnly, null)).getCode());
+        for (String invalid : List.of("{}", "{\"signature\":\"AAAA\"}", "{\"signature\":\"%%\"}",
+                "{\"signedTransaction\":\"%%\"}")) {
+            assertEquals(-32603, assertThrows(SolanaConnect.SolanaWalletException.class,
+                    () -> SolanaConnect.submitted(invalid, null)).getCode(), invalid);
+        }
+    }
+
+    /** 假节点：sendTransaction 原样返回交易签名（或以预检失败拒绝），并记录收到的交易。 */
+    private static com.wontlost.web3.solana.SolanaRpcClient echoingRpc(java.util.List<byte[]> sent, boolean reject) {
+        return new com.wontlost.web3.solana.SolanaRpcClient(request -> {
+            JsonNode node = JSON.readTree(request);
+            if (reject) {
+                return "{\"jsonrpc\":\"2.0\",\"id\":" + node.path("id").asLong()
+                        + ",\"error\":{\"code\":-32002,\"message\":\"Transaction simulation failed\"}}";
+            }
+            byte[] wire = Base64.getDecoder().decode(node.path("params").get(0).asString());
+            sent.add(wire);
+            return "{\"jsonrpc\":\"2.0\",\"id\":" + node.path("id").asLong() + ",\"result\":\""
+                    + com.wontlost.web3.solana.SolanaTransaction.signatureOf(wire) + "\"}";
+        }, com.wontlost.web3.solana.SolanaCommitment.CONFIRMED);
     }
 
     @Test void serverWalletInfoCarriesThePublicKeyAndChain() {

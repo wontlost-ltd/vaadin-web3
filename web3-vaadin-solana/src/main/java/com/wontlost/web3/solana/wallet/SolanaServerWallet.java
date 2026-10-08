@@ -29,6 +29,14 @@ public interface SolanaServerWallet {
     byte[] signMessage(byte[] message);
 
     /**
+     * Submits a transaction this wallet has signed and returns its base58 signature, for wallets that can reach a
+     * node; the default refuses, so browser code falls back to sending through the application.
+     */
+    default String sendTransaction(byte[] signedTransaction) {
+        throw new SolanaConnect.SolanaWalletException(4200, "This server wallet cannot send transactions", false);
+    }
+
+    /**
      * Registers the server wallet for the application, typically from a {@code VaadinServiceInitListener}. Throws
      * {@link IllegalStateException} in Vaadin production mode, or when a different wallet is already registered.
      * Registering the same instance again is a no-op. The context must provide Vaadin's

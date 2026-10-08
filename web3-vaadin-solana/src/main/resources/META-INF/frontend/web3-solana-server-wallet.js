@@ -44,7 +44,8 @@ function createWallet(info, entry) {
     address: info.address,
     publicKey: fromBase64(info.publicKey),
     chains: Object.freeze([info.chain]),
-    features: Object.freeze(['solana:signIn', 'solana:signMessage'])
+    features: Object.freeze(['solana:signIn', 'solana:signMessage', 'solana:signTransaction',
+      'solana:signAndSendTransaction'])
   });
   const forward = (method, payload) => new Promise((resolve, reject) => {
     const owner = entry.owners.at(-1);
@@ -75,6 +76,22 @@ function createWallet(info, entry) {
           const result = await forward('signIn', input);
           return { account, signedMessage: fromBase64(result.signedMessage), signature: fromBase64(result.signature),
             signatureType: 'ed25519' };
+        }))
+      },
+      'solana:signTransaction': {
+        version: '1.0.0',
+        supportedTransactionVersions: Object.freeze(['legacy', 0]),
+        signTransaction: (...inputs) => Promise.all(inputs.map(async ({ transaction }) => {
+          const result = await forward('signTransaction', { transaction: toBase64(transaction) });
+          return { signedTransaction: fromBase64(result.signedTransaction) };
+        }))
+      },
+      'solana:signAndSendTransaction': {
+        version: '1.0.0',
+        supportedTransactionVersions: Object.freeze(['legacy', 0]),
+        signAndSendTransaction: (...inputs) => Promise.all(inputs.map(async ({ transaction }) => {
+          const result = await forward('signAndSendTransaction', { transaction: toBase64(transaction) });
+          return { signature: fromBase64(result.signature) };
         }))
       },
       'solana:signMessage': {

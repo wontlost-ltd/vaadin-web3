@@ -153,6 +153,52 @@ public final class SolanaTransaction {
         return offset;
     }
 
+    /**
+     * The signers of a wire transaction in signature-slot order, read from its message header. Handles legacy and
+     * versioned (v0) messages; a v0 message's signers are always in its static account keys.
+     */
+    public static List<String> signersOf(byte[] wire) {
+        int[] count = readLength(wire, 0);
+        int offset = messageOffset(wire);
+        // 版本化消息以 0x80|版本 开头，其后与 legacy 头相同
+        if ((wire[offset] & 0x80) != 0) offset++;
+        if (offset + 3 > wire.length) throw new IllegalArgumentException("truncated transaction");
+        int required = wire[offset] & 0xFF;
+        if (required != count[0]) throw new IllegalArgumentException("signature count does not match the message header");
+        int[] keys = readLength(wire, offset + 3);
+        if (keys[0] < required || keys[1] + keys[0] * 32 > wire.length) {
+            throw new IllegalArgumentException("truncated transaction");
+        }
+        List<String> signers = new ArrayList<>();
+        for (int i = 0; i < required; i++) {
+            int start = keys[1] + i * 32;
+            signers.add(Base58.encode(Arrays.copyOfRange(wire, start, start + 32)));
+        }
+        return signers;
+    }
+
+    /**
+     * Returns a copy of the wire transaction with {@code signature} in {@code signer}'s slot, after verifying it over
+     * the message. Other slots are kept, so several parties can sign in turn.
+     */
+    public static byte[] withSignature(byte[] wire, String signer, byte[] signature) {
+        int slot = signersOf(wire).indexOf(signer);
+        if (slot < 0) throw new IllegalArgumentException("not a signer of this transaction");
+        int offset = messageOffset(wire);
+        if (signature == null || signature.length != 64
+                || !Ed25519.verify(signature, 0, SolanaAddresses.key(signer), 0, wire, offset, wire.length - offset)) {
+            throw new IllegalArgumentException("signature does not match the signer and this message");
+        }
+        byte[] signed = wire.clone();
+        System.arraycopy(signature, 0, signed, readLength(wire, 0)[1] + slot * 64, 64);
+        return signed;
+    }
+
+    /** The message bytes of a wire transaction: what each signer signs. */
+    public static byte[] messageOf(byte[] wire) {
+        return Arrays.copyOfRange(wire, messageOffset(wire), wire.length);
+    }
+
     /** Solana's compact-u16 length encoding: 7 bits per byte, low bits first, high bit set when more follow. */
     static void writeLength(ByteArrayOutputStream out, int value) {
         if (value < 0 || value > 0xFFFF) throw new IllegalArgumentException("compact-u16 out of range");

@@ -558,10 +558,46 @@ account changes.
   ready for `SiwsVerifier.verify`.
 - `signMessage(bytes)` signs arbitrary bytes.
 
+#### Sending transfers from the browser wallet
+
+Build the transaction on the server with `SolanaTransfers` (see *Solana
+transfers and transaction status*). Then let the connected wallet sign and
+send it, and show its progress with `SolanaTransactionStatus`:
+
+```java
+LatestBlockhash latest = rpc.getLatestBlockhash();
+SolanaTransaction transfer = SolanaTransfers.sol(sender, recipient, lamports, latest.blockhash());
+
+SolanaTransactionStatus status = new SolanaTransactionStatus(rpc, SolanaCluster.MAINNET);
+login.getWallet().signAndSendTransaction(transfer.unsignedWire(), rpc).whenComplete((signature, error) -> {
+    if (error == null) status.track(signature, latest.lastValidBlockHeight());
+});
+```
+
+- **Sending.** `signAndSendTransaction` uses the wallet's
+  `solana:signAndSendTransaction`. If the wallet only supports
+  `solana:signTransaction`, the server sends the signed transaction through
+  the `SolanaRpcClient` you pass in (or fails if you pass `null`). Wallets may
+  add instructions, such as priority fees, before signing.
+- **Status.** `SolanaTransactionStatus` polls `getSignatureStatuses` through
+  the UI's shared poll interval. It moves through submitted, processed,
+  confirmed and finalized. It stops at the target commitment (`confirmed` by
+  default; change it with `setTarget`).
+- **Final states.** Besides success, tracking ends in one of three ways:
+  - `FAILED`: the transaction failed on chain (`getLastSignatureStatus()`
+    holds the error);
+  - `EXPIRED`: the blockhash ran out before the transaction landed, so it is
+    safe to build and send it again;
+  - `TIMED_OUT`: no final answer arrived in time. Check the Solana Explorer
+    link before retrying.
+
 For local development without a browser wallet, register a
 `SolanaDevWallet` with `SolanaServerWallet.register(VaadinContext, wallet)`.
 It appears in the picker as "Solana development wallet", next to a warning.
-Its Ed25519 key lives only on the server and it signs without asking.
+Its Ed25519 key lives only on the server, and it signs messages and
+transactions without asking. Give it a `SolanaRpcClient`, as in
+`SolanaDevWallet.random(cluster, rpc)`, to support
+`solana:signAndSendTransaction`.
 `SolanaServerWallet.register` throws in Vaadin production mode, so a
 misconfigured application fails at startup. If a wallet is placed in the
 context some other way, `SolanaConnect` doesn't offer it in production mode. The demo enables one for `solana-test-validator` in the

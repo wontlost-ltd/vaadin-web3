@@ -41,9 +41,10 @@ public class SolanaDemoConfiguration {
     }
 
     @Bean
-    VaadinServiceInitListener solanaDemoServiceInit(SiwsVerifier verifier, SolanaCluster cluster,
+    VaadinServiceInitListener solanaDemoServiceInit(SiwsVerifier verifier, SolanaCluster cluster, SolanaRpcClient rpc,
             @Value("${web3.demo.solana.dev-wallet.enabled:false}") boolean devWallet) {
-        SolanaDevWallet wallet = devWallet ? SolanaDevWallet.random(cluster) : null;
+        // 开发钱包经同一 RPC 发送它签名的交易，以支持 solana:signAndSendTransaction
+        SolanaDevWallet wallet = devWallet ? SolanaDevWallet.random(cluster, rpc) : null;
         return event -> {
             var context = event.getSource().getContext();
             SiwsLogin.registerVerifier(context, verifier);
