@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows
 - Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
 
 ### Added
+- Add the optional `web3-vaadin-solana` module: `SolanaConnect` (Wallet Standard discovery, `solana:signIn` with a `solana:signMessage` fallback), `SiwsLogin`, and a server-side `SolanaDevWallet` for local development; `SessionIds` and `RequestOrigins` are now public for custom sign-in flows.
 - Add Sign-In With Solana server verification (`SiwsVerifier`), CAIP-10 identities (`ChainAccount`, `Web3Identity`) and `SolanaRpcClient` for SOL and SPL token balances.
 - Add `JsonRpcDialect` so `FailoverJsonRpcTransport` can check endpoint recovery and classify node errors per chain; `JsonRpcDialect.SOLANA` probes with `getHealth` and switches endpoints on Agave's transient error codes. Existing transports keep the Ethereum behaviour.
 - Add an opt-in x402 v2 EVM payment core with EIP-3009 authorization, facilitator integration, and an in-memory payment store.

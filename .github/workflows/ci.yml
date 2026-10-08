@@ -30,3 +30,5 @@ jobs:
         working-directory: web3-vaadin
       - run: npm ci && npm test
         working-directory: web3-vaadin-walletconnect
+      - run: npm ci && npm test
+        working-directory: web3-vaadin-solana
