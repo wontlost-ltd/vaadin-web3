@@ -18,15 +18,25 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final List<EndpointState> endpoints;
     private final Config config;
+    private final JsonRpcDialect dialect;
     private final AtomicReference<EndpointState> active;
 
     /** Creates a transport with default circuit breaker settings. */
     public FailoverJsonRpcTransport(List<Endpoint> endpoints) { this(endpoints, Config.defaults()); }
 
-    /** Creates a transport for endpoints in priority order. */
+    /** Creates a transport for EVM endpoints in priority order. */
     public FailoverJsonRpcTransport(List<Endpoint> endpoints, Config config) {
+        this(endpoints, config, JsonRpcDialect.ETHEREUM);
+    }
+
+    /**
+     * Creates a transport for endpoints in priority order. The dialect selects the request used to check whether
+     * the primary endpoint has recovered and how node errors are classified, e.g. {@link JsonRpcDialect#SOLANA}.
+     */
+    public FailoverJsonRpcTransport(List<Endpoint> endpoints, Config config, JsonRpcDialect dialect) {
         if (endpoints == null || endpoints.isEmpty()) throw new IllegalArgumentException("At least one endpoint is required");
         this.config = Objects.requireNonNull(config);
+        this.dialect = Objects.requireNonNull(dialect);
         this.endpoints = endpoints.stream().map(EndpointState::new).toList();
         this.active = new AtomicReference<>(this.endpoints.getFirst());
     }
@@ -179,18 +189,15 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
         EndpointState primary = endpoints.getFirst();
         if (respondingEndpoint == primary || !primary.acquireRecoveryProbe()) return;
         try {
-            String response = primary.endpoint.transport().send(
-                    "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"eth_chainId\",\"params\":[]}");
-            JsonNode parsed = MAPPER.readTree(response);
-            JsonNode error = parsed.path("error");
-            if (!error.isMissingNode() && !error.isNull()) {
-                EthRpcException rpcError = new EthRpcException(error.path("code").asInt(),
-                        error.path("message").asString("JSON-RPC error"),
-                        error.path("data").isMissingNode() || error.path("data").isNull()
-                                ? null : error.path("data").toString());
-                primary.failed(rpcError.getCategory().name(), rpcError.getMessage(), config);
+            String response = primary.endpoint.transport().send(MAPPER.createObjectNode().put("jsonrpc", "2.0")
+                    .put("id", 0).put("method", dialect.healthProbeMethod()).set("params", MAPPER.createArrayNode())
+                    .toString());
+            RpcFailure probeFailure = rpcFailure(response);
+            if (probeFailure != null) {
+                primary.failed(probeFailure.category.name(), probeFailure.message, config);
                 return;
             }
+            JsonNode parsed = MAPPER.readTree(response);
             if (parsed.path("result").isMissingNode()) throw new IOException("Primary endpoint probe returned no result");
             primary.succeeded(Duration.ZERO);
             active.set(primary);
@@ -210,7 +217,7 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
         return category == EthRpcException.Category.TRANSIENT_NODE || category == EthRpcException.Category.RATE_LIMITED;
     }
 
-    private static RpcFailure rpcFailure(String response) throws IOException {
+    private RpcFailure rpcFailure(String response) throws IOException {
         try {
             JsonNode error = MAPPER.readTree(response).path("error");
             if (error.isMissingNode() || error.isNull()) return null;
@@ -218,7 +225,7 @@ public final class FailoverJsonRpcTransport implements JsonRpcTransport {
             String message = error.path("message").asString("JSON-RPC error");
             String data = error.path("data").isMissingNode() || error.path("data").isNull()
                     ? null : error.path("data").toString();
-            return new RpcFailure(new EthRpcException(code, message, data).getCategory(), message);
+            return new RpcFailure(dialect.classify(code, message, data), message);
         } catch (RuntimeException exception) { throw new IOException("Invalid JSON-RPC response", exception); }
     }
 

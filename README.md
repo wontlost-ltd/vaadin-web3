@@ -481,9 +481,7 @@ signature)`.
 
 `SolanaRpcClient` reads SOL and SPL token balances. It takes a
 `JsonRpcTransport`, the same interface the EVM client uses, so you can pass a
-custom transport. `FailoverJsonRpcTransport` is not supported for Solana yet:
-it checks endpoint health with `eth_chainId` and classifies errors with
-Ethereum rules.
+custom transport.
 
 ```java
 try (SolanaRpcClient solana = new SolanaRpcClient("https://api.devnet.solana.com")) {
@@ -508,6 +506,34 @@ try (SolanaRpcClient solana = new SolanaRpcClient("https://api.devnet.solana.com
   contain an API key.
 - `clusterReference()` returns the CAIP-2 reference of the connected cluster
   (the first 32 characters of the genesis hash).
+
+To fail over between several Solana endpoints, create the
+`FailoverJsonRpcTransport` with `JsonRpcDialect.SOLANA`:
+
+```java
+var transport = new FailoverJsonRpcTransport(List.of(
+        new FailoverJsonRpcTransport.Endpoint("primary", new HttpJsonRpcTransport(primaryUrl)),
+        new FailoverJsonRpcTransport.Endpoint("backup", new HttpJsonRpcTransport(backupUrl))),
+        FailoverJsonRpcTransport.Config.defaults(), JsonRpcDialect.SOLANA);
+SolanaRpcClient solana = new SolanaRpcClient(transport, SolanaCommitment.CONFIRMED);
+```
+
+With this dialect, the transport checks whether the primary has recovered with
+`getHealth`. It moves to another endpoint when a node reports one of these
+errors:
+
+| Code | Meaning |
+|---|---|
+| -32004 | Block not available |
+| -32005 | Node unhealthy or behind |
+| -32014 | Block status not available yet |
+| -32016 | Minimum context slot not reached |
+| -32019 | Long-term storage unreachable |
+
+Rate-limit errors also move the request. Errors that another node would repeat
+do not, such as a failed preflight simulation (-32002) or a failed signature
+check (-32003). Without a dialect, the transport uses `JsonRpcDialect.ETHEREUM`,
+so existing EVM setups are unchanged.
 
 ### On-chain reads
 

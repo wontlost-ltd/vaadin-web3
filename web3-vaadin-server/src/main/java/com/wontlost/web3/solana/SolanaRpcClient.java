@@ -24,8 +24,8 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code getTokenSupply}、{@code getGenesisHash}。余额查询按给定确认级别（默认 {@code confirmed}）进行。
  * 错误只携带 RPC 错误码、HTTP 状态码与方法名，不包含节点地址（地址中可能含 API key）。
  * <p>
- * 注意：{@link com.wontlost.web3.chain.FailoverJsonRpcTransport} 的恢复探测与错误分类目前只针对 EVM
- * （探测请求为 {@code eth_chainId}），不适用于 Solana 节点。
+ * 多端点故障转移需用 {@link com.wontlost.web3.chain.JsonRpcDialect#SOLANA} 构造
+ * {@link com.wontlost.web3.chain.FailoverJsonRpcTransport}（{@code getHealth} 探测、Solana 错误码分类）。
  */
 public final class SolanaRpcClient implements AutoCloseable {
     private static final ObjectMapper MAPPER = new ObjectMapper();
