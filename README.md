@@ -477,6 +477,38 @@ The on-chain check is one blocking call, limited by the transport timeout
 hashes, use `SignatureValidator.isValidSignature(client, address, hash,
 signature)`.
 
+### Solana balances (server)
+
+`SolanaRpcClient` reads SOL and SPL token balances. It takes a
+`JsonRpcTransport`, the same interface the EVM client uses, so you can pass a
+custom transport. `FailoverJsonRpcTransport` is not supported for Solana yet:
+it checks endpoint health with `eth_chainId` and classifies errors with
+Ethereum rules.
+
+```java
+try (SolanaRpcClient solana = new SolanaRpcClient("https://api.devnet.solana.com")) {
+    SolanaBalance sol = solana.getBalance(owner);           // lamports + slot
+    SplTokenBalance usdc = solana.getTokenBalance(owner, mint);
+    usdc.uiAmount();                                        // amount scaled by the mint's decimals
+}
+```
+
+- Reads use the `confirmed` commitment by default. To choose another one, pass
+  it in `new SolanaRpcClient(transport, SolanaCommitment.FINALIZED)`.
+- `getTokenBalance` adds up every token account the owner holds for that mint,
+  including Token-2022 accounts. A response where accounts report different
+  decimals is rejected. An owner with no account gets 0, with the
+  decimals read from the mint.
+- Addresses must be base58 32-byte public keys. Anything else throws
+  `IllegalArgumentException` before any request is sent.
+- Errors are reported as `SolanaRpcException`. It carries the JSON-RPC error
+  code (`getCode()`) and, when the HTTP request failed, the status code
+  (`getHttpStatus()`, for example 429 when rate-limited). The message never
+  includes the endpoint URL or the node's error text, because either one can
+  contain an API key.
+- `clusterReference()` returns the CAIP-2 reference of the connected cluster
+  (the first 32 characters of the genesis hash).
+
 ### On-chain reads
 
 The server module provides an `EthRpcClient` that works over either a JSON-RPC
