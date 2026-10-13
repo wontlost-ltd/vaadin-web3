@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 import com.vaadin.flow.component.AttachEvent;
@@ -61,6 +62,8 @@ public class SolanaTransactionStatus extends Composite<Div> {
     private String signature;
     private long lastValidBlockHeight = -1;
     private long startedAt;
+    /** 单调时间源；测试里替换为可控时钟，避免用 sleep 赌超时窗口。 */
+    private LongSupplier nanos = System::nanoTime;
     private Status status;
     private SignatureStatus lastStatus;
     private I18n i18n = new I18n();
@@ -90,7 +93,7 @@ public class SolanaTransactionStatus extends Composite<Div> {
     public SolanaTransactionStatus track(String transactionSignature, long lastValidBlockHeight) {
         signature = Objects.requireNonNull(transactionSignature, "transactionSignature");
         this.lastValidBlockHeight = lastValidBlockHeight;
-        startedAt = System.nanoTime();
+        startedAt = nanos.getAsLong();
         lastStatus = null;
         generation++;
         checking = false;
@@ -115,6 +118,11 @@ public class SolanaTransactionStatus extends Composite<Div> {
         if (value == null || value.isZero() || value.isNegative()) throw new IllegalArgumentException("pollInterval must be positive");
         pollInterval = value;
         restartPolling();
+        return this;
+    }
+
+    SolanaTransactionStatus setNanos(LongSupplier value) {
+        nanos = Objects.requireNonNull(value, "nanos");
         return this;
     }
 
@@ -226,7 +234,7 @@ public class SolanaTransactionStatus extends Composite<Div> {
             lastStatus = reading.status().get();
             advance(next(lastStatus));
         }
-        if (!isFinal(status) && System.nanoTime() - startedAt > timeout.toNanos()) change(Status.TIMED_OUT);
+        if (!isFinal(status) && nanos.getAsLong() - startedAt > timeout.toNanos()) change(Status.TIMED_OUT);
         if (isFinal(status)) stopPolling();
     }
 

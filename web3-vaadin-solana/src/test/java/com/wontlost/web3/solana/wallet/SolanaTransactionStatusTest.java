@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
 
@@ -221,14 +222,15 @@ class SolanaTransactionStatusTest {
         assertEquals(SolanaTransactionStatus.Status.SUBMITTED, view.getStatus().orElseThrow());
     }
 
-    @Test void rpcOutagesKeepTheStatusAndTimeoutEnds() throws InterruptedException {
-        SolanaTransactionStatus view = view().setTimeout(Duration.ofMillis(50));
+    @Test void rpcOutagesKeepTheStatusAndTimeoutEnds() {
+        AtomicLong now = new AtomicLong();
+        SolanaTransactionStatus view = view().setNanos(now::get).setTimeout(Duration.ofMillis(50));
         view.track(SIGNATURE);
         down = true;
 
         view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.SUBMITTED, view.getStatus().orElseThrow());
-        Thread.sleep(60);
+        now.set(Duration.ofMillis(51).toNanos());
         view.pollNow();
         assertEquals(SolanaTransactionStatus.Status.TIMED_OUT, view.getStatus().orElseThrow());
     }
