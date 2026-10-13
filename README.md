@@ -1195,6 +1195,8 @@ mvn spring-boot:run -pl web3-vaadin-demo -Dspring-boot.run.profiles=demo
 | `/paid-article` | SIWE-bound x402 EIP-3009 paid article; redirects to `/paywall` until settled |
 | `/x402-api` | Browser `x402Fetch` example for the protected `/api/x402/quote` HTTP endpoint |
 
+The demo uses the `demo` application theme in `web3-vaadin-demo/src/main/frontend/themes/demo`. Its shared Lumo-based styles give each page a consistent layout and support light and dark appearance. Use the theme button in the top bar to switch modes; the choice is remembered in this browser, and the first visit follows the operating system preference.
+
 The demo profile provides a Development wallet for local SIWE. Anvil accounts are publicly known test keys and must never be used with valuable assets. The default demo checkout uses Sepolia and a real wallet. For a local fork checkout, plain Anvil is insufficient: its default chain ID 31337 has no built-in Sepolia token entries. See the tutorial for the Sepolia fork command and the matching local RPC override. You can get test USDC from the
 [Circle faucet](https://faucet.circle.com/), and test PYUSD from the
 [Paxos faucet](https://faucet.paxos.com/). Before trying the checkout, set

@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [1.0.0] - Unreleased
 
 ### Changed
+
+- Polish the OSS demo with a shared Lumo theme, responsive page sections, grouped navigation, and a persistent light/dark mode toggle.
+
+### Changed
 - Represent facilitator supported kinds as versioned scheme/network records with extensions.
 
 

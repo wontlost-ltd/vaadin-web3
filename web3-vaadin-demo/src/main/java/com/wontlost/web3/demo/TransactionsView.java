@@ -9,10 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.html.H1;
-import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.BigDecimalField;
@@ -32,28 +31,31 @@ import com.wontlost.web3.pay.Finality;
 import com.wontlost.web3.ui.Balance;
 import com.wontlost.web3.ui.TransactionStatus;
 import com.wontlost.web3.ui.UiPolling;
+import com.wontlost.web3.demo.ui.DemoPage;
+import com.wontlost.web3.demo.ui.DemoCallout;
+import com.wontlost.web3.demo.ui.DemoSection;
+import com.wontlost.web3.demo.ui.DemoStatus;
 
 /** Demonstrates wallet transactions and EIP-5792 batch calls. */
 @Route(value = "transactions", layout = MainLayout.class)
 @AnonymousAllowed
-public class TransactionsView extends VerticalLayout {
+public class TransactionsView extends DemoPage {
     private final Web3Connect wallet = new Web3Connect();
     private final NetworkIndicator network = new NetworkIndicator(wallet);
     private final VerticalLayout balances = new VerticalLayout();
     private final Balance nativeBalance = new Balance();
     private final TransactionStatus transactionStatus = new TransactionStatus();
     private final Span capability = new Span("Connect a wallet to read batch capabilities.");
-    private final Span singleResult = new Span();
-    private final Span batchResult = new Span();
-    private final Span batchStatus = new Span();
+    private final DemoStatus singleResult = new DemoStatus("pending", "");
+    private final DemoStatus batchResult = new DemoStatus("pending", "");
+    private final DemoStatus batchStatus = new DemoStatus("pending", "");
     private int finalityConfirmations = 1;
     private Registration batchPolling;
     private boolean batchRequestInFlight;
     private long batchGeneration;
 
     public TransactionsView(@Value("${web3.demo.expected-chain-id:11155111}") long expectedChainId) {
-        setMaxWidth("760px");
-        getStyle().set("margin", "0 auto");
+        super("Transactions", "Send a single transaction or submit an ordered EIP-5792 batch and follow its confirmation state.", true);
         network.setExpectedChainId(expectedChainId);
         transactionStatus.setChainId(expectedChainId);
         transactionStatus.setFinality(Finality.confirmations(1));
@@ -69,13 +71,12 @@ public class TransactionsView extends VerticalLayout {
             balances.setVisible(false);
             capability.setText("Connect a wallet to read batch capabilities.");
         });
-        add(new H1("Transactions"),
-                new Paragraph("Send a transaction or submit two ordered calls. The Development wallet executes batches sequentially and does not support atomic batches."),
-                wallet, network, new H2("Balance"), balances, singleTransactionSection(), batchSection(), transactionStatus);
+        add(new DemoSection("Wallet and network", "Connect to view the active chain and balances.", wallet, network, balances));
+        add(singleTransactionSection(), batchSection(), new DemoSection("Confirmation", "Track transaction finality.", transactionStatus));
         wallet.restore();
     }
 
-    private VerticalLayout singleTransactionSection() {
+    private DemoSection singleTransactionSection() {
         TextField recipient = addressField("Recipient address");
         BigDecimalField amount = amountField("Amount (ETH)");
         Button send = new Button("Send transaction", event -> {
@@ -97,10 +98,10 @@ public class TransactionsView extends VerticalLayout {
             finalityConfirmations = event.getValue() == null ? 1 : event.getValue();
             transactionStatus.setFinality(Finality.confirmations(finalityConfirmations));
         });
-        return section("Single transaction", recipient, amount, confirmations, send, singleResult);
+        return section("Single transaction", "Send one transaction and choose its confirmation depth.", recipient, amount, confirmations, send, singleResult);
     }
 
-    private VerticalLayout batchSection() {
+    private DemoSection batchSection() {
         TextField firstRecipient = addressField("First recipient address");
         BigDecimalField firstAmount = amountField("First amount (ETH)");
         TextField secondRecipient = addressField("Second recipient address");
@@ -113,7 +114,9 @@ public class TransactionsView extends VerticalLayout {
         fallback.setValue(FallbackPolicy.NEVER);
         Button submit = new Button("Submit two calls", event -> submitBatch(firstRecipient, firstAmount,
                 secondRecipient, secondAmount, fallback.getValue()));
-        return section("Batch calls (EIP-5792)", capability, firstRecipient, firstAmount,
+        DemoCallout developmentNote = new DemoCallout("warning", VaadinIcon.WARNING.create(),
+                "The Development wallet executes batches sequentially and does not support atomic batches.");
+        return section("Batch calls (EIP-5792)", "Submit two wallet calls and review the available batch behavior.", capability, developmentNote, firstRecipient, firstAmount,
                 secondRecipient, secondAmount, fallback, submit, batchResult, batchStatus);
     }
 
@@ -214,7 +217,7 @@ public class TransactionsView extends VerticalLayout {
     }
     private static TextField addressField(String label) { TextField field = new TextField(label); field.setWidthFull(); field.setPlaceholder("0x…"); return field; }
     private static BigDecimalField amountField(String label) { BigDecimalField field = new BigDecimalField(label); field.setValue(new BigDecimal("0.001")); return field; }
-    private static VerticalLayout section(String title, com.vaadin.flow.component.Component... children) {
-        VerticalLayout layout = new VerticalLayout(new H2(title)); layout.setPadding(false); layout.add(children); return layout;
+    private static DemoSection section(String title, String description, com.vaadin.flow.component.Component... children) {
+        return new DemoSection(title, description, children);
     }
 }
