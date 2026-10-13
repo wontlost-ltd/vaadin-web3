@@ -173,7 +173,7 @@ public class X402DemoConfiguration {
     private record UnavailableDemoFacilitator(String reason) implements FacilitatorClient {
         @Override
         public SupportedResponse supported() {
-            return new SupportedResponse(2, List.of());
+            return new SupportedResponse(List.of(), List.of());
         }
 
         @Override

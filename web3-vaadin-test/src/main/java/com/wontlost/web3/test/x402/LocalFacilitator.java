@@ -48,7 +48,7 @@ public final class LocalFacilitator implements FacilitatorClient {
         if (rpc.chainId() != chainId) throw new IllegalArgumentException("local facilitator chain mismatch");
     }
 
-    @Override public SupportedResponse supported() { return new SupportedResponse(2, List.of("exact:eip155:eip3009")); }
+    @Override public SupportedResponse supported() { return new SupportedResponse(List.of(new SupportedResponse.Kind(2, "exact", "eip155:" + chainId, Map.of())), List.of()); }
 
     @Override public VerifyResult verify(PaymentPayload payload, PaymentRequirements requirements) {
         try {

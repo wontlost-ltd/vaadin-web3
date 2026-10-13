@@ -123,7 +123,7 @@ class X402LocalFacilitatorAnvilIT {
     @Test @Order(3) void reconcilesUnknownByAuthorizationStateAndLeavesUnusedAuthorizationPending() {
         var store = new InMemoryPaidResourceStore();
         var forbiddenFacilitator = new FacilitatorClient() {
-            @Override public SupportedResponse supported() { return new SupportedResponse(2, List.of()); }
+            @Override public SupportedResponse supported() { return new SupportedResponse(List.of(), List.of()); }
             @Override public VerifyResult verify(PaymentPayload payload, com.wontlost.web3.x402.protocol.PaymentRequirements requirements) {
                 return new VerifyResult(false, "not used", null);
             }
@@ -156,7 +156,7 @@ class X402LocalFacilitatorAnvilIT {
     @Test @Order(4) void reconcilesExpiryAgainstChainTimeRatherThanExpiredServerClock() {
         var store = new InMemoryPaidResourceStore();
         var forbiddenFacilitator = new FacilitatorClient() {
-            @Override public SupportedResponse supported() { return new SupportedResponse(2, List.of()); }
+            @Override public SupportedResponse supported() { return new SupportedResponse(List.of(), List.of()); }
             @Override public VerifyResult verify(PaymentPayload payload, com.wontlost.web3.x402.protocol.PaymentRequirements requirements) {
                 return new VerifyResult(false, "not used", null);
             }

@@ -50,8 +50,30 @@ public final class HttpFacilitatorClient implements FacilitatorClient {
         JsonNode root = request("GET", "/supported", null, false);
         JsonNode kinds = root.path("kinds");
         if (!kinds.isArray()) throw malformed();
-        return new SupportedResponse(root.path("x402Version").asInt(),
-                java.util.stream.StreamSupport.stream(kinds.spliterator(), false).map(JsonNode::asString).toList());
+        java.util.List<SupportedResponse.Kind> parsedKinds = new java.util.ArrayList<>();
+        for (JsonNode kind : kinds) {
+            JsonNode scheme = kind.get("scheme");
+            JsonNode network = kind.get("network");
+            if (!kind.isObject() || scheme == null || !scheme.isString() || network == null || !network.isString())
+                throw malformed();
+            JsonNode version = kind.get("x402Version");
+            if (version != null && !version.isIntegralNumber()) throw malformed();
+            JsonNode extra = kind.get("extra");
+            if (extra != null && !extra.isObject()) throw malformed();
+            parsedKinds.add(new SupportedResponse.Kind(version == null ? 1 : version.intValue(), scheme.asString(),
+                    network.asString(), extra == null ? Map.of() : mapper.convertValue(extra, mapper.getTypeFactory()
+                            .constructMapType(Map.class, String.class, JsonNode.class))));
+        }
+        JsonNode extensions = root.get("extensions");
+        java.util.List<String> parsedExtensions = new java.util.ArrayList<>();
+        if (extensions != null) {
+            if (!extensions.isArray()) throw malformed();
+            for (JsonNode extension : extensions) {
+                if (!extension.isString()) throw malformed();
+                parsedExtensions.add(extension.asString());
+            }
+        }
+        return new SupportedResponse(parsedKinds, parsedExtensions);
     }
     @Override public VerifyResult verify(PaymentPayload payload, PaymentRequirements requirements) {
         JsonNode root = request("POST", "/verify", body(payload, requirements), false);
