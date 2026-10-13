@@ -4,11 +4,9 @@ import java.math.BigDecimal;
 
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.html.H1;
-import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -24,6 +22,10 @@ import com.wontlost.web3.Chains;
 import com.wontlost.web3.Web3Address;
 import com.wontlost.web3.Web3Connect;
 import com.wontlost.web3.Web3Utils;
+import com.wontlost.web3.demo.ui.DemoCallout;
+import com.wontlost.web3.demo.ui.DemoPage;
+import com.wontlost.web3.demo.ui.DemoSection;
+import com.wontlost.web3.demo.ui.DemoStatus;
 
 /**
  * Demo view exercising every feature of the web3 add-on: connecting,
@@ -32,22 +34,17 @@ import com.wontlost.web3.Web3Utils;
  */
 @Route(value = "", layout = MainLayout.class)
 @AnonymousAllowed
-public class DemoView extends VerticalLayout {
+public class DemoView extends DemoPage {
 
     private final Web3Connect wallet = new Web3Connect();
     private final Web3Address address = new Web3Address();
-    private final Paragraph status = new Paragraph("Not connected.");
+    private final DemoStatus status = new DemoStatus("pending", "Not connected.");
     private final Paragraph providerPrompt = new Paragraph(
             "No browser wallet detected. Install MetaMask: https://metamask.io/download");
     private final VerticalLayout walletList = new VerticalLayout();
 
     public DemoView() {
-        setMaxWidth("720px");
-        getStyle().set("margin", "0 auto");
-
-        add(new H1("Vaadin Web3 Add-on Demo"),
-                new Paragraph("Use a browser wallet extension such as MetaMask on a test network (e.g. Sepolia), "
-                        + "or run the 'demo' profile with Anvil to use the built-in development wallet."));
+        super("Vaadin Web3 Add-on Demo", "Connect a browser wallet to inspect accounts, signatures, transactions, balances, and networks.");
 
         // 默认隐藏，只有浏览器明确报告没有钱包时才显示，避免已装钱包的用户每次加载都闪现提示
         providerPrompt.setVisible(false);
@@ -56,7 +53,7 @@ public class DemoView extends VerticalLayout {
 
         walletList.setPadding(false);
         walletList.setSpacing(true);
-        add(providerPrompt, wallet, walletList, address, status);
+        add(new DemoSection("Wallet", "Connect and inspect the active account.", providerPrompt, wallet, walletList, address, status));
         add(signSection(), transactionSection(), chainSection());
 
         // Restore a previously authorized session without prompting.
@@ -99,31 +96,30 @@ public class DemoView extends VerticalLayout {
             HorizontalLayout row = new HorizontalLayout();
             if (!info.icon().isBlank()) {
                 Image icon = new Image(info.icon(), info.name());
-                icon.setWidth("32px");
-                icon.setHeight("32px");
+                icon.addClassName("demo-wallet-icon");
                 row.add(icon);
             }
             row.add(new Paragraph(info.name()), new Button("Connect with " + info.name(),
                     event -> wallet.connect(info.rdns())));
             if (wallet.isServerWallet(info)) {
                 // 开发钱包：醒目提示，文案与组件 i18n 一致
-                Span warning = new Span(wallet.getI18n().getDevelopmentWalletWarning());
-                warning.getStyle().set("color", "var(--lumo-error-text-color)").set("font-weight", "700");
+                DemoCallout warning = new DemoCallout("warning", VaadinIcon.WARNING.create(),
+                        wallet.getI18n().getDevelopmentWalletWarning());
                 row.add(warning);
             }
             walletList.add(row);
         }
     }
 
-    private VerticalLayout signSection() {
+    private DemoSection signSection() {
         TextArea message = new TextArea("Message");
         message.setValue("Hello from Vaadin!");
         message.setWidthFull();
         Button sign = new Button("Sign message", e -> wallet.signMessage(message.getValue()));
-        return section("Sign a message", message, sign);
+        return section("Sign a message", "Review and sign a message with your connected wallet.", message, sign);
     }
 
-    private VerticalLayout transactionSection() {
+    private DemoSection transactionSection() {
         TextField to = new TextField("Recipient address");
         to.setWidthFull();
         to.setPlaceholder("0x…");
@@ -145,10 +141,10 @@ public class DemoView extends VerticalLayout {
                 error(exception.getMessage());
             }
         });
-        return section("Send a transaction", to, amount, send);
+        return section("Send a transaction", "Enter a recipient and amount, then submit a transaction.", to, amount, send);
     }
 
-    private VerticalLayout chainSection() {
+    private DemoSection chainSection() {
         Select<String> chain = new Select<>();
         chain.setLabel("Network");
         chain.setItems("Ethereum", "Sepolia", "Polygon", "Base", "Arbitrum One");
@@ -163,7 +159,7 @@ public class DemoView extends VerticalLayout {
                 default -> wallet.switchChain(Chains.SEPOLIA);
             }
         });
-        return section("Switch network", new HorizontalLayout(chain, switchBtn));
+        return section("Switch network", "Choose a supported network and request a wallet switch.", new HorizontalLayout(chain, switchBtn));
     }
 
     private void refreshBalance() {
@@ -176,11 +172,8 @@ public class DemoView extends VerticalLayout {
                         .stripTrailingZeros().toPlainString() + " (native token)")));
     }
 
-    private VerticalLayout section(String title, com.vaadin.flow.component.Component... components) {
-        VerticalLayout layout = new VerticalLayout(new H2(title));
-        layout.add(components);
-        layout.setPadding(false);
-        return layout;
+    private DemoSection section(String title, String description, com.vaadin.flow.component.Component... components) {
+        return new DemoSection(title, description, components);
     }
 
     private void success(String text) {

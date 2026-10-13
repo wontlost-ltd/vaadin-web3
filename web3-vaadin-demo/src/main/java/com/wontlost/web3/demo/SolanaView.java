@@ -33,18 +33,21 @@ import com.wontlost.web3.solana.SolanaTransaction;
 import com.wontlost.web3.solana.SolanaTransfers;
 import com.wontlost.web3.solana.wallet.SiwsLogin;
 import com.wontlost.web3.solana.wallet.SolanaTransactionStatus;
+import com.wontlost.web3.demo.ui.DemoPage;
+import com.wontlost.web3.demo.ui.DemoSection;
+import com.wontlost.web3.demo.ui.DemoStatus;
 
 /** Sign-In With Solana 演示页：登录、查看身份，以及按登录地址读取 SOL 与 SPL 余额。 */
 @Route(value = "solana", layout = MainLayout.class)
 @PageTitle("Solana")
 @AnonymousAllowed
-public final class SolanaView extends VerticalLayout {
+public final class SolanaView extends DemoPage {
     private static final BigInteger AIRDROP_LAMPORTS = BigInteger.valueOf(1_000_000_000L);
 
     private final SolanaRpcClient rpc;
     private final SolanaCluster cluster;
     private final Span identity = new Span();
-    private final Span status = new Span();
+    private final DemoStatus status = new DemoStatus("pending", "");
     private final Span solBalance = new Span();
     private final Span tokenBalance = new Span();
     private final TextField mint = new TextField("SPL token mint");
@@ -61,6 +64,7 @@ public final class SolanaView extends VerticalLayout {
 
     public SolanaView(SiwsVerifier verifier, SolanaClusters clusters,
             @Value("${web3.demo.solana.cluster:devnet}") String clusterName) {
+        super("Solana", "Sign in with a Wallet Standard wallet, inspect balances, and send a Solana transfer.");
         this.cluster = SolanaCluster.valueOf(clusterName.trim().toUpperCase(Locale.ROOT));
         this.rpc = clusters.get(cluster).orElseThrow(() -> new IllegalStateException(
                 "No Solana RPC client is configured for the demo cluster '" + cluster.chainId() + "'"));
@@ -74,15 +78,15 @@ public final class SolanaView extends VerticalLayout {
                 if (!mint.getValue().isBlank()) showTokenBalance();
             }
         });
-        recipient.setWidth("32rem");
-        amount.setWidth("10rem");
+        recipient.addClassName("demo-field--wide");
+        amount.addClassName("demo-field--compact");
         send.addClickListener(event -> sendTransfer());
         status.getElement().setAttribute("role", "status");
         status.setId("solana-status");
         identity.setId("solana-identity");
         solBalance.setId("solana-sol-balance");
         tokenBalance.setId("solana-token-balance");
-        mint.setWidth("32rem");
+        mint.addClassName("demo-field--wide");
         mint.setHelperText("Base58 mint address, for example a token created with spl-token on the local validator");
         airdrop.setVisible(cluster == SolanaCluster.LOCALNET || cluster == SolanaCluster.DEVNET);
 
@@ -100,19 +104,12 @@ public final class SolanaView extends VerticalLayout {
         checkToken.addClickListener(event -> showTokenBalance());
         airdrop.addClickListener(event -> requestAirdrop());
 
-        add(new H2("Sign in with Solana"),
-                new Paragraph("Cluster: " + cluster.chainId() + ". Connect a Wallet Standard wallet such as Phantom, "
-                        + "or the development wallet when it is enabled, and sign the challenge."),
-                login, status, identity,
-                new HorizontalLayout(signOut),
-                new H3("Balances"),
-                new HorizontalLayout(solBalance, refresh, airdrop),
-                new HorizontalLayout(mint, checkToken),
-                tokenBalance,
-                new H3("Send"),
-                transferHint,
-                new HorizontalLayout(recipient, amount, send),
-                transferStatus);
+        add(new DemoSection("Identity", "Cluster: " + cluster.chainId() + ". Sign the challenge with a Wallet Standard wallet.",
+                login, status, identity, new HorizontalLayout(signOut)));
+        add(new DemoSection("Balances", "Read SOL and SPL token balances for the signed-in address.",
+                new HorizontalLayout(solBalance, refresh, airdrop), new HorizontalLayout(mint, checkToken), tokenBalance));
+        add(new DemoSection("Transfer", "Send SOL or the selected SPL token and follow confirmation status.",
+                transferHint, new HorizontalLayout(recipient, amount, send), transferStatus));
         update();
     }
 

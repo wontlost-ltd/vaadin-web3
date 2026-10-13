@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.component.page.Push;
 import com.vaadin.flow.component.dependency.StyleSheet;
+import com.vaadin.flow.theme.Theme;
 import com.vaadin.flow.theme.lumo.Lumo;
 
 /**
@@ -16,6 +17,7 @@ import com.vaadin.flow.theme.lumo.Lumo;
  * Development wallet when Anvil is running.
  */
 @Push
+@Theme("demo")
 @StyleSheet(Lumo.STYLESHEET)
 @SpringBootApplication
 public class DemoApplication implements AppShellConfigurator {
