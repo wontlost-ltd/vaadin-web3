@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [1.0.0] - Unreleased
 
+### Changed
+- Represent facilitator supported kinds as versioned scheme/network records with extensions.
+
+
 ### Fixed
 - Rotate servlet session IDs after verified SIWE sign-in when the current Vaadin request supports it; warn when the transport cannot rotate the ID.
 - Reject payment confirmation when the receipt block is no longer canonical, and prevent wallet restoration from racing with a cross-instance disconnect.

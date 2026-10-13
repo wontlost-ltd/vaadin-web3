@@ -221,7 +221,7 @@ class X402AutoConfigurationTest {
                 .serviceInit(new ServiceInitEvent(service));
     }
     private static final class StubFacilitator implements FacilitatorClient {
-        @Override public com.wontlost.web3.x402.payment.SupportedResponse supported() { return new com.wontlost.web3.x402.payment.SupportedResponse(2, java.util.List.of()); }
+        @Override public com.wontlost.web3.x402.payment.SupportedResponse supported() { return new com.wontlost.web3.x402.payment.SupportedResponse(java.util.List.of(), java.util.List.of()); }
         @Override public com.wontlost.web3.x402.payment.VerifyResult verify(com.wontlost.web3.x402.protocol.PaymentPayload p, com.wontlost.web3.x402.protocol.PaymentRequirements r) { return new com.wontlost.web3.x402.payment.VerifyResult(false, "invalid", null); }
         @Override public com.wontlost.web3.x402.payment.SettlementResult settle(com.wontlost.web3.x402.protocol.PaymentPayload p, com.wontlost.web3.x402.protocol.PaymentRequirements r) { return new com.wontlost.web3.x402.payment.SettlementResult(com.wontlost.web3.x402.payment.SettlementState.REJECTED, null, "invalid", null); }
     }

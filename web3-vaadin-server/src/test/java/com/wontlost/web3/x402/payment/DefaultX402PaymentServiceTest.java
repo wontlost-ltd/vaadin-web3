@@ -614,7 +614,7 @@ class DefaultX402PaymentServiceTest {
         private volatile RuntimeException failure;
         private volatile VerifyResult verify = new VerifyResult(true, null, ADDRESS);
         private volatile SettlementResult settlement = new SettlementResult(SettlementState.SETTLED, "0xabc", null, null);
-        @Override public SupportedResponse supported() { return new SupportedResponse(2, java.util.List.of()); }
+        @Override public SupportedResponse supported() { return new SupportedResponse(java.util.List.of(), java.util.List.of()); }
         @Override public VerifyResult verify(PaymentPayload payload, com.wontlost.web3.x402.protocol.PaymentRequirements requirements) {
             verifies.incrementAndGet(); return verify;
         }

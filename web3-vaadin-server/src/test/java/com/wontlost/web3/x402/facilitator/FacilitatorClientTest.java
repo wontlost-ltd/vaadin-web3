@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.wontlost.web3.x402.payment.SettlementState;
+import com.wontlost.web3.x402.payment.SupportedResponse;
 import com.wontlost.web3.x402.protocol.PaymentPayload;
 import com.wontlost.web3.x402.protocol.PaymentRequirements;
 
@@ -75,11 +76,27 @@ class FacilitatorClientTest {
         body.set("{\"success\":false,\"pending\":true,\"errorReason\":\"settlement_pending\",\"transaction\":\"0xabc\"}");
         assertEquals(SettlementState.PENDING, client.settle(payload, requirements).state());
         assertEquals("/settle", path.get());
-        body.set("{\"x402Version\":2,\"kinds\":[\"exact:eip155:1\"]}");
-        assertEquals(2, client.supported().x402Version());
+        body.set("{\"kinds\":[{\"x402Version\":2,\"scheme\":\"exact\",\"network\":\"eip155:84532\"},{\"x402Version\":2,\"scheme\":\"upto\",\"network\":\"eip155:84532\",\"extra\":{\"facilitatorAddress\":\"0x...\"}},{\"x402Version\":1,\"scheme\":\"exact\",\"network\":\"base-sepolia\"}],\"extensions\":[\"builder-code\"]}");
+        SupportedResponse supported = client.supported();
+        assertEquals(3, supported.kinds().size());
+        assertEquals(2, supported.kinds().getFirst().x402Version());
+        assertEquals("exact", supported.kinds().getFirst().scheme());
+        assertEquals("eip155:84532", supported.kinds().getFirst().network());
+        assertEquals("0x...", supported.kinds().get(1).extra().get("facilitatorAddress").asString());
+        assertTrue(supported.kinds().get(2).extra().isEmpty());
+        assertTrue(supported.supports(2, "exact", "eip155:84532"));
+        assertFalse(supported.supports(2, "Exact", "eip155:84532"));
+        assertEquals(java.util.List.of("builder-code"), supported.extensions());
         assertEquals("GET", method.get());
         assertEquals("/supported", path.get());
         assertEquals(3, calls.get());
+    }
+
+
+    @Test void supportedRejectsMalformedKind() {
+        body.set("{\"kinds\":[{\"x402Version\":2,\"scheme\":\"exact\"}]}");
+        assertEquals(FacilitatorFailure.MALFORMED_RESPONSE,
+                assertThrows(FacilitatorException.class, () -> client.supported()).failure());
     }
 
     @Test void classifiesAuthenticationRateLimitRejectedAndUnavailableResponses() {
