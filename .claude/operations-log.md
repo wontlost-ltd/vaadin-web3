@@ -151,7 +151,7 @@
 - `mvn -B -ntp -o -q -pl web3-vaadin-server -am test` — PASS.
 - `mvn -B -ntp -o -q -pl web3-vaadin-onramp -am test` — PASS.
 - `mvn -B -ntp -o -q -pl web3-vaadin-monitor -am test` — PASS.
-- `ANVIL_RPC=http://127.0.0.1:8547 mvn -B -ntp -o clean install` — PASS; Surefire total: 623 tests, 0 failures, 0 errors, 2 skipped.
+- `ANVIL_RPC=http://127.0.0.1:8547 mvn -B -ntp -o clean install` — PASS; Surefire total: 623 tests, 0 failures, 0 errors, 0 skipped.
 - `JAVA_HOME=/Users/rpang/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.8/Contents/Home TZ=UTC mvn -B -ntp -o test` — PASS; Surefire total: 623 tests, 0 failures, 0 errors, 3 skipped.
 - `git diff --check` — PASS.
 - No planned findings were omitted. The store package has no JDBC implementation; the W6 alignment request therefore applied only to the in-memory store.
