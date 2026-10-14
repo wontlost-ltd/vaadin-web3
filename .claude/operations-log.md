@@ -155,3 +155,15 @@
 - `JAVA_HOME=/Users/rpang/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.8/Contents/Home TZ=UTC mvn -B -ntp -o test` — PASS; Surefire total: 623 tests, 0 failures, 0 errors, 3 skipped.
 - `git diff --check` — PASS.
 - No planned findings were omitted. The store package has no JDBC implementation; the W6 alignment request therefore applied only to the in-memory store.
+
+### round 2
+
+- R1: Changed TokenGate decimals caching from process-global static state to a bounded per-instance cache; the regression now evaluates two navigations through the same gate and confirms one decimals eth_call.
+- R2: BoundedHttpServletResponse.copyTo now excludes buffered Content-Length metadata and always sets the real response length from the buffered body. The test supplies length 99 for a two-byte body and verifies the copied length is 2.
+- R3: Added SiweException.Reason.INTERNAL_ERROR. Unexpected pre-completion runtime failures finish as INTERNAL_ERROR; failures from SignedInEvent listeners after completion are logged without firing SignInFailedEvent. Tests cover the listener failure and a missing-current-session store failure.
+- R4: UiPolling now tracks a last-run time per subscription and dispatches according to 90% of each interval, with an injectable package-private clock setter. Simulated 500 ms polls produce six short callbacks and two 3-second callbacks.
+- R5: Split the four aggregated Fixed bullets into individual English entries.
+- Targeted server regression tests: `mvn -B -ntp -o -q -pl web3-vaadin-server test -Dtest=TokenGateTest,BoundedHttpServletResponseTest,SiweSessionRotationTest,UiPollingTest` — PASS.
+- `ANVIL_RPC=http://127.0.0.1:8547 mvn -B -ntp -o clean install` — PASS; all 10 reactor projects succeeded; Surefire: 625 tests, 0 failures, 0 errors, 0 skipped.
+- `JAVA_HOME=/Users/rpang/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.8/Contents/Home TZ=UTC mvn -B -ntp -o test` — PASS; all 10 reactor projects succeeded; Surefire XML total: 625 tests, 0 failures, 0 errors, 3 skipped.
+- `git diff --check` — PASS.
