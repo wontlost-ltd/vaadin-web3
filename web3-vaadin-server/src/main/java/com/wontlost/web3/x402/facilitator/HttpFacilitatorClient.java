@@ -21,9 +21,10 @@ import com.wontlost.web3.x402.protocol.PaymentRequirements;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-public final class HttpFacilitatorClient implements FacilitatorClient {
+public final class HttpFacilitatorClient implements FacilitatorClient, AutoCloseable {
     private final URI baseUri;
     private final HttpClient client;
+    private final boolean ownsClient;
     private final Duration timeout;
     private final int maxResponseBytes;
     private final String apiKey;
@@ -32,18 +33,36 @@ public final class HttpFacilitatorClient implements FacilitatorClient {
 
     public HttpFacilitatorClient(String baseUrl, String apiKey, String apiKeyHeader,
             Duration connectTimeout, Duration requestTimeout, int maxResponseBytes) {
+        this(baseUrl, apiKey, apiKeyHeader, connectTimeout, requestTimeout, maxResponseBytes,
+                null, true);
+    }
+
+    public HttpFacilitatorClient(String baseUrl, String apiKey, String apiKeyHeader,
+            Duration connectTimeout, Duration requestTimeout, int maxResponseBytes, HttpClient client) {
+        this(baseUrl, apiKey, apiKeyHeader, connectTimeout, requestTimeout, maxResponseBytes, client, false);
+    }
+
+    private HttpFacilitatorClient(String baseUrl, String apiKey, String apiKeyHeader,
+            Duration connectTimeout, Duration requestTimeout, int maxResponseBytes, HttpClient client,
+            boolean ownsClient) {
         this.baseUri = validateUri(baseUrl);
         if (connectTimeout == null || requestTimeout == null || connectTimeout.toMillis() < 100
                 || connectTimeout.toSeconds() > 30 || requestTimeout.toMillis() < 100 || requestTimeout.toSeconds() > 30)
             throw new IllegalArgumentException("facilitator timeouts must be between 100ms and 30s");
         if (maxResponseBytes < 1 || maxResponseBytes > 262_144) throw new IllegalArgumentException("invalid response limit");
-        this.client = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        this.client = ownsClient ? HttpClient.newBuilder().connectTimeout(connectTimeout).build()
+                : java.util.Objects.requireNonNull(client);
+        this.ownsClient = ownsClient;
         this.timeout = requestTimeout;
         this.maxResponseBytes = maxResponseBytes;
         this.apiKey = apiKey == null ? "" : apiKey;
         this.apiKeyHeader = apiKeyHeader == null || apiKeyHeader.isBlank() ? "Authorization" : apiKeyHeader;
         if (!this.apiKey.isEmpty() && !this.apiKeyHeader.matches("[A-Za-z0-9-]{1,64}"))
             throw new IllegalArgumentException("invalid API key header");
+    }
+
+    @Override public void close() {
+        if (ownsClient) client.close();
     }
 
     @Override public SupportedResponse supported() {
