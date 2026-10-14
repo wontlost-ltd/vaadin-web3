@@ -27,7 +27,7 @@ public final class HttpJsonRpcTransport implements JsonRpcTransport {
         this(endpoint, timeout, HttpClient.newBuilder().connectTimeout(timeout).build(), true, DEFAULT_MAX_RESPONSE_BYTES);
     }
 
-    /** Creates a transport with a privately owned HTTP client and a response size limit. */
+    /** 使用内部创建的 HTTP 客户端和响应大小限制创建传输器。 */
     public HttpJsonRpcTransport(String endpoint, Duration timeout, int maxResponseBytes) {
         this(endpoint, timeout, HttpClient.newBuilder().connectTimeout(timeout).build(), true, maxResponseBytes);
     }
@@ -37,7 +37,7 @@ public final class HttpJsonRpcTransport implements JsonRpcTransport {
         this(endpoint, timeout, client, false, DEFAULT_MAX_RESPONSE_BYTES);
     }
 
-    /** Creates a transport using a caller-owned shared HTTP client and response size limit. */
+    /** 使用调用方共享的 HTTP 客户端和响应大小限制创建传输器。 */
     public HttpJsonRpcTransport(String endpoint, Duration timeout, HttpClient client, int maxResponseBytes) {
         this(endpoint, timeout, client, false, maxResponseBytes);
     }
