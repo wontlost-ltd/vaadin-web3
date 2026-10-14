@@ -107,9 +107,9 @@ public final class SolanaView extends DemoPage {
         add(new DemoSection("Identity", "Cluster: " + cluster.chainId() + ". Sign the challenge with a Wallet Standard wallet.",
                 login, status, identity, new HorizontalLayout(signOut)));
         add(new DemoSection("Balances", "Read SOL and SPL token balances for the signed-in address.",
-                new HorizontalLayout(solBalance, refresh, airdrop), new HorizontalLayout(mint, checkToken), tokenBalance));
+                DemoSection.row(solBalance, refresh, airdrop), DemoSection.row(mint, checkToken), tokenBalance));
         add(new DemoSection("Transfer", "Send SOL or the selected SPL token and follow confirmation status.",
-                transferHint, new HorizontalLayout(recipient, amount, send), transferStatus));
+                transferHint, DemoSection.row(recipient, amount, send), transferStatus));
         update();
     }
 
