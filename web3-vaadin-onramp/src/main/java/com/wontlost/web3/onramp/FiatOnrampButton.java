@@ -90,7 +90,7 @@ public final class FiatOnrampButton extends Composite<VerticalLayout> {
             button.setEnabled(false);
             fallback.setVisible(false);
             uri = resolved.createSession(order);
-            if (!uri.isAbsolute() || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme())) || uri.getHost() == null)
+            if (!uri.isAbsolute() || !"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null)
                 throw new IllegalArgumentException(i18n.getInvalidProviderUrl());
         } catch (RuntimeException failure) {
             OnrampException exception = failure instanceof OnrampException onramp ? onramp

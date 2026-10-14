@@ -8,7 +8,7 @@ public class FiatOnrampI18n implements Serializable {
     private String continueTo = "Continue to {0}";
     private String connectWallet = "Connect your wallet first";
     private String providerMissing = "No on-ramp provider named {0} is registered; call OnrampProviders.register at startup";
-    private String invalidProviderUrl = "Provider URL must be an absolute HTTP URL";
+    private String invalidProviderUrl = "Provider URL must be an absolute HTTPS URL";
     private String needToken = "Need {0}? Buy with card";
 
     public String getButton() { return button; }
