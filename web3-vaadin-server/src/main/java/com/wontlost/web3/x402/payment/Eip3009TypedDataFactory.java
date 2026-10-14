@@ -16,6 +16,7 @@ import com.wontlost.web3.x402.protocol.X402Validation;
 import tools.jackson.databind.ObjectMapper;
 
 public final class Eip3009TypedDataFactory {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String TYPE = "TransferWithAuthorization";
     private static final Duration DEFAULT_VALID_AFTER_SKEW = Duration.ofSeconds(600);
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -91,7 +92,7 @@ public final class Eip3009TypedDataFactory {
                         Map.of("name", "validBefore", "type", "uint256"), Map.of("name", "nonce", "type", "bytes32"))));
         typedData.put("message", Map.of("from", auth.from(), "to", auth.to(), "value", auth.value(),
                 "validAfter", auth.validAfter(), "validBefore", auth.validBefore(), "nonce", auth.nonce()));
-        try { return new ObjectMapper().writeValueAsString(typedData); }
+        try { return MAPPER.writeValueAsString(typedData); }
         catch (Exception exception) { throw new IllegalStateException("could not encode typed data", exception); }
     }
 

@@ -17,7 +17,12 @@ class EthRpcErrorClassifierTest {
                 {3, "execution reverted", "0xdead", EthRpcException.Category.DETERMINISTIC},
                 {-32601, "method not found", null, EthRpcException.Category.INVALID_REQUEST},
                 {-32000, "provider internal error", null, EthRpcException.Category.UNKNOWN},
-                {-32000, "", "{\"detail\":\"header not found\"}", EthRpcException.Category.TRANSIENT_NODE}
+                {-32000, "", "{\"detail\":\"header not found\"}", EthRpcException.Category.TRANSIENT_NODE},
+                {-32000, "execution reverted", "0x429", EthRpcException.Category.DETERMINISTIC},
+                {-32000, "execution reverted: allowance limit exceeded", null, EthRpcException.Category.DETERMINISTIC},
+                {-32000, "HTTP 429: too many requests", null, EthRpcException.Category.RATE_LIMITED},
+                {-32000, "request 1429 failed", null, EthRpcException.Category.UNKNOWN},
+                {429, "provider overloaded", null, EthRpcException.Category.RATE_LIMITED}
         };
         for (Object[] testCase : cases) {
             EthRpcException exception = new EthRpcException((int) testCase[0], (String) testCase[1], (String) testCase[2]);

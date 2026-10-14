@@ -14,12 +14,46 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
 import com.wontlost.web3.chain.TokenInfo;
 
 class CatalogCacheTest {
+    @Test void slowGetLoaderDoesNotBlockPeekAndRefresh() throws Exception {
+        CatalogCache<String> cache = new CatalogCache<>(new MutableClock(), Duration.ofMinutes(10));
+        CountDownLatch loaderStarted = new CountDownLatch(1);
+        CountDownLatch releaseLoader = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        java.util.concurrent.ConcurrentLinkedQueue<Runnable> background = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        try {
+            var get = executor.submit(() -> cache.get(() -> {
+                loaderStarted.countDown();
+                try {
+                    if (!releaseLoader.await(2, TimeUnit.SECONDS)) throw new IllegalStateException("loader release timed out");
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(exception);
+                }
+                return List.of("loaded");
+            }));
+            assertTrue(loaderStarted.await(2, TimeUnit.SECONDS));
+
+            var peek = executor.submit(() -> cache.peekAndRefresh(() -> List.of("background"), background::add));
+            assertEquals(Optional.empty(), peek.get(1, TimeUnit.SECONDS));
+
+            releaseLoader.countDown();
+            assertEquals(List.of("loaded"), get.get(2, TimeUnit.SECONDS));
+            assertEquals(1, background.size());
+        } finally {
+            releaseLoader.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     @Test void peekNeverBlocksAndServesStaleDataWhileRefreshingInTheBackground() {
         MutableClock clock = new MutableClock();
         CatalogCache<String> cache = new CatalogCache<>(clock, Duration.ofMinutes(10));

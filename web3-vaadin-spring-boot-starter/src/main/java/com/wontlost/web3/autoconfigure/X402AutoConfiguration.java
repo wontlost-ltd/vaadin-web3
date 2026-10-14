@@ -105,7 +105,7 @@ public class X402AutoConfiguration {
     @ConditionalOnMissingBean(PaidResourceStore.class)
     PaidResourceStore x402PaidResourceStore() { return new InMemoryPaidResourceStore(); }
 
-    @Bean
+    @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean(FacilitatorClient.class)
     FacilitatorClient x402FacilitatorClient(Web3Properties properties) {
         Web3Properties.X402 config = properties.getX402();

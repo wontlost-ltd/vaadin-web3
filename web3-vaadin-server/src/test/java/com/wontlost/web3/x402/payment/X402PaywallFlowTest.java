@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.server.Command;
 import com.vaadin.flow.server.VaadinSession;
 import com.wontlost.web3.Web3Connect;
@@ -46,6 +47,22 @@ class X402PaywallFlowTest {
         wall.payNowForTest();
         assertEquals(2, payments.prepares.get());
         assertEquals(PaywallState.REJECTED, wall.getState());
+    }
+
+    @Test void replacingWalletRemovesListenersFromPreviousWallet() {
+        AtomicReference<String> identity = new AtomicReference<>(ADDRESS_A);
+        TestWallet previous = new TestWallet(ADDRESS_A, "0x7a69", CompletableFuture.completedFuture("sig"));
+        X402Paywall wall = new X402Paywall(new FakePayments(), "demo-article",
+                new X402Resource("http://localhost/paid-article", "Article", "text/html"), "1000000", 6,
+                "eip155:31337", "0x0000000000000000000000000000000000000001", Runnable::run, identity::get);
+        wall.setWallet(previous);
+        TestWallet replacement = new TestWallet(ADDRESS_A, "0x7a69", CompletableFuture.completedFuture("sig"));
+        wall.setWallet(replacement);
+        identity.set(ADDRESS_B);
+
+        ComponentUtil.fireEvent(previous, new Web3Connect.Web3ConnectedEvent(previous, false, ADDRESS_A, "0x7a69"));
+
+        assertEquals("", wall.getErrorMessageForTest());
     }
 
     @Test void wrongNetworkAndMismatchedSessionAccountNeverPrepareOrSign() {

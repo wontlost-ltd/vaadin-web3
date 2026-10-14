@@ -32,21 +32,31 @@ class InMemoryPaidResourceStoreTest {
         assertTrue(store.findLatest("article", WALLET, "v2").isEmpty());
     }
 
-    @Test void purgeExpiredRemovesOnlyExpiredReadyRecordsAndReclaimsCapacity() {
-        var store = new InMemoryPaidResourceStore(3);
+    @Test void purgeExpiredRemovesExpiredReclaimableRecordsAndReclaimsCapacity() {
+        var store = new InMemoryPaidResourceStore(5);
         var expired = record("expired", "expired-key", "v1", PaymentStatus.READY, NOW, NOW.getEpochSecond() - 1);
         var active = record("active", "active-key", "v1", PaymentStatus.READY, NOW, NOW.getEpochSecond() + 60);
         var settled = record("settled", "settled-key", "v1", PaymentStatus.READY, NOW.minusSeconds(1), NOW.getEpochSecond() - 1);
+        var verified = record("verified", "verified-key", "v1", PaymentStatus.READY, NOW, NOW.getEpochSecond() - 1);
+        var failed = record("failed", "failed-key", "v1", PaymentStatus.READY, NOW, NOW.getEpochSecond() - 1);
         store.createReady(expired);
         store.createReady(active);
         store.createReady(settled);
+        store.createReady(verified);
+        store.createReady(failed);
         store.transition("settled", PaymentStatus.READY, withStatus(settled, PaymentStatus.VERIFIED));
         store.transition("settled", PaymentStatus.VERIFIED, withStatus(settled, PaymentStatus.SETTLING));
         store.transition("settled", PaymentStatus.SETTLING, withStatus(settled, PaymentStatus.SETTLED));
+        store.transition("verified", PaymentStatus.READY, withStatus(verified, PaymentStatus.VERIFIED));
+        store.transition("failed", PaymentStatus.READY, withStatus(failed, PaymentStatus.FAILED));
 
-        assertEquals(1, store.purgeExpired(NOW));
+        assertEquals(3, store.purgeExpired(NOW));
         assertTrue(store.findByPaymentId("expired").isEmpty());
         assertTrue(store.findByIdempotencyKey("expired-key").isEmpty());
+        assertTrue(store.findByPaymentId("verified").isEmpty());
+        assertTrue(store.findByIdempotencyKey("verified-key").isEmpty());
+        assertTrue(store.findByPaymentId("failed").isEmpty());
+        assertTrue(store.findByIdempotencyKey("failed-key").isEmpty());
         assertEquals("active", store.findLatest("article", WALLET, "v1").orElseThrow().paymentId());
         assertFalse(store.findByPaymentId("active").isEmpty());
         assertEquals(PaymentStatus.SETTLED, store.findByPaymentId("settled").orElseThrow().status());

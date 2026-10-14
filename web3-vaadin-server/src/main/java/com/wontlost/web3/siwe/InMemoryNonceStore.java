@@ -8,12 +8,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** In-memory one-time nonce store intended to be held as an application singleton. */
 public final class InMemoryNonceStore implements NonceStore {
+    public static final int DEFAULT_MAXIMUM_ENTRIES = 100_000;
 
     private static final char[] ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final Duration ttl;
     private final Clock clock;
+    private final int maximumEntries;
     private final ConcurrentHashMap<String, Instant> entries = new ConcurrentHashMap<>();
 
     /** Creates a store with a five-minute TTL and the system UTC clock. */
@@ -28,17 +30,29 @@ public final class InMemoryNonceStore implements NonceStore {
 
     /** Creates a store with an explicit TTL and clock. */
     public InMemoryNonceStore(Duration ttl, Clock clock) {
+        this(ttl, clock, DEFAULT_MAXIMUM_ENTRIES);
+    }
+
+    /** 使用指定的有效期、时钟和容量创建存储。 */
+    public InMemoryNonceStore(Duration ttl, Clock clock, int maximumEntries) {
         if (ttl == null || ttl.isZero() || ttl.isNegative()) {
             throw new IllegalArgumentException("ttl must be positive");
         }
+        if (maximumEntries < 1) {
+            throw new IllegalArgumentException("maximum nonce entries must be positive");
+        }
         this.ttl = ttl;
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
+        this.maximumEntries = maximumEntries;
     }
 
     /** Issues a random 17-character alphanumeric nonce. */
     @Override
-    public String issue() {
+    public synchronized String issue() {
         cleanupExpired();
+        if (entries.size() >= maximumEntries) {
+            throw new IllegalStateException("nonce store capacity reached");
+        }
         String nonce;
         do {
             nonce = randomNonce();

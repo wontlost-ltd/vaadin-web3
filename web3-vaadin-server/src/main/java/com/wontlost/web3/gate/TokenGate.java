@@ -5,6 +5,8 @@ import java.math.BigInteger;
 import java.time.Duration;
 import java.util.Objects;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterListener;
@@ -25,6 +27,7 @@ import com.wontlost.web3.siwe.Web3Session;
  * {@link java.time.Duration#ZERO} to query on every navigation, when that window matters.
  */
 public final class TokenGate implements BeforeEnterListener {
+    private final Cache<DecimalsKey, Integer> decimals = Caffeine.newBuilder().maximumSize(10_000).build();
     private final ChainRegistry chains;
     private final BalanceCache<BalanceKey, BigInteger> balances;
 
@@ -68,7 +71,7 @@ public final class TokenGate implements BeforeEnterListener {
     Decision evaluate(RequiresToken requirement, String address) {
         try {
             TokenInfo token = resolve(requirement);
-            int decimals = requirement.decimals() < 0 ? Erc20.decimals(client(requirement.chainId()), token.address())
+            int decimals = requirement.decimals() < 0 ? tokenDecimals(requirement.chainId(), token.address())
                     : requirement.decimals();
             BigInteger minimum = Tokens.toBaseUnits(new BigDecimal(requirement.minBalance()), decimals);
             return checkBalance(() -> balance(requirement.chainId(), token.address(), address), minimum);
@@ -106,6 +109,11 @@ public final class TokenGate implements BeforeEnterListener {
         return chains.get(chainId).orElseThrow(() -> new IllegalStateException("No RPC registered for chain " + chainId));
     }
 
+    private int tokenDecimals(long chainId, String tokenAddress) {
+        DecimalsKey key = new DecimalsKey(chainId, tokenAddress.toLowerCase(java.util.Locale.ROOT));
+        return decimals.get(key, ignored -> Erc20.decimals(client(chainId), tokenAddress));
+    }
+
     private BigInteger balance(long chainId, String token, String address) {
         BalanceKey key = new BalanceKey(chainId, token.toLowerCase(), address.toLowerCase());
         return balances.get(key, () -> Erc20.balanceOf(client(chainId), token, address));
@@ -114,4 +122,5 @@ public final class TokenGate implements BeforeEnterListener {
     int cachedBalanceCount() { return balances.size(); }
 
     private record BalanceKey(long chainId, String token, String address) { }
+    private record DecimalsKey(long chainId, String tokenAddress) { }
 }

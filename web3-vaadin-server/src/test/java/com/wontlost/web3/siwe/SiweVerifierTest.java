@@ -173,6 +173,17 @@ class SiweVerifierTest {
         assertFalse(store.consume(expired));
     }
 
+    @Test
+    void nonceStoreRejectsIssuesWhenCapacityIsFullAndReusesExpiredCapacity() {
+        MutableClock clock = new MutableClock(NOW);
+        InMemoryNonceStore store = new InMemoryNonceStore(Duration.ofSeconds(5), clock, 1);
+        store.issue();
+        assertThrows(IllegalStateException.class, store::issue);
+
+        clock.advance(Duration.ofSeconds(5));
+        assertTrue(store.issue().matches("[A-Za-z0-9]{17}"));
+    }
+
     private static SiweMessage message(String nonce, Instant issuedAt, Instant expiration,
             Instant notBefore, String requestId, String statement) {
         SiweMessage.Builder builder = SiweMessage.builder().scheme("https").domain("example.com")

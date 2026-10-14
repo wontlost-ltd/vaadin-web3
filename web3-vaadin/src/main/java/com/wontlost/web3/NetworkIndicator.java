@@ -2,6 +2,7 @@ package com.wontlost.web3;
 
 import java.text.MessageFormat;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
 
@@ -18,6 +19,11 @@ import com.vaadin.flow.shared.Registration;
 /** Displays the connected wallet network and offers a switch to an expected chain. */
 @Tag("div")
 public class NetworkIndicator extends Component {
+    private static final Map<Long, String> CHAIN_LABELS = Map.ofEntries(
+            Map.entry(1L, "Ethereum"), Map.entry(11155111L, "Sepolia"), Map.entry(137L, "Polygon"),
+            Map.entry(80002L, "Polygon Amoy"), Map.entry(56L, "BNB Smart Chain"),
+            Map.entry(42161L, "Arbitrum One"), Map.entry(10L, "Optimism"), Map.entry(8453L, "Base"),
+            Map.entry(43114L, "Avalanche C-Chain"), Map.entry(100L, "Gnosis"));
     private final Web3Connect wallet;
     private final Span status = new Span();
     private final Button switchButton = new Button();
@@ -176,19 +182,7 @@ public class NetworkIndicator extends Component {
     }
 
     private static String chainLabel(long chainId) {
-        return switch ((int) chainId) {
-            case 1 -> "Ethereum";
-            case 11155111 -> "Sepolia";
-            case 137 -> "Polygon";
-            case 80002 -> "Polygon Amoy";
-            case 56 -> "BNB Smart Chain";
-            case 42161 -> "Arbitrum One";
-            case 10 -> "Optimism";
-            case 8453 -> "Base";
-            case 43114 -> "Avalanche C-Chain";
-            case 100 -> "Gnosis";
-            default -> "Chain " + chainId;
-        };
+        return CHAIN_LABELS.getOrDefault(chainId, "Chain " + chainId);
     }
 
     /** Event fired when the wallet reports a chain change. */

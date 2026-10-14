@@ -10,6 +10,8 @@ import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.web3j.crypto.Keys;
 
 import com.vaadin.flow.component.ComponentEvent;
@@ -39,6 +41,7 @@ import com.wontlost.web3.screening.AddressScreening;
  * only externally owned accounts can sign in.
  */
 public class SiweLogin extends Composite<HorizontalLayout> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SiweLogin.class);
 
     private final Web3Connect wallet = new Web3Connect(true);
     private final Button signInButton = new Button();
@@ -198,18 +201,18 @@ public class SiweLogin extends Composite<HorizontalLayout> {
                     .build();
             return wallet.signMessage(message.toMessage()).thenApply(signature -> new SignedPayload(message, signature));
         }).whenComplete((payload, error) -> {
-            if (error != null) {
-                Throwable cause = unwrap(error);
-                if (cause instanceof SiweException siweException) {
-                    finishFailure(siweException.getReason(), -1, false);
-                } else if (cause instanceof Web3Connect.Web3Exception walletException) {
-                    finishFailure(null, walletException.getCode(), walletException.isUserRejected());
-                } else {
-                    finishFailure(SiweException.Reason.MALFORMED, -1, false);
-                }
-                return;
-            }
             try {
+                if (error != null) {
+                    Throwable cause = unwrap(error);
+                    if (cause instanceof SiweException siweException) {
+                        finishFailure(siweException.getReason(), -1, false);
+                    } else if (cause instanceof Web3Connect.Web3Exception walletException) {
+                        finishFailure(null, walletException.getCode(), walletException.isUserRejected());
+                    } else {
+                        failUnexpectedly(cause);
+                    }
+                    return;
+                }
                 SiweExpectations expectations = SiweExpectations.forDomain(expectedDomain)
                         .withUri(expectedUri).withAllowedChainIds(allowedChainIds).withMaxAge(maxAge);
                 VerifiedSignIn verified = requireVerifier().verify(payload.message().toMessage(),
@@ -217,6 +220,8 @@ public class SiweLogin extends Composite<HorizontalLayout> {
                 completeVerifiedSignIn(verified);
             } catch (SiweException exception) {
                 finishFailure(exception.getReason(), -1, false);
+            } catch (RuntimeException exception) {
+                failUnexpectedly(exception);
             }
         });
     }
@@ -229,6 +234,15 @@ public class SiweLogin extends Composite<HorizontalLayout> {
             finishSuccess(verified);
         } catch (SiweException exception) {
             finishFailure(exception.getReason(), -1, false);
+        } catch (RuntimeException exception) {
+            failUnexpectedly(exception);
+        }
+    }
+
+    private void failUnexpectedly(Throwable failure) {
+        LOGGER.error("Sign-In With Ethereum failed unexpectedly", failure);
+        if (flowInProgress) {
+            finishFailure(SiweException.Reason.INTERNAL_ERROR, -1, false);
         }
     }
 

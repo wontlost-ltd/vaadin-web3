@@ -39,15 +39,30 @@ class FiatOnrampButtonTest {
         assertEquals(0, unused.calls);
     }
 
+    @Test void rejectsHttpProviderSessionUrl() {
+        FiatOnrampButton button = new FiatOnrampButton(new TestProvider(URI.create("http://provider.test/session")),
+                () -> new OnrampOrder(Tokens.usdc(1).orElseThrow(),
+                        "0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe", null, null, null, null, null, null));
+        java.util.concurrent.atomic.AtomicReference<OnrampException> failure = new java.util.concurrent.atomic.AtomicReference<>();
+        button.addOnrampFailedListener(event -> failure.set(event.getException()));
+
+        button.createSession();
+
+        assertEquals("Provider URL must be an absolute HTTPS URL", failure.get().getMessage());
+    }
+
     private static OnrampProvider provider() { return new TestProvider(false); }
     private static final class TestProvider implements OnrampProvider {
         private static final long serialVersionUID=1L;
         private final boolean fails;
+        private final URI sessionUrl;
         private int calls;
-        TestProvider(boolean fails){this.fails=fails;}
+        TestProvider(boolean fails){this(fails, URI.create("https://provider.test"));}
+        TestProvider(URI sessionUrl){this(false, sessionUrl);}
+        private TestProvider(boolean fails, URI sessionUrl){this.fails=fails;this.sessionUrl=sessionUrl;}
         public String name(){return "Test Provider";}
         public boolean supports(com.wontlost.web3.chain.TokenInfo token){return true;}
-        public URI createSession(OnrampOrder order){calls++; if(fails) throw new OnrampException(name(), 503, "offline"); return URI.create("https://provider.test");}
+        public URI createSession(OnrampOrder order){calls++; if(fails) throw new OnrampException(name(), 503, "offline"); return sessionUrl;}
         public boolean isTestEnvironment(){return true;}
     }
 }

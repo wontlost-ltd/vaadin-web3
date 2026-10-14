@@ -19,6 +19,6 @@ public interface PaidResourceStore {
     /** 以原子 expected-status CAS 更新记录；抢占失败时抛出 PaymentStateChangedException。 */
     PaymentRecord transition(String paymentId, PaymentStatus expected, PaymentRecord update);
     List<PaymentRecord> findPending(int limit);
-    /** 删除授权窗口已过且仍处于 READY 的记录，并同步清理其幂等键。 */
+    /** 删除授权窗口已过且仍处于 READY、VERIFIED 或 FAILED 的记录，并同步清理关联索引。 */
     int purgeExpired(Instant now);
 }

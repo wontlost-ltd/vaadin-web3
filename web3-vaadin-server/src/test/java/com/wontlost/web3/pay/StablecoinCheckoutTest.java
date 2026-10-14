@@ -350,10 +350,44 @@ class StablecoinCheckoutTest {
         }
     }
 
+    @Test void submittedTransactionStaysLockedAndRestartsPollingAfterDetach() {
+        StablecoinCheckout checkout = new StablecoinCheckout(new ChainRegistry(), new InMemoryPaymentLedger(),
+                RECIPIENT, BigDecimal.ONE, Runnable::run);
+        com.vaadin.flow.component.UI ui = new com.vaadin.flow.component.UI() {
+            @Override public java.util.concurrent.Future<Void> access(com.vaadin.flow.server.Command command) {
+                command.execute();
+                return java.util.concurrent.CompletableFuture.completedFuture(null);
+            }
+        };
+        com.vaadin.flow.component.UI.setCurrent(ui);
+        ui.add(checkout);
+        try {
+            checkout.recordHostedTransactionForTest("0x" + "ab".repeat(32), null);
+            assertFalse(button(checkout).isEnabled());
+            assertTrue(readField(checkout, "pollRegistration") != null);
+
+            ui.remove(checkout);
+
+            assertFalse(button(checkout).isEnabled());
+            assertEquals(null, readField(checkout, "pollRegistration"));
+
+            ui.add(checkout);
+
+            assertFalse(button(checkout).isEnabled());
+            assertTrue(readField(checkout, "pollRegistration") != null);
+            assertEquals(ui, readField(checkout, "pollingUi"));
+        } finally {
+            if (checkout.isAttached()) ui.remove(checkout);
+            checkout.reset("next-order");
+            com.vaadin.flow.component.UI.setCurrent(null);
+        }
+    }
+
     @Test void networksAreShownByName() {
         org.junit.jupiter.api.Assertions.assertEquals("Sepolia", StablecoinCheckout.networkName(11155111L));
         org.junit.jupiter.api.Assertions.assertEquals("Base", StablecoinCheckout.networkName(8453L));
         org.junit.jupiter.api.Assertions.assertEquals("Chain 999", StablecoinCheckout.networkName(999L));
+        org.junit.jupiter.api.Assertions.assertEquals("Chain 4294967297", StablecoinCheckout.networkName(4294967297L));
         org.junit.jupiter.api.Assertions.assertEquals("Avalanche Fuji", StablecoinCheckout.networkName(43113L));
         for (String symbol : com.wontlost.web3.chain.Tokens.symbols()) {
             for (long id : com.wontlost.web3.chain.Tokens.chains(symbol)) {

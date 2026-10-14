@@ -61,7 +61,7 @@ class FacilitatorClientTest {
         server.start();
         client = client(Duration.ofSeconds(2), 262_144);
     }
-    @AfterEach void stop() { server.stop(0); }
+    @AfterEach void stop() { client.close(); server.stop(0); }
 
     @Test void sendsExpectedRequestAndParsesSuccessfulVerificationAndPendingSettlement() throws Exception {
         assertTrue(client.verify(payload, requirements).valid());
@@ -149,8 +149,39 @@ class FacilitatorClientTest {
                         Duration.ofSeconds(1), Duration.ofSeconds(1), 262_145));
     }
 
+    @Test void closingClientWithInjectedHttpClientLeavesSharedClientOpen() {
+        CloseTrackingHttpClient shared = new CloseTrackingHttpClient();
+        HttpFacilitatorClient injected = new HttpFacilitatorClient("http://127.0.0.1:" + server.getAddress().getPort(),
+                "", "Authorization", Duration.ofMillis(100), Duration.ofSeconds(2), 1024, shared);
+
+        injected.close();
+
+        assertFalse(shared.closed);
+    }
+
     private HttpFacilitatorClient client(Duration timeout, int maxBytes) {
         return new HttpFacilitatorClient("http://127.0.0.1:" + server.getAddress().getPort(), "test-secret", "Authorization",
                 Duration.ofMillis(100), timeout, maxBytes);
+    }
+
+    private static final class CloseTrackingHttpClient extends java.net.http.HttpClient {
+        private boolean closed;
+        @Override public void close() { closed = true; }
+        @Override public <T> java.net.http.HttpResponse<T> send(java.net.http.HttpRequest request,
+                java.net.http.HttpResponse.BodyHandler<T> handler) { throw new UnsupportedOperationException(); }
+        @Override public <T> java.util.concurrent.CompletableFuture<java.net.http.HttpResponse<T>> sendAsync(
+                java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> handler) { throw new UnsupportedOperationException(); }
+        @Override public <T> java.util.concurrent.CompletableFuture<java.net.http.HttpResponse<T>> sendAsync(
+                java.net.http.HttpRequest request, java.net.http.HttpResponse.BodyHandler<T> handler,
+                java.net.http.HttpResponse.PushPromiseHandler<T> pushPromiseHandler) { throw new UnsupportedOperationException(); }
+        @Override public java.util.Optional<java.net.CookieHandler> cookieHandler() { return java.util.Optional.empty(); }
+        @Override public java.util.Optional<Duration> connectTimeout() { return java.util.Optional.empty(); }
+        @Override public Redirect followRedirects() { return Redirect.NEVER; }
+        @Override public java.util.Optional<java.net.ProxySelector> proxy() { return java.util.Optional.empty(); }
+        @Override public javax.net.ssl.SSLContext sslContext() { try { return javax.net.ssl.SSLContext.getDefault(); } catch (Exception e) { throw new IllegalStateException(e); } }
+        @Override public javax.net.ssl.SSLParameters sslParameters() { return new javax.net.ssl.SSLParameters(); }
+        @Override public java.util.Optional<java.net.Authenticator> authenticator() { return java.util.Optional.empty(); }
+        @Override public Version version() { return Version.HTTP_1_1; }
+        @Override public java.util.Optional<java.util.concurrent.Executor> executor() { return java.util.Optional.empty(); }
     }
 }
