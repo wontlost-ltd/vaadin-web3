@@ -96,7 +96,8 @@ public final class InMemoryPaidResourceStore implements PaidResourceStore {
         int removed = 0;
         synchronized (idempotency) {
             for (PaymentRecord record : records.values()) {
-                if (record.status() != PaymentStatus.READY || record.validBefore() == null
+                if ((record.status() != PaymentStatus.READY && record.status() != PaymentStatus.VERIFIED
+                        && record.status() != PaymentStatus.FAILED) || record.validBefore() == null
                         || Long.parseLong(record.validBefore()) >= now.getEpochSecond()) continue;
                 if (!records.remove(record.paymentId(), record)) continue;
                 idempotency.remove(record.idempotencyKey(), record.paymentId());
