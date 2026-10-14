@@ -4,7 +4,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -12,11 +16,13 @@ import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
+import jakarta.servlet.http.Cookie;
 
 final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
     private final int maximumBytes;
     private final ByteArrayOutputStream body = new ByteArrayOutputStream();
     private final Map<String, Header> headers = new LinkedHashMap<>();
+    private final List<Cookie> cookies = new ArrayList<>();
     private int status = SC_OK;
     private String characterEncoding = "UTF-8";
     private String contentType;
@@ -32,9 +38,22 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
 
     @Override public void setStatus(int value) { status = value; }
     @Override public int getStatus() { return status; }
-    @Override public void setCharacterEncoding(String value) { characterEncoding = value; }
+    @Override public void setCharacterEncoding(String value) {
+        if (!writerSelected) {
+            characterEncoding = value;
+        }
+    }
     @Override public String getCharacterEncoding() { return characterEncoding; }
-    @Override public void setContentType(String value) { contentType = value; }
+    @Override public void setContentType(String value) {
+        contentType = value;
+        if (!writerSelected && value != null) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?i)(?:^|;)\\s*charset\\s*=\\s*['\\\"]?([^; '\\\"]+)")
+                    .matcher(value);
+            if (matcher.find()) {
+                characterEncoding = matcher.group(1);
+            }
+        }
+    }
     @Override public String getContentType() { return contentType; }
 
     @Override public void setHeader(String name, String value) {
@@ -45,6 +64,15 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
         headers.computeIfAbsent(key(name), ignored -> new Header(name, new java.util.ArrayList<>()))
                 .values().add(value);
     }
+
+    @Override public void setIntHeader(String name, int value) { setHeader(name, Integer.toString(value)); }
+    @Override public void addIntHeader(String name, int value) { addHeader(name, Integer.toString(value)); }
+    @Override public void setDateHeader(String name, long value) { setHeader(name, date(value)); }
+    @Override public void addDateHeader(String name, long value) { addHeader(name, date(value)); }
+    @Override public void addCookie(Cookie cookie) { cookies.add((Cookie) cookie.clone()); }
+    @Override public void setContentLength(int length) { setHeader("Content-Length", Integer.toString(length)); }
+    @Override public void setContentLengthLong(long length) { setHeader("Content-Length", Long.toString(length)); }
+    @Override public boolean containsHeader(String name) { return headers.containsKey(key(name)); }
 
     @Override public String getHeader(String name) {
         Header header = headers.get(key(name));
@@ -95,27 +123,32 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
         return writer;
     }
 
-    @Override public void flushBuffer() { flushWriter(); }
+    @Override public void flushBuffer() throws IOException { flushWriter(); }
     @Override public boolean isCommitted() { return false; }
     @Override public void resetBuffer() { body.reset(); }
 
     @Override public void reset() {
         resetBuffer();
         headers.clear();
+        cookies.clear();
         status = SC_OK;
         contentType = null;
+        characterEncoding = "UTF-8";
     }
 
     @Override public void sendError(int status) throws IOException {
-        throw new IOException("protected resource cannot commit an error response before settlement");
+        resetBuffer();
+        setStatus(status);
     }
 
     @Override public void sendError(int status, String message) throws IOException {
-        throw new IOException("protected resource cannot commit an error response before settlement");
+        sendError(status);
     }
 
     @Override public void sendRedirect(String location) throws IOException {
-        throw new IOException("protected resource cannot commit a redirect before settlement");
+        resetBuffer();
+        setStatus(SC_FOUND);
+        setHeader("Location", location);
     }
 
     void copyTo(HttpServletResponse target) throws IOException {
@@ -130,9 +163,18 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
         if (contentType != null) {
             target.setContentType(contentType);
         }
-        headers.values().stream().filter(header -> !header.name().equalsIgnoreCase("Content-Length"))
-                .forEach(header -> header.values().forEach(value -> target.addHeader(header.name(), value)));
-        target.setContentLength(body.size());
+        headers.values().forEach(header -> {
+            if (header.values().isEmpty()) {
+                target.setHeader(header.name(), null);
+                return;
+            }
+            target.setHeader(header.name(), header.values().getFirst());
+            header.values().stream().skip(1).forEach(value -> target.addHeader(header.name(), value));
+        });
+        if (!containsHeader("Content-Length")) {
+            target.setContentLength(body.size());
+        }
+        cookies.forEach(cookie -> target.addCookie((Cookie) cookie.clone()));
         body.writeTo(target.getOutputStream());
     }
 
@@ -143,10 +185,18 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
         body.write(value);
     }
 
-    private void flushWriter() {
+    private void flushWriter() throws IOException {
         if (writer != null) {
             writer.flush();
+            if (writer.checkError()) {
+                throw new IOException("protected response exceeded configured buffer limit");
+            }
         }
+    }
+
+    private static String date(long value) {
+        return DateTimeFormatter.RFC_1123_DATE_TIME.format(java.time.Instant.ofEpochMilli(value)
+                .atZone(ZoneOffset.UTC));
     }
 
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }
