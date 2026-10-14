@@ -38,6 +38,27 @@ class UiPollingTest {
         }
     }
 
+    @Test void measuresIntervalFromDelayedFirstPoll() {
+        AtomicLong now = new AtomicLong();
+        UiPolling.setClock(now::get);
+        Registration subscription = null;
+        try {
+            TestUI ui = new TestUI();
+            AtomicInteger runs = new AtomicInteger();
+            subscription = UiPolling.register(ui, Duration.ofSeconds(3), runs::incrementAndGet);
+
+            now.set(5_000);
+            ui.poll();
+            now.set(5_500);
+            ui.poll();
+
+            assertEquals(1, runs.get());
+        } finally {
+            if (subscription != null) subscription.remove();
+            UiPolling.setClock(System::currentTimeMillis);
+        }
+    }
+
     @Test void choosesMinimumAndRestoresPreviousIntervalAfterFinalRemoval() {
         TestUI ui = new TestUI();
         ui.setPollInterval(9000);

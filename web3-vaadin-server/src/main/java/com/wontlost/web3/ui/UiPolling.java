@@ -30,7 +30,7 @@ public final class UiPolling {
         }
         long id = IDS.incrementAndGet();
         synchronized (registry) {
-            registry.entries.put(id, new Entry(interval, onPoll, clock.getAsLong()));
+            registry.entries.put(id, new Entry(interval, onPoll));
             update(ui, registry);
         }
         Registry captured = registry;
@@ -59,15 +59,20 @@ public final class UiPolling {
         private long lastRun;
         private boolean hasRun;
 
-        private Entry(Duration interval, Runnable callback, long createdAt) {
+        private Entry(Duration interval, Runnable callback) {
             this.interval = interval;
             this.callback = callback;
-            this.lastRun = createdAt;
         }
 
         private boolean isDue(long now) {
-            long threshold = (interval.toMillis() * 9 + 9) / 10;
+            long intervalMillis = interval.toMillis();
+            long threshold = intervalMillis - intervalMillis / 6;
             return !hasRun || now - lastRun >= threshold;
+        }
+
+        private void markRun(long now) {
+            lastRun = now;
+            hasRun = true;
         }
     }
 
@@ -83,8 +88,7 @@ public final class UiPolling {
 
         private synchronized java.util.List<Runnable> dueCallbacks(long now) {
             return entries.values().stream().filter(entry -> entry.isDue(now)).peek(entry -> {
-                if (entry.hasRun) entry.lastRun = now;
-                entry.hasRun = true;
+                entry.markRun(now);
             }).map(entry -> entry.callback).toList();
         }
     }
