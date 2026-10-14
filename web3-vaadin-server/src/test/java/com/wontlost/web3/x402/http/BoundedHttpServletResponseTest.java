@@ -42,7 +42,7 @@ class BoundedHttpServletResponseTest {
         response.addCookie(cookie);
         response.addDateHeader("Expires", date);
         response.addIntHeader("X-Count", 3);
-        response.setContentLengthLong(2);
+        response.setContentLengthLong(99);
         response.getOutputStream().write(new byte[] {1, 2});
 
         assertTrue(response.containsHeader("expires"));

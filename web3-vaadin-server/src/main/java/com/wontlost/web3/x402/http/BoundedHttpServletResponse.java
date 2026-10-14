@@ -164,6 +164,9 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
             target.setContentType(contentType);
         }
         headers.values().forEach(header -> {
+            if (key(header.name()).equals(key("Content-Length"))) {
+                return;
+            }
             if (header.values().isEmpty()) {
                 target.setHeader(header.name(), null);
                 return;
@@ -171,9 +174,7 @@ final class BoundedHttpServletResponse extends HttpServletResponseWrapper {
             target.setHeader(header.name(), header.values().getFirst());
             header.values().stream().skip(1).forEach(value -> target.addHeader(header.name(), value));
         });
-        if (!containsHeader("Content-Length")) {
-            target.setContentLength(body.size());
-        }
+        target.setContentLength(body.size());
         cookies.forEach(cookie -> target.addCookie((Cookie) cookie.clone()));
         body.writeTo(target.getOutputStream());
     }

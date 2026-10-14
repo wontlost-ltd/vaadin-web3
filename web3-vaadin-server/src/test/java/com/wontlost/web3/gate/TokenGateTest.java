@@ -12,7 +12,7 @@ import com.vaadin.flow.router.ErrorParameter;
 import org.junit.jupiter.api.Test;
 
 class TokenGateTest {
-    @Test void decimalsAreCachedAcrossGateInstancesForTheSameChainAndToken() {
+    @Test void decimalsAreCachedAcrossNavigationsThroughTheSameGate() {
         long chainId = 900_001;
         String tokenAddress = "0x0000000000000000000000000000000000000099";
         AtomicInteger decimalsCalls = new AtomicInteger();
@@ -26,9 +26,10 @@ class TokenGateTest {
         }));
         RequiresToken requirement = UnknownDecimalsView.class.getAnnotation(RequiresToken.class);
 
-        assertEquals(TokenGate.Decision.INSUFFICIENT, new TokenGate(registry).evaluate(requirement,
+        TokenGate gate = new TokenGate(registry);
+        assertEquals(TokenGate.Decision.INSUFFICIENT, gate.evaluate(requirement,
                 "0x0000000000000000000000000000000000000001"));
-        assertEquals(TokenGate.Decision.INSUFFICIENT, new TokenGate(registry).evaluate(requirement,
+        assertEquals(TokenGate.Decision.INSUFFICIENT, gate.evaluate(requirement,
                 "0x0000000000000000000000000000000000000002"));
 
         assertEquals(1, decimalsCalls.get());

@@ -27,7 +27,7 @@ import com.wontlost.web3.siwe.Web3Session;
  * {@link java.time.Duration#ZERO} to query on every navigation, when that window matters.
  */
 public final class TokenGate implements BeforeEnterListener {
-    private static final Cache<DecimalsKey, Integer> DECIMALS = Caffeine.newBuilder().maximumSize(10_000).build();
+    private final Cache<DecimalsKey, Integer> decimals = Caffeine.newBuilder().maximumSize(10_000).build();
     private final ChainRegistry chains;
     private final BalanceCache<BalanceKey, BigInteger> balances;
 
@@ -111,7 +111,7 @@ public final class TokenGate implements BeforeEnterListener {
 
     private int tokenDecimals(long chainId, String tokenAddress) {
         DecimalsKey key = new DecimalsKey(chainId, tokenAddress.toLowerCase(java.util.Locale.ROOT));
-        return DECIMALS.get(key, ignored -> Erc20.decimals(client(chainId), tokenAddress));
+        return decimals.get(key, ignored -> Erc20.decimals(client(chainId), tokenAddress));
     }
 
     private BigInteger balance(long chainId, String token, String address) {
