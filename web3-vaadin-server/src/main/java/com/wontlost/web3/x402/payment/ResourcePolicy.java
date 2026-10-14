@@ -10,6 +10,7 @@ import com.wontlost.web3.x402.protocol.X402Validation;
 public record ResourcePolicy(String resourceId, String version, X402Resource resource, String network,
         BigInteger amount, String asset, String payTo, int maxTimeoutSeconds, String tokenName,
         String tokenVersion) {
+    private static final tools.jackson.databind.ObjectMapper MAPPER = new tools.jackson.databind.ObjectMapper();
     public ResourcePolicy {
         Objects.requireNonNull(resourceId); Objects.requireNonNull(version); Objects.requireNonNull(resource);
         Objects.requireNonNull(network); Objects.requireNonNull(amount); Objects.requireNonNull(asset);
@@ -24,9 +25,8 @@ public record ResourcePolicy(String resourceId, String version, X402Resource res
         payTo = X402Validation.address(payTo);
     }
     public PaymentRequirements requirements() {
-        var mapper = new tools.jackson.databind.ObjectMapper();
         return new PaymentRequirements("exact", network, amount.toString(), asset, payTo, maxTimeoutSeconds,
-                java.util.Map.of("name", mapper.valueToTree(tokenName), "version", mapper.valueToTree(tokenVersion),
-                        "assetTransferMethod", mapper.valueToTree("eip3009"), "paymentFlow", mapper.valueToTree("authorization")));
+                java.util.Map.of("name", MAPPER.valueToTree(tokenName), "version", MAPPER.valueToTree(tokenVersion),
+                        "assetTransferMethod", MAPPER.valueToTree("eip3009"), "paymentFlow", MAPPER.valueToTree("authorization")));
     }
 }
