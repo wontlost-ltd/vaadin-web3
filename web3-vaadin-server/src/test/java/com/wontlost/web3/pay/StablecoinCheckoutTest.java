@@ -387,6 +387,7 @@ class StablecoinCheckoutTest {
         org.junit.jupiter.api.Assertions.assertEquals("Sepolia", StablecoinCheckout.networkName(11155111L));
         org.junit.jupiter.api.Assertions.assertEquals("Base", StablecoinCheckout.networkName(8453L));
         org.junit.jupiter.api.Assertions.assertEquals("Chain 999", StablecoinCheckout.networkName(999L));
+        org.junit.jupiter.api.Assertions.assertEquals("Chain 4294967297", StablecoinCheckout.networkName(4294967297L));
         org.junit.jupiter.api.Assertions.assertEquals("Avalanche Fuji", StablecoinCheckout.networkName(43113L));
         for (String symbol : com.wontlost.web3.chain.Tokens.symbols()) {
             for (long id : com.wontlost.web3.chain.Tokens.chains(symbol)) {

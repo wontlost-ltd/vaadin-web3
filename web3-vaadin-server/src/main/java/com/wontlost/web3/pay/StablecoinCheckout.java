@@ -51,6 +51,12 @@ import java.util.function.Supplier;
  * payer should require SIWE before accepting the payment.
  */
 public class StablecoinCheckout extends VerticalLayout {
+    private static final Map<Long, String> NETWORK_NAMES = Map.ofEntries(
+            Map.entry(1L, "Ethereum"), Map.entry(11155111L, "Sepolia"), Map.entry(8453L, "Base"),
+            Map.entry(84532L, "Base Sepolia"), Map.entry(42161L, "Arbitrum One"),
+            Map.entry(421614L, "Arbitrum Sepolia"), Map.entry(10L, "OP Mainnet"),
+            Map.entry(11155420L, "OP Sepolia"), Map.entry(137L, "Polygon"), Map.entry(80002L, "Polygon Amoy"),
+            Map.entry(43114L, "Avalanche"), Map.entry(43113L, "Avalanche Fuji"));
     private static final Executor DEFAULT_EXECUTOR = new ThreadPoolExecutor(2, 4, 30,
             java.util.concurrent.TimeUnit.SECONDS, new ArrayBlockingQueue<>(64), task -> {
                 Thread thread = new Thread(task, "web3-payment-verifier");
@@ -263,21 +269,7 @@ public class StablecoinCheckout extends VerticalLayout {
     /** 已知链显示名称，未知链回退为 "Chain <id>"（与 Tokens 中的 USDC 注册表一致）。 */
     static String networkName(Long chainId) {
         if (chainId == null) return "";
-        return switch (chainId.intValue()) {
-            case 1 -> "Ethereum";
-            case 11155111 -> "Sepolia";
-            case 8453 -> "Base";
-            case 84532 -> "Base Sepolia";
-            case 42161 -> "Arbitrum One";
-            case 421614 -> "Arbitrum Sepolia";
-            case 10 -> "OP Mainnet";
-            case 11155420 -> "OP Sepolia";
-            case 137 -> "Polygon";
-            case 80002 -> "Polygon Amoy";
-            case 43114 -> "Avalanche";
-            case 43113 -> "Avalanche Fuji";
-            default -> "Chain " + chainId;
-        };
+        return NETWORK_NAMES.getOrDefault(chainId, "Chain " + chainId);
     }
 
     /** 支付进行中或已付款时界面已锁定，此时修改配置会让显示与已捕获的支付意图不一致。 */

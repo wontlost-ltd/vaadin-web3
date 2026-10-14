@@ -101,6 +101,15 @@ class NetworkIndicatorTest {
         assertEquals("Go to Ethereum", button(indicator).getElement().getAttribute("aria-label"));
     }
 
+    @Test
+    void doesNotTruncateLargeChainIdsWhenShowingNetworkName() {
+        FakeWallet wallet = connectedWallet("0x100000001");
+        NetworkIndicator indicator = new NetworkIndicator(wallet);
+        indicator.setExpectedChainId(2);
+
+        assertTrue(status(indicator).contains("Chain 4294967297"));
+    }
+
     private static FakeWallet connectedWallet(String chainId) {
         FakeWallet wallet = new FakeWallet();
         wallet.setConnectedChain(chainId);
