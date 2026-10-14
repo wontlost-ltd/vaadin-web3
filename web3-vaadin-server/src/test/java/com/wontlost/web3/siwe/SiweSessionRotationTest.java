@@ -111,8 +111,10 @@ class SiweSessionRotationTest {
     }
 
     @Test
-    void signedInListenerFailureFiresFailureEventAndReenablesButton() throws Exception {
+    void signedInListenerFailureDoesNotUndoCompletedSignIn() throws Exception {
         SiweLogin login = login(null).setSessionIdRotation(false);
+        AtomicReference<SiweLogin.SignedInEvent> signedIn = new AtomicReference<>();
+        login.addSignedInListener(event -> signedIn.set(event));
         login.addSignedInListener(event -> { throw new IllegalStateException("listener failed"); });
         AtomicReference<SiweLogin.SignInFailedEvent> failure = new AtomicReference<>();
         login.addSignInFailedListener(failure::set);
@@ -124,7 +126,25 @@ class SiweSessionRotationTest {
         complete(login);
 
         assertTrue(button.isEnabled());
-        assertEquals(SiweException.Reason.MALFORMED, failure.get().getReason());
+        assertEquals(VERIFIED, signedIn.get().getSignIn());
+        assertEquals(null, failure.get());
+    }
+
+    @Test
+    void sessionStoreFailureFiresInternalErrorAndReenablesButton() throws Exception {
+        SiweLogin login = login(null).setSessionIdRotation(false);
+        VaadinSession.setCurrent(null);
+        AtomicReference<SiweLogin.SignInFailedEvent> failure = new AtomicReference<>();
+        login.addSignInFailedListener(failure::set);
+        var buttonField = SiweLogin.class.getDeclaredField("signInButton");
+        buttonField.setAccessible(true);
+        Button button = (Button) buttonField.get(login);
+        button.setEnabled(false);
+
+        complete(login);
+
+        assertTrue(button.isEnabled());
+        assertEquals(SiweException.Reason.INTERNAL_ERROR, failure.get().getReason());
     }
 
     private SiweLogin login(AddressScreening screening) throws Exception {

@@ -241,8 +241,9 @@ public class SiweLogin extends Composite<HorizontalLayout> {
 
     private void failUnexpectedly(Throwable failure) {
         LOGGER.error("Sign-In With Ethereum failed unexpectedly", failure);
-        flowInProgress = true;
-        finishFailure(SiweException.Reason.MALFORMED, -1, false);
+        if (flowInProgress) {
+            finishFailure(SiweException.Reason.INTERNAL_ERROR, -1, false);
+        }
     }
 
     static void screenVerifiedAddress(VerifiedSignIn verified, AddressScreening screening) {
