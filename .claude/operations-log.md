@@ -167,3 +167,6 @@
 - `ANVIL_RPC=http://127.0.0.1:8547 mvn -B -ntp -o clean install` — PASS; all 10 reactor projects succeeded; Surefire: 625 tests, 0 failures, 0 errors, 0 skipped.
 - `JAVA_HOME=/Users/rpang/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.8/Contents/Home TZ=UTC mvn -B -ntp -o test` — PASS; all 10 reactor projects succeeded; Surefire XML total: 625 tests, 0 failures, 0 errors, 3 skipped.
 - `git diff --check` — PASS.
+
+### 2026-10-14 审查决策（Claude）— deep-audit-fix OSS
+- round 1 86 需修改 → round 2 91 通过。开 PR，CI 绿后合并。
