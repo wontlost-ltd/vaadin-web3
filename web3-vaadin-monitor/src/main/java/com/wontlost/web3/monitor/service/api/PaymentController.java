@@ -3,6 +3,7 @@ package com.wontlost.web3.monitor.service.api;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -40,7 +41,8 @@ public class PaymentController {
     private final JdbcTemplate jdbc;
     private final ChainRegistry chains;
     private final MonitorProperties properties;
-    public PaymentController(IntentRepository intents,JdbcTemplate jdbc,ChainRegistry chains,MonitorProperties properties){this.intents=intents;this.jdbc=jdbc;this.chains=chains;this.properties=properties;}
+    private final Clock clock;
+    public PaymentController(IntentRepository intents,JdbcTemplate jdbc,ChainRegistry chains,MonitorProperties properties,Clock clock){this.intents=intents;this.jdbc=jdbc;this.chains=chains;this.properties=properties;this.clock=clock;}
 
     @PostMapping
     public ResponseEntity<MonitoredPayment> create(@RequestAttribute(MerchantAuthentication.MERCHANT_ID) String merchant,
@@ -63,7 +65,7 @@ public class PaymentController {
             if(same(existing,token,recipient,units,payer,confirmations,expiry))return ResponseEntity.ok(IntentJson.from(existing));
             throw new ApiException(HttpStatus.CONFLICT,"orderId already exists with different payment parameters");
         }
-        Instant now=Instant.now();
+        Instant now=clock.instant();
         PaymentIntent created=new PaymentIntent(UUID.randomUUID().toString(),merchant,request.orderId(),request.chainId(),token.symbol(),token.address(),token.decimals(),recipient,units,payer,confirmations,now.minus(properties.getNotBeforeTolerance()),now.plus(expiry),MonitoredStatus.AWAITING_TRANSACTION,null,BigInteger.ZERO,0,now,now,null,0,now);
         try{intents.insert(created);}catch(DuplicateKeyException ex){
             PaymentIntent raced=intents.byOrder(merchant,request.orderId()).orElseThrow(()->ex);
@@ -80,7 +82,7 @@ public class PaymentController {
         PaymentIntent payment=owned(merchant,id);
         if(terminal(payment.status()))throw new ApiException(HttpStatus.CONFLICT,"Payment is already terminal");
         if(payment.txHash()!=null){if(payment.txHash().equalsIgnoreCase(request.txHash()))return ResponseEntity.ok(IntentJson.from(payment));throw new ApiException(HttpStatus.CONFLICT,"A different transaction hash is already set");}
-        Instant now=Instant.now();
+        Instant now=clock.instant();
         if (!intents.transaction(id,request.txHash().toLowerCase(Locale.ROOT),now)) {
             PaymentIntent latest=owned(merchant,id);
             if (latest.txHash()!=null && latest.txHash().equalsIgnoreCase(request.txHash())) return ResponseEntity.ok(IntentJson.from(latest));
