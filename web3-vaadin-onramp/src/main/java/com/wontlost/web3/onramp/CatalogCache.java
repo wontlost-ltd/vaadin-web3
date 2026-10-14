@@ -17,11 +17,19 @@ final class CatalogCache<T> {
 
     CatalogCache(Clock clock, Duration ttl) { this.clock = clock; this.ttl = ttl; }
 
-    synchronized List<T> get(Supplier<List<T>> loader) {
-        if (values != null && clock.instant().isBefore(expiresAt)) return values;
+    List<T> get(Supplier<List<T>> loader) {
+        long started;
+        synchronized (this) {
+            if (values != null && clock.instant().isBefore(expiresAt)) return values;
+            started = generation;
+        }
         List<T> loaded = List.copyOf(loader.get());
-        values = loaded;
-        expiresAt = clock.instant().plus(ttl);
+        synchronized (this) {
+            if (started == generation) {
+                values = loaded;
+                expiresAt = clock.instant().plus(ttl);
+            }
+        }
         return loaded;
     }
 
