@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,30 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.shared.Registration;
 
 class UiPollingTest {
+    @Test void runsEachSubscriptionAtItsOwnCadence() {
+        AtomicLong now = new AtomicLong();
+        UiPolling.setClock(now::get);
+        try {
+            TestUI ui = new TestUI();
+            AtomicInteger shortRuns = new AtomicInteger();
+            AtomicInteger longRuns = new AtomicInteger();
+            Registration shortSubscription = UiPolling.register(ui, Duration.ofMillis(500), shortRuns::incrementAndGet);
+            Registration longSubscription = UiPolling.register(ui, Duration.ofSeconds(3), longRuns::incrementAndGet);
+
+            for (long time = 500; time <= 3000; time += 500) {
+                now.set(time);
+                ui.poll();
+            }
+
+            assertEquals(6, shortRuns.get());
+            assertEquals(2, longRuns.get());
+            shortSubscription.remove();
+            longSubscription.remove();
+        } finally {
+            UiPolling.setClock(System::currentTimeMillis);
+        }
+    }
+
     @Test void choosesMinimumAndRestoresPreviousIntervalAfterFinalRemoval() {
         TestUI ui = new TestUI();
         ui.setPollInterval(9000);
@@ -28,19 +53,26 @@ class UiPollingTest {
     }
 
     @Test void dispatchesToActiveSubscribersAndRemovesOnlySelectedSubscription() {
-        TestUI ui = new TestUI();
-        AtomicInteger first = new AtomicInteger();
-        AtomicInteger second = new AtomicInteger();
-        Registration a = UiPolling.register(ui, Duration.ofSeconds(1), first::incrementAndGet);
-        Registration b = UiPolling.register(ui, Duration.ofSeconds(3), second::incrementAndGet);
-        ui.poll();
-        assertEquals(1, first.get());
-        assertEquals(1, second.get());
-        a.remove();
-        ui.poll();
-        assertEquals(1, first.get());
-        assertEquals(2, second.get());
-        b.remove();
+        AtomicLong now = new AtomicLong();
+        UiPolling.setClock(now::get);
+        try {
+            TestUI ui = new TestUI();
+            AtomicInteger first = new AtomicInteger();
+            AtomicInteger second = new AtomicInteger();
+            Registration a = UiPolling.register(ui, Duration.ofSeconds(1), first::incrementAndGet);
+            Registration b = UiPolling.register(ui, Duration.ofSeconds(3), second::incrementAndGet);
+            ui.poll();
+            assertEquals(1, first.get());
+            assertEquals(1, second.get());
+            a.remove();
+            now.set(3000);
+            ui.poll();
+            assertEquals(1, first.get());
+            assertEquals(2, second.get());
+            b.remove();
+        } finally {
+            UiPolling.setClock(System::currentTimeMillis);
+        }
     }
 
     @Test void rejectsNonPositiveIntervals() {
