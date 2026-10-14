@@ -159,7 +159,7 @@ public class DemoView extends DemoPage {
                 default -> wallet.switchChain(Chains.SEPOLIA);
             }
         });
-        return section("Switch network", "Choose a supported network and request a wallet switch.", new HorizontalLayout(chain, switchBtn));
+        return section("Switch network", "Choose a supported network and request a wallet switch.", DemoSection.row(chain, switchBtn));
     }
 
     private void refreshBalance() {
