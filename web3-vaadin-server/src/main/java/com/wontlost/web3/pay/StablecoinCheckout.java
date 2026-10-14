@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
@@ -539,7 +540,11 @@ public class StablecoinCheckout extends VerticalLayout {
     }
 
     void startPolling() {
-        UI ui = UI.getCurrent();
+        startPolling(UI.getCurrent());
+    }
+
+    private void startPolling(UI ui) {
+        if (ui == null || pollRegistration != null) return;
         pollingUi = ui;
         pollRegistration = UiPolling.register(ui, java.time.Duration.ofSeconds(3), this::verifyPayment);
     }
@@ -664,7 +669,12 @@ public class StablecoinCheckout extends VerticalLayout {
         if (pollRegistration != null) pollRegistration.remove();
         pollRegistration = null;
         pollingUi = null;
-        if (!paid) setPayEnabled(true);
+        if (!paid) setPayEnabled(transactionHash == null);
+    }
+
+    @Override protected void onAttach(AttachEvent event) {
+        super.onAttach(event);
+        if (transactionHash != null && !paid) startPolling(event.getUI());
     }
 
     @Override protected void onDetach(DetachEvent event) { stopPolling(); super.onDetach(event); }
