@@ -33,7 +33,7 @@ public final class InMemoryNonceStore implements NonceStore {
         this(ttl, clock, DEFAULT_MAXIMUM_ENTRIES);
     }
 
-    /** Creates a store with an explicit TTL, clock, and capacity. */
+    /** 使用指定的有效期、时钟和容量创建存储。 */
     public InMemoryNonceStore(Duration ttl, Clock clock, int maximumEntries) {
         if (ttl == null || ttl.isZero() || ttl.isNegative()) {
             throw new IllegalArgumentException("ttl must be positive");
