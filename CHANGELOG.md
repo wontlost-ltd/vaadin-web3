@@ -15,10 +15,21 @@ All notable changes to this project are documented here. The format follows
 
 
 ### Fixed
-- Preserve full-width chain IDs in network labels, bound in-memory SIWE nonce storage, and reuse shared Jackson mappers for x402 requirements and typed data.
-- Buffer protected servlet response metadata and errors correctly, limit JSON-RPC response reads, prioritize deterministic RPC errors, and report unexpected SIWE completion failures.
-- Preserve submitted checkout state across detach/reattach, purge expired failed payment records, run onramp catalog loads outside cache locks, and require HTTPS provider URLs.
-- Cache token decimals by chain and address, use the injected monitor clock for payment timestamps, remove listeners from replaced x402 wallets, and close owned facilitator HTTP clients with the starter context.
+- Preserve full-width chain IDs in network labels.
+- Bound in-memory SIWE nonce storage.
+- Reuse Jackson mappers for x402 requirements and typed data.
+- Buffer protected servlet response metadata and errors.
+- Limit JSON-RPC response reads.
+- Prioritize deterministic RPC errors.
+- Report unexpected SIWE completion failures.
+- Preserve submitted checkout state across detach and reattach.
+- Purge expired failed payment records.
+- Run onramp catalog loads outside cache locks.
+- Require HTTPS provider URLs.
+- Cache token decimals within each token gate.
+- Use the injected monitor clock for payment timestamps.
+- Remove listeners from replaced x402 wallets.
+- Close owned facilitator HTTP clients with the starter context.
 - Rotate servlet session IDs after verified SIWE sign-in when the current Vaadin request supports it; warn when the transport cannot rotate the ID.
 - Reject payment confirmation when the receipt block is no longer canonical, and prevent wallet restoration from racing with a cross-instance disconnect.
 - Bound the token-gate balance cache and improve wallet-picker keyboard accessibility.
