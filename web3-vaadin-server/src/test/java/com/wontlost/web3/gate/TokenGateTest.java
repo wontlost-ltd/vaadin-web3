@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import java.math.BigInteger;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.vaadin.flow.internal.ReflectTools;
 import com.vaadin.flow.router.ErrorParameter;
@@ -11,6 +12,28 @@ import com.vaadin.flow.router.ErrorParameter;
 import org.junit.jupiter.api.Test;
 
 class TokenGateTest {
+    @Test void decimalsAreCachedAcrossGateInstancesForTheSameChainAndToken() {
+        long chainId = 900_001;
+        String tokenAddress = "0x0000000000000000000000000000000000000099";
+        AtomicInteger decimalsCalls = new AtomicInteger();
+        var mapper = new tools.jackson.databind.ObjectMapper();
+        var registry = new com.wontlost.web3.chain.ChainRegistry();
+        registry.register(chainId, new com.wontlost.web3.chain.EthRpcClient(request -> {
+            String data = mapper.readTree(request).path("params").get(0).path("data").asString();
+            if (data.startsWith("0x313ce567")) decimalsCalls.incrementAndGet();
+            String value = data.startsWith("0x313ce567") ? "6" : "0";
+            return "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0x" + String.format("%064x", Integer.parseInt(value)) + "\"}";
+        }));
+        RequiresToken requirement = UnknownDecimalsView.class.getAnnotation(RequiresToken.class);
+
+        assertEquals(TokenGate.Decision.INSUFFICIENT, new TokenGate(registry).evaluate(requirement,
+                "0x0000000000000000000000000000000000000001"));
+        assertEquals(TokenGate.Decision.INSUFFICIENT, new TokenGate(registry).evaluate(requirement,
+                "0x0000000000000000000000000000000000000002"));
+
+        assertEquals(1, decimalsCalls.get());
+    }
+
     @Test void rerouteExceptionsHavePublicNoArgConstructors() {
         assertDoesNotThrow(() -> ReflectTools.createInstance(TokenGateDeniedException.class));
         assertDoesNotThrow(() -> ReflectTools.createInstance(TokenGateUnavailableException.class));
@@ -71,6 +94,9 @@ class TokenGateTest {
 
     @RequiresToken(chainId = 1, token = "USDC", minBalance = "1", decimals = 6)
     private static final class MainnetUsdcGatedView { }
+
+    @RequiresToken(chainId = 900_001, token = "0x0000000000000000000000000000000000000099", minBalance = "1")
+    private static final class UnknownDecimalsView { }
 
     @RequiresToken(chainId = 11155111, token = "pyusd", minBalance = "1", decimals = 6)
     private static final class PyusdGatedView { }
