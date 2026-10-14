@@ -57,6 +57,7 @@ public final class X402Paywall extends VerticalLayout {
     private final AtomicLong generation = new AtomicLong();
     private final Executor executor;
     private final Supplier<String> identityAddress;
+    private final java.util.List<Registration> walletListeners = new java.util.ArrayList<>();
 
     private Web3Connect wallet = new Web3Connect(true);
     private X402PaywallI18n i18n = new X402PaywallI18n();
@@ -126,6 +127,8 @@ public final class X402Paywall extends VerticalLayout {
     }
 
     public X402Paywall setWallet(Web3Connect value) {
+        walletListeners.forEach(Registration::remove);
+        walletListeners.clear();
         remove(wallet);
         wallet = Objects.requireNonNull(value);
         addComponentAtIndex(Math.min(7, getComponentCount()), wallet);
@@ -441,9 +444,9 @@ public final class X402Paywall extends VerticalLayout {
     }
 
     private void installWalletListeners(Web3Connect value) {
-        value.addConnectedListener(event -> refreshAccount());
-        value.addDisconnectedListener(event -> refreshAccount());
-        value.addChainChangedListener(event -> refreshAccount());
+        walletListeners.add(value.addConnectedListener(event -> refreshAccount()));
+        walletListeners.add(value.addDisconnectedListener(event -> refreshAccount()));
+        walletListeners.add(value.addChainChangedListener(event -> refreshAccount()));
     }
 
     void payNowForTest() {
